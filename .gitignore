@@ -1,0 +1,39 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Aiken
+contracts/build/
+contracts/.aiken/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/dist/
+web/.pnpm-store/
+web/.turbo/
+web/next-env.d.ts
+
+# Java / Gradle
+api/build/
+api/.gradle/
+api/out/
+api/bin/
+*.class
+
+# Misc
+*.log
+*.pid
+.tmp/

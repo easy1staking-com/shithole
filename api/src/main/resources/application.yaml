@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: shithole-api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/shithole
+    username: shithole
+    password: shithole
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.lob.non_contextual_creation: true
+  flyway:
+    enabled: true
+    locations:
+      - classpath:db/store/{vendor}
+      - classpath:db/store/shithole
+    out-of-order: true
+
+# Yaci Store config — points at local Yaci DevKit Cardano node by default.
+# For preprod/mainnet, override via env vars or a profile.
+store:
+  cardano:
+    host: localhost
+    port: 3001
+    protocol-magic: 42  # Yaci DevKit default
+  utxo:
+    pruning-enabled: false
+
+# Network: devnet | preprod | preview | mainnet
+network: devnet
+api-prefix: /api
+
+server:
+  port: 8080
+
+logging:
+  level:
+    root: INFO
+    com.easy1staking.shithole: DEBUG
+    com.bloxbean.cardano: INFO

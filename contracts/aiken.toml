@@ -1,0 +1,23 @@
+name = "easy1staking-com/shithole"
+version = "0.0.0"
+compiler = "v1.1.21"
+plutus = "v3"
+license = "Apache-2.0"
+description = "Shithole — Cardano dApp for swapping dead/rugpulled NFTs within their collection"
+
+[repository]
+user = "easy1staking-com"
+project = "shithole"
+platform = "github"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "v3.1.0"
+source = "github"
+
+[[dependencies]]
+name = "aiken-lang/fuzz"
+version = "v2.1.1"
+source = "github"
+
+[config]
