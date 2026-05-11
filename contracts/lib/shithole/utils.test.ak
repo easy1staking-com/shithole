@@ -79,8 +79,7 @@ test extract_from_constr_with_nonzero_tag() {
   // Constr tag != 0. Helper should still extract the first field — it doesn't
   // verify the tag. (This is intentional; the Swap branch separately enforces
   // ListingDatum shape via expect-cast.)
-  let data: Data =
-    builtin.constr_data(7, [builtin.b_data(test_lister_pkh)])
+  let data: Data = builtin.constr_data(7, [builtin.b_data(test_lister_pkh)])
   utils.extract_first_bytearray_field(data) == test_lister_pkh
 }
 
@@ -124,10 +123,7 @@ test extract_fails_when_first_field_is_constr() fail {
   let data: Data =
     builtin.constr_data(
       0,
-      [
-        builtin.constr_data(0, []),
-        builtin.b_data(test_lister_pkh),
-      ],
+      [builtin.constr_data(0, []), builtin.b_data(test_lister_pkh)],
     )
   utils.extract_first_bytearray_field(data) == #""
 }

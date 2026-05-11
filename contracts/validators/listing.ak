@@ -4,7 +4,7 @@ use aiken/collection/list
 use aiken/crypto.{blake2b_256}
 use aiken/primitive/bytearray
 use aiken/primitive/int.{from_bytearray_big_endian}
-use cardano/assets.{PolicyId, lovelace_of}
+use cardano/assets.{PolicyId, ada_asset_name, ada_policy_id, lovelace_of}
 use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
 use shithole/types.{Cancel, ConfigDatum, ListingDatum, ListingRedeemer, Swap}
 use shithole/utils
@@ -128,19 +128,32 @@ fn validate_swap(
   let input_lovelace = lovelace_of(input_value)
 
   // S2: input strictly carries one NFT under collection_policy (and nothing
-  // else besides ADA). Extract NA's asset_name from the input value — we
-  // don't need it in the redeemer since it's already pinned by the consumed
-  // UTxO. We just need the bytes for the bucket equation.
-  expect assets.has_any_nft_strict(input_value, collection_policy_id)
-  expect [Pair(na_asset_name, 1)] =
-    input_value
-      |> assets.tokens(collection_policy_id)
-      |> dict.to_pairs()
+  // else besides ADA). Single-traversal extraction:
+  //   1. assets.to_dict → the value's internal Dict<PolicyId, Dict<AssetName, Int>>
+  //   2. dict.expect_tail drops the first key, which is always ADA (empty
+  //      bytestring sorts first in the ascending-key Dict).
+  //   3. dict.to_pairs + pattern match on a single Pair asserts BOTH
+  //      "exactly one non-ADA policy" AND extracts (policy, inner_dict).
+  //   4. Verify the policy matches the config-declared collection_policy_id.
+  //   5. Inner dict.to_pairs + pattern match on [Pair(name, 1)] asserts
+  //      exactly one asset under that policy, with quantity 1.
+  // Net: one walk through the value structure, replacing the previous
+  // has_any_nft_strict + tokens.to_pairs (two walks).
+  expect [Pair(actual_collection_policy_id, na_inner)] =
+    assets.to_dict(input_value) |> dict.expect_tail() |> dict.to_pairs()
+  expect actual_collection_policy_id == collection_policy_id
+  expect [Pair(na_asset_name, 1)] = dict.to_pairs(na_inner)
 
   // Precompute the output tag once — used by S4 and S8.
   let own_tag = utils.compute_output_tag(own_ref)
 
-  // O(1) output lookups via redeemer hints.
+  // O(1) lookups via redeemer hints. `list.expect_at` walks the list to the
+  // given index, so two calls cost O(listing_output_index + treasury_output_index)
+  // cons traversals total. For typical small swap txs (3-5 outputs at indexes
+  // 0 and 1) this is negligible. A fold-2 combinator would replace two forward
+  // walks with one full pass + accumulator destructure — same asymptotic shape,
+  // marginal constant-factor savings. Keep `expect_at` for readability; revisit
+  // if benchmarks ever flag this as a hot spot.
   let out_listing = list.expect_at(outputs, listing_output_index)
   let out_treasury = list.expect_at(outputs, treasury_output_index)
 
@@ -154,19 +167,36 @@ fn validate_swap(
   expect InlineDatum(out_listing_data) = out_listing.datum
   expect out_listing_datum: ListingDatum = out_listing_data
 
+  // Build the expected output VALUE shape once: exactly the new NB NFT + the
+  // accrued lovelace lower bound. `assets.match` compares non-ADA assets for
+  // strict equality and lets the callback assert any relation between the
+  // two lovelace amounts. Combines S5 (strict NB) AND S6 (lovelace bound)
+  // into one stdlib call.
+  let expected_output_value =
+    dict.from_ascending_pairs(
+      [
+        Pair(
+          ada_policy_id,
+          dict.singleton(ada_asset_name, input_lovelace + cfg.lister_fee),
+        ),
+        Pair(collection_policy_id, dict.singleton(nb_asset_name, 1)),
+      ],
+    )
+
   and {
     // S3: continuing output at the same script address
     (out_listing.address == own_address)?,
     // S4: lister identity preserved + correct update_ref tag (one comparison)
     (out_listing_datum == expected_listing_datum)?,
-    // S5: new listing strictly carries NB
-    assets.has_nft_strict(
+    // S5 + S6: out_listing carries exactly NB (asset equality) AND its
+    // lovelace >= input.lovelace + lister_fee (callback). Combined.
+    assets.match(
       out_listing.value,
-      collection_policy_id,
-      nb_asset_name,
+      expected_output_value,
+      fn(actual_lovelace, expected_lovelace) {
+        actual_lovelace >= expected_lovelace
+      },
     )?,
-    // S6: accrual lower bound
-    (lovelace_of(out_listing.value) >= input_lovelace + cfg.lister_fee)?,
     // S7: treasury address
     (out_treasury.address == cfg.treasury_addr)?,
     // S8: treasury uniqueness tag (double-satisfaction Case 1)
