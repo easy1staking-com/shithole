@@ -355,46 +355,44 @@ test spend_fails_with_rotation_missing_old_admin_sig() fail {
 }
 
 // ============================================================================
-// Output uniqueness — added 2026-05-11 after Codex review of v0.3 contracts
+// Accepted footgun: extra output at config script address
 // ============================================================================
 //
-// SPEC C2 / M4 require EXACTLY ONE matching output at the config address.
-// The original `list.find`-based implementation allowed extra junk outputs at
-// the same address to slip through. These tests pin the fix: a transaction
-// that produces two outputs at the config script address must fail.
+// The validator uses `list.expect_find`, which proves AT LEAST ONE matching
+// output exists. A careless transaction could include a second, junk output
+// at the config address — that UTxO has no protocol meaning (it carries no
+// config NFT, since one-shot mint guarantees the config NFT exists on
+// exactly one UTxO chain-wide), and the ADA on it is locked behind the
+// spend validator forever. This hurts only whoever sent the extra output.
+//
+// See the ACCEPTED FOOTGUN block at the top of `config.ak`. We deliberately
+// do NOT enforce uniqueness — fold-and-count costs more cpu/mem than the
+// self-injurious nature of this mistake warrants.
 
-test mint_fails_with_two_outputs_at_script_address() fail {
-  // Both outputs are well-formed individually — the validator must still
-  // reject the tx because the continuing-UTxO invariant requires uniqueness.
+test mint_accepts_extra_junk_output_at_script_address() {
+  // Two outputs at the config address. The first is well-formed; the second
+  // is junk (no NFT, no datum). The validator passes because it finds the
+  // legitimate one via `list.expect_find` and ignores the junk.
+  let junk_output =
+    Output {
+      address: test_config_addr(),
+      value: assets.from_lovelace(1_500_000),
+      datum: NoDatum,
+      reference_script: None,
+    }
   let tx =
     Transaction {
       ..transaction.placeholder,
       inputs: [seed_input()],
-      outputs: [mint_output(), mint_output()],
+      outputs: [mint_output(), junk_output],
       mint: assets.from_asset(test_config_policy, test_collection_policy, 1),
       extra_signatories: [test_admin_pkh],
     }
   config.config.mint(test_seed_utxo(), 0, test_config_policy, tx)
 }
 
-test spend_fails_with_two_outputs_at_script_address() fail {
-  let datum = valid_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [config_input_with_datum(own_ref(), datum)],
-      outputs: [
-        config_output_with_datum(datum),
-        config_output_with_datum(datum),
-      ],
-      extra_signatories: [test_admin_pkh],
-    }
-  config.config.spend(test_seed_utxo(), Some(datum), 0, own_ref(), tx)
-}
-
 // ============================================================================
-// Spend-path datum-floor negatives that the mint path also covers — pinning
-// them on the spend side too (Codex review of v0.3 contracts).
+// Spend-path datum-floor negative pinned on the spend side too.
 // ============================================================================
 
 test spend_fails_with_negative_protocol_fee_on_output() fail {

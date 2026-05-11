@@ -1,3 +1,4 @@
+use aiken/builtin
 use aiken/cbor.{serialise}
 use aiken/collection/list
 use aiken/crypto.{VerificationKeyHash, blake2b_256}
@@ -27,4 +28,26 @@ pub fn compute_output_tag(oref: OutputReference) -> ByteArray {
 /// Cheap; prefer this over on-chain Ed25519 verification.
 pub fn signed_by(tx: Transaction, pkh: VerificationKeyHash) -> Bool {
   list.has(tx.extra_signatories, pkh)
+}
+
+// ============================================================================
+// Defensive datum extraction
+// ============================================================================
+
+/// Extract the first field of a `Constr`-encoded `Data` as a `ByteArray`,
+/// without requiring the rest of the datum to decode cleanly.
+///
+/// Used by the listing validator's `Cancel` branch so that a lister can
+/// reclaim their UTxO via signature even if the datum's second field
+/// (`update_ref`) is corrupt or shape-drifted between contract versions.
+///
+/// Recovery envelope: datum must be `Constr [bytestring, ...]`. Non-constr
+/// roots (`Int`, `List`, `Map`), empty Constr field lists, or a non-bytes
+/// first field will fail this extraction. Those shapes cannot arise from
+/// the `Swap` path (which writes a full `ListingDatum`) nor from a
+/// legitimate initial listing creation.
+pub fn extract_first_bytearray_field(data: Data) -> ByteArray {
+  let fields = builtin.snd_pair(builtin.un_constr_data(data))
+  let first = builtin.head_list(fields)
+  builtin.un_b_data(first)
 }

@@ -64,13 +64,18 @@ pub type ListingDatum {
 // Listing redeemer
 // ============================================================================
 
-/// Index hints in `Swap` turn O(N) input/output scans into O(1). Wrong indexes
-/// cause downstream equality/value checks to fail; no security cost.
+/// Swap carries `nb_asset_name` (the NFT the swapper is depositing) and two
+/// output-index hints for O(1) lookup. NA's asset_name is read from the
+/// consumed listing's input value — not provided in the redeemer.
+///
+/// The seed for the bucket equation is anchored to `own_ref` (the consumed
+/// listing's outRef), not to a swapper-controlled input. This makes the swap
+/// outcome a deterministic function of (consumed listing, deposited NFT)
+/// pairs — the swapper has no per-attempt manipulation axis. For dead
+/// collections this is the desired property.
 pub type ListingRedeemer {
   Swap {
-    na_asset_name: ByteArray,
     nb_asset_name: ByteArray,
-    nb_input_index: Int,
     listing_output_index: Int,
     treasury_output_index: Int,
   }

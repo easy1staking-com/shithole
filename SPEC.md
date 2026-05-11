@@ -1,7 +1,7 @@
 # Shithole — Protocol Specification
 
-**Status:** **LOCKED v0.3** — clean second Codex adversarial review (no new findings). Ready for plan mode and scaffolding.
-**Date:** 2026-05-10.
+**Status:** **v0.4 — post-implementation review.** During Giovanni's review of the Aiken contracts (2026-05-11), the design was simplified: UA-based bucket seed (with `nb_input_index` redeemer hint) was replaced by `own_ref`-based seed; redeemer fields `na_asset_name` and `nb_input_index` were removed; the listing datum type became `Option<Data>` so the cancel branch can recover from a corrupted datum; the config-output uniqueness check was reverted to `list.expect_find` with an accepted-footgun note. SPEC is realigned to the shipped code.
+**Date:** 2026-05-11.
 
 ---
 
@@ -30,7 +30,7 @@ There is no global protocol contract, no shared admin, no on-chain registry. Eac
 | **Config NFT** | A one-shot NFT minted by the config validator's mint handler. Its **policy id is the config validator's hash**; its **asset name is the 28 bytes of the collection policy id** it governs. |
 | **`config_nft_policy`** | Policy id of the config NFT. Equal to the config validator's compiled hash. The spend (listing) validator is parameterized at compile-time on this. |
 | **NA / NB** | NA is the NFT currently held by the listing being swapped against. NB is the NFT being deposited by the swapper. Both share the same `collection_policy_id`. |
-| **UA** | The transaction input that holds NB. Its `OutputReference` (`UA.outRef`) is the per-swap entropy source for the bucket calculation. |
+| **`self.outRef`** | The consumed listing's `OutputReference`. Fixed once the swapper picks which listing UTxO to target. Used as the entropy anchor for the bucket-equation seed (replaces the earlier UA-based design). |
 | **Bucket** | An integer in `[0, M)` derived from a hash of `(policy_id ‖ asset_name)` mod `M`. Used for deterministic NFT selection on swap. |
 | **M** | The number of buckets; positive integer set per-collection by the admin. Stored in the config datum. Sized roughly as `well_formed_listings / 3` for ~95% non-empty bucket coverage. |
 | **outRef** | An `OutputReference` (transaction id + output index). Used as a uniqueness tag for double-satisfaction defenses and as the bucket-seed entropy source. |
@@ -87,7 +87,7 @@ A single redeemer (`Void`); every spend re-runs all checks. There is no "Retire"
 | # | Invariant |
 |---|---|
 | C1 | `tx.extra_signatories` contains `input.datum.admin_pkh`. |
-| C2 | Exactly one output at `input.address` (same script credential), containing the same config NFT (policy + asset name preserved). Call this `out_cfg`. |
+| C2 | At least one output at `input.address` (same script credential) carries the config NFT (policy + asset name preserved). Located via `list.expect_find`. Call this `out_cfg`. The "exactly one" guarantee is not enforced on-chain — see ACCEPTED FOOTGUN in §8.2 and the comment block in `config.ak`. |
 | C3 | `out_cfg.datum.m >= 1`. |
 | C4 | `out_cfg.datum.protocol_fee >= 0`. |
 | C5 | `out_cfg.datum.lister_fee >= MIN_LISTER_FEE`. |
@@ -99,10 +99,12 @@ A single redeemer (`Void`); every spend re-runs all checks. There is no "Retire"
 
 ```aiken
 validator listing(config_nft_policy: PolicyId) {
-  spend(datum: Option<ListingDatum>, redeemer: ListingRedeemer, self_ref: OutputReference, self: Transaction) { ... }
+  spend(datum: Option<Data>, redeemer: ListingRedeemer, self_ref: OutputReference, self: Transaction) { ... }
   else(_) { fail }
 }
 ```
+
+The spend handler takes `Option<Data>` (not `Option<ListingDatum>`) so that the `Cancel` branch can recover the lister's `pkh` via a partial decode (first field only). The `Swap` branch starts by casting `Data → ListingDatum` via `expect`.
 
 The address is deterministic in the `config_nft_policy` parameter — each config produces a unique spend-script address.
 
@@ -115,14 +117,14 @@ type ListingDatum {
 }
 ```
 
+The spend validator takes `Option<Data>` (not `Option<ListingDatum>`) so that the `Cancel` branch can recover the lister's `pkh` via a partial decode (first field only) even if the rest of the datum is somehow corrupt. The `Swap` branch still requires the full `ListingDatum` shape via `expect`-cast.
+
 #### Listing redeemer
 
 ```aiken
 type ListingRedeemer {
   Swap {
-    na_asset_name: AssetName,
     nb_asset_name: AssetName,
-    nb_input_index: Int,            // index into tx.inputs of the UTxO containing NB (called UA below)
     listing_output_index: Int,      // index into tx.outputs of the new listing UTxO
     treasury_output_index: Int,     // index into tx.outputs of the protocol-fee payment
   }
@@ -130,7 +132,7 @@ type ListingRedeemer {
 }
 ```
 
-All three index hints turn O(N) scans into O(1). Wrong hints cause downstream equality checks to fail; no security cost. The swapper / FE is responsible for computing them after Cardano's deterministic input/output ordering is applied.
+`NA`'s asset name is read directly from the consumed listing's input value — it does not need to appear in the redeemer. The two output-index hints turn O(N) scans into O(1); wrong values cause downstream equality checks to fail (no security cost).
 
 ---
 
@@ -198,13 +200,13 @@ Multiple listings in one tx → one output per NFT.
 | Item | Detail |
 |---|---|
 | Signers | Swapper |
-| Inputs | 1× listing UTxO (consumed); the input UA holding NB; any other swapper-funding UTxOs |
+| Inputs | 1× listing UTxO (consumed); swapper-funding UTxO(s) supplying NB and ADA for fees |
 | Reference inputs | The config UTxO (CIP-31 ref input). May be among other ref inputs from composability. |
 | Outputs | (a) NA → swapper's wallet; (b) new listing UTxO at the spend-script address holding `NB + (input.value.lovelace + lister_fee)` with datum `{ lister_pkh: input.lister_pkh, update_ref: Some(compute_output_tag(self.outRef)) }`; (c) `protocol_fee` lovelace → `treasury_addr` with inline datum = `compute_output_tag(self.outRef)` |
 | Mints | None |
 | Validators | Spend validator's `Swap` redeemer |
 
-UA and the listing input may be the same UTxO only if the swapper had previously listed NB themselves and is doing `Cancel + Swap` in one tx — in that case UA is a script input being consumed via the listing validator's `Cancel` path.
+The validator does not constrain *which* input provides NB — Cardano's value-conservation rule handles that at the tx-body level. The validator only cares about (a) what's in the consumed listing input, (b) the new listing output, and (c) the treasury output.
 
 ### 5.5 Cancel
 
@@ -235,25 +237,25 @@ See §3.1. Invariants C1-C6.
 
 ### 6.3 Spend validator — `Swap`
 
-For input `self` at outRef `self.outRef` with datum `input_datum`:
+For input `self` at outRef `self.outRef` with datum `input_datum` (cast from `Data` to `ListingDatum`):
 
 | # | Invariant |
 |---|---|
-| S1 | **At least one** ref input has a value containing an asset under policy_id == `config_nft_policy` (the script's compile-time parameter). Linear search via `list.find`. Call its asset name `collection_policy_id` (= 28 bytes by §3.1 M3) and its datum `cfg`. |
+| S1 | **At least one** ref input has a value containing an asset under policy_id == `config_nft_policy` (the script's compile-time parameter). Linear search via `list.expect_find`. Call its asset name `collection_policy_id` (= 28 bytes by §3.1 M3) and its datum `cfg`. |
 | — | *(No self-swap check. A self-swap costs the swapper `protocol_fee + lister_fee` for nothing — accepted.)* |
-| S2 | `input.value` contains exactly one non-ADA asset, equal to `(collection_policy_id, na_asset_name)` quantity 1. |
-| S3 | Let `ua = tx.inputs[redeemer.nb_input_index]`. `ua.value` contains `(collection_policy_id, nb_asset_name)` quantity 1. *(Pins UA — the input that physically holds NB — for the bucket-seed computation.)* |
-| S4 | Let `out_listing = tx.outputs[redeemer.listing_output_index]`. `out_listing.address == self.address`. |
-| S5 | `out_listing.datum.lister_pkh == input_datum.lister_pkh`. |
-| S6 | `out_listing.datum.update_ref == Some(compute_output_tag(self.outRef))`. *(Double-satisfaction defense for Case 2 — listing recreation.)* |
-| S7 | `out_listing.value` contains exactly one non-ADA asset, equal to `(collection_policy_id, nb_asset_name)` quantity 1. |
-| S8 | `out_listing.value.lovelace >= input.value.lovelace + cfg.lister_fee`. |
-| S9 | Let `out_treasury = tx.outputs[redeemer.treasury_output_index]`. `out_treasury.address == cfg.treasury_addr`. |
-| S10 | `out_treasury.datum == InlineDatum(compute_output_tag(self.outRef))`. *(Double-satisfaction defense for Case 1 — fee payment.)* |
-| S11 | `out_treasury.value.lovelace >= cfg.protocol_fee`. |
-| S12 | Bucket equation: `from_bytearray_big_endian(blake2b_256(collection_policy_id ‖ na_asset_name)) % cfg.m == from_bytearray_big_endian(blake2b_256(collection_policy_id ‖ nb_asset_name ‖ cbor.serialise(ua.outRef))) % cfg.m`. |
+| S2 | `input.value` strictly carries one NFT under `collection_policy_id` and no other non-ADA assets (`assets.has_any_nft_strict`). Extract `na_asset_name` from the input value. |
+| S3 | Let `out_listing = tx.outputs[redeemer.listing_output_index]`. `out_listing.address == self.address`. |
+| S4 | `out_listing.datum` (cast to `ListingDatum`) `== ListingDatum { lister_pkh: input_datum.lister_pkh, update_ref: Some(compute_output_tag(self.outRef)) }`. *(Combines lister continuity AND double-satisfaction Case 2 binding in one structural compare.)* |
+| S5 | `out_listing.value` strictly carries `(collection_policy_id, nb_asset_name) × 1` (`assets.has_nft_strict`). |
+| S6 | `out_listing.value.lovelace >= input.value.lovelace + cfg.lister_fee`. |
+| S7 | Let `out_treasury = tx.outputs[redeemer.treasury_output_index]`. `out_treasury.address == cfg.treasury_addr`. |
+| S8 | `out_treasury.datum == InlineDatum(compute_output_tag(self.outRef))`. *(Double-satisfaction defense for Case 1 — fee payment.)* |
+| S9 | `out_treasury.value.lovelace >= cfg.protocol_fee`. |
+| S10 | Bucket equation: `from_bytearray_big_endian(blake2b_256(collection_policy_id ‖ na_asset_name)) % cfg.m == from_bytearray_big_endian(blake2b_256(collection_policy_id ‖ nb_asset_name ‖ cbor.serialise(self.outRef))) % cfg.m`. |
 
-The validator does **not** constrain the count, value, address, or datum of *other* outputs at `self.address`. Junk outputs at the listing address can exist (and may be created by malicious swappers piggybacking onto a swap tx), but the chain only guarantees correctness of the designated `out_listing`. This is a deliberate trade-off: enforcing "no extra outputs at self.address" would make multi-swap atomic txs impossible. Off-chain discovery handles junk filtering — see §10.2.
+The validator does **not** constrain the count, value, address, or datum of *other* outputs at `self.address`. Junk outputs at the listing address can exist, but the chain only guarantees correctness of the designated `out_listing`. Off-chain discovery handles junk filtering — see §10.2.
+
+There is no `S3` validating an "input that contains NB" (the previous UA-based design): the seed is now anchored to `self.outRef`, so the validator does not care which input supplies NB. Cardano's value-conservation rule at the tx-body level ensures NB must come from somewhere.
 
 ### 6.4 Spend validator — `Cancel`
 
@@ -278,32 +280,37 @@ bucket_self = from_bytearray_big_endian(blake2b_256(collection_policy ‖ asset_
 On swap, the validator computes the target bucket the swapper is hitting:
 
 ```
-seed_bytes    = collection_policy ‖ nb_asset_name ‖ cbor.serialise(ua.outRef)
+seed_bytes    = collection_policy ‖ nb_asset_name ‖ cbor.serialise(self.outRef)
 hash_bytes    = blake2b_256(seed_bytes)        // 32 bytes
 hash_int      = from_bytearray_big_endian(hash_bytes)
 bucket_target = hash_int % M
 ```
 
-`from_bytearray_big_endian` (in `aiken/primitive/int`) treats the input bytes as an unsigned big-endian integer. The resulting `Int` is then reducible modulo `M`. `cbor.serialise` (in `aiken/cbor`) gives the canonical byte form of `ua.outRef`.
+The seed is anchored to `self.outRef` — the consumed listing's `OutputReference`, fixed once the swapper picks which listing UTxO to target. `from_bytearray_big_endian` (in `aiken/primitive/int`) treats the input bytes as an unsigned big-endian integer. `cbor.serialise` (in `aiken/cbor`) gives the canonical byte form of the `OutputReference`.
 
 The validator requires `bucket_self == bucket_target`. When multiple well-formed listing UTxOs share the target bucket, the dApp UI picks one — on-chain doesn't care which.
 
 ### 7.2 Seed inputs and grinding analysis
 
-The seed has two swapper-controllable axes:
+The seed has exactly one swapper-controllable axis:
 
 1. **`nb_asset_name`** — bounded by NFTs of this collection the swapper owns.
-2. **`ua.outRef`** — bounded by the *physical UTxO* in which NB currently resides. Manufacturing a different `ua.outRef` requires a real on-chain transaction: spending the current NB-holding UTxO to produce a new one. Cost ~0.17 ADA per attempt.
 
-Total grinding surface ≈ (#NFTs of the collection the grinder holds) × (#NB-relocations the grinder is willing to pay for). Bounded but not eliminated. Each grinding step has a real, non-amortized on-chain cost.
+`self.outRef` is fixed by which listing the swapper chooses to target. For a given (target listing, candidate `nb`) pair, `bucket_target` is fully determined; there is no per-attempt manipulation axis. The swapper cannot make a specific (listing, nb) pair match by paying additional fees or rearranging inputs.
 
-This design intentionally avoids using `tx.inputs[0].outRef` (the lex-first input of the entire tx) as the entropy source. That earlier choice would give the grinder a *free* axis: vary which funding UTxOs the tx includes, change which one sorts first, no cost. Anchoring to UA (the input that physically holds NB) forces every grinding attempt through a real wallet operation.
+Effective behavior:
 
-Edge case: if the swapper had previously listed NB themselves and is doing `Cancel + Swap` in one tx, UA is a script input being consumed via the listing validator's `Cancel` path. This is normal — UA is "the input that contains NB" regardless of whether it comes from a wallet or another script.
+- The swapper enumerates `(target_listing, owned_nft)` pairs off-chain for free, computes both buckets, and submits the one tx where they match.
+- Total grinding surface ≈ (#NFTs of the collection the swapper holds) × (#well-formed listings in the pool). For an attacker with N owned NFTs and M listings, ~`N × M / cfg.m` matches are expected to exist.
+- A swapper with **only one owned NFT of the collection** can swap only into listings that happen to match their single bucket-target. They cannot grind any specific listing into matching.
+
+This is *more* randomness-preserving than an earlier UA-based design (where the seed anchored to a swapper-held input UTxO and the attacker could pay ~0.17 ADA per relocation to eventually force any target). The current design has no manipulation axis at all — outcomes are a deterministic function of wallet contents × the existing pool.
+
+This design intentionally avoids using `tx.inputs[0].outRef` (the lex-first input of the entire tx) as the entropy source. That would give the grinder a *free* axis: vary which funding UTxOs the tx includes, change which one sorts first, no cost. Anchoring to `self.outRef` forces the seed to be fully determined by the swap target the swapper picks.
 
 ### 7.3 Why this is acceptable
 
-By the protocol's premise the collections are dead — no individual NFT is materially more valuable than any other. The economic incentive to grind toward a specific target is small. This trade-off is explicit and protocol-defining; it is **not** suitable for a marketplace handling valuable assets.
+By the protocol's premise the collections are dead — no individual NFT is materially more valuable than any other. A swapper can pick the most appealing of their matching options, but the *outcome distribution* over the pool is still effectively uniform from the protocol's POV: which NFT they get depends on which listing they target, and the listings rotate over time as swaps happen. The trade-off is explicit and protocol-defining; it is **not** suitable for a marketplace handling valuable assets.
 
 ### 7.4 Bucket coverage math
 
@@ -329,25 +336,26 @@ As listings are swapped, the NFT inside each listing UTxO changes, so its bucket
 
 | Attack | Defense |
 |---|---|
-| **Lister-pkh rewrite + cancel theft.** Swapper writes their own pkh into the new listing datum, then cancels to take accrued ADA. | Invariant S5 — `out_listing.lister_pkh == input.lister_pkh`. |
-| **Cross-collection deposit.** Swapper deposits an unrelated NFT to corrupt a listing. | Invariants S2, S3, S7 — NA, the input UA holding NB, and the output's NB must all be under the `collection_policy_id` derived from the config NFT's asset name. |
-| **NB-input substitution.** Swapper claims `nb_input_index` points at an unrelated input. | Invariant S3 — that input's value must contain `(collection_policy_id, nb_asset_name) × 1`. Lying causes failure. |
+| **Lister-pkh rewrite + cancel theft.** Swapper writes their own pkh into the new listing datum, then cancels to take accrued ADA. | Invariant S4 — `out_listing.datum == ListingDatum { lister_pkh: input.lister_pkh, update_ref: Some(compute_output_tag(self.outRef)) }`. The full-datum equality preserves `lister_pkh`. |
+| **Cross-collection deposit.** Swapper deposits an unrelated NFT to corrupt a listing. | Invariants S2 and S5 — both NA (read from consumed listing's input value via `assets.has_any_nft_strict`) and NB (in `out_listing.value` via `assets.has_nft_strict`) must be under `collection_policy_id` derived from the config NFT's asset name. |
 | **Wrong-config substitution.** Swapper provides a malicious zero-fee config UTxO as ref input. | Invariant S1 — ref input must contain an asset under `config_nft_policy` (the *parameterized* policy), which is fixed at script-compile time. The validator address itself is `Address(ScriptCredential(config_nft_policy))`, so the only place a config-policy-id-tagged asset can live with a `ConfigDatum` is the legitimate config UTxO. |
 | **Double-mint of config NFT.** | One-shot mint M1, M2: `seed_utxo` consumed, exactly +1 minted. The seed UTxO is gone after first mint, so no second mint is possible. |
 | **Asset-name spoofing on config mint.** Deployer mints a config with an asset name that isn't 28 bytes. | M3 — the mint handler enforces `length(asset_name) == 28`. The bytes themselves are not validatable on-chain; off-chain curation (§10.3) verifies semantic correspondence to a real collection. |
-| **Double-satisfaction Case 1 (treasury).** One protocol-fee output satisfies multiple swap inputs. | Invariant S10 — treasury output's inline datum must equal `compute_output_tag(self.outRef)`. Each swap input demands a uniquely-tagged treasury output. |
-| **Double-satisfaction Case 2 (listing recreation).** One new listing output satisfies multiple consumed listing inputs. | Invariant S6 — `out_listing.update_ref == Some(compute_output_tag(self.outRef))`. Each swap input demands a uniquely-bound listing output. |
+| **Double-satisfaction Case 1 (treasury).** One protocol-fee output satisfies multiple swap inputs. | Invariant S8 — treasury output's inline datum must equal `compute_output_tag(self.outRef)`. Each swap input demands a uniquely-tagged treasury output. |
+| **Double-satisfaction Case 2 (listing recreation).** One new listing output satisfies multiple consumed listing inputs. | Invariant S4 — `out_listing.datum.update_ref` field (inside the full-datum equality) must equal `Some(compute_output_tag(self.outRef))`. Each swap input demands a uniquely-bound listing output. |
+| **Corrupt-datum cancel lockout.** Listing UTxO ends up with a malformed datum (encoding drift, foreign tx, etc.) and the lister cannot recover. | Listing validator takes datum as `Option<Data>` and on `Cancel` extracts only the first field (lister_pkh) via Plutus builtin — no full-shape decode required. As long as the datum is `Constr 0 [bytestring, ...]`, the lister can always sign and reclaim. |
 | **Hostile admin replacement.** Old admin tries to install a malicious successor unilaterally. | Invariant C6 — admin rotation requires both old and new admin signatures. |
 | **Lister-fee shrinkage by hostile admin.** Admin lowers `lister_fee` to drain incentive. | Invariant C5 — `lister_fee >= MIN_LISTER_FEE` (compile-time floor of 1 ADA). Admin can never go below this. |
 | **Bucket-mod-by-zero.** Admin sets `M = 0`. | Invariant C3 — `m >= 1` enforced on every config update. |
-| **Free seed grinding via input-set choice.** Earlier seed used `tx.inputs[0].outRef`, lettings swappers vary funding UTxOs at no cost. | UA-based seed in S12: the entropy is anchored to the input physically holding NB; varying it requires a real wallet operation (~0.17 ADA per attempt). |
+| **Free seed grinding via input-set choice.** Earlier seed used `tx.inputs[0].outRef`, letting swappers vary funding UTxOs at no cost. | `self.outRef`-based seed in S10: the entropy is fixed by the listing being consumed. No swapper-controlled manipulation axis at all. |
 
 ### 8.2 Accepted (with rationale)
 
 | Risk | Why accepted |
 |---|---|
 | **Self-swap.** Swapper deposits the same asset name they "took" (`na == nb`). | They pay `protocol_fee + lister_fee` for nothing in return. Accepted as a free donation; not worth a validator check. |
-| **Bounded swapper grinding on seed.** | Dead-collection premise: no NFT is materially more valuable than others. Cost barrier (~0.17 ADA per attempt to relocate NB) limits surface; full mitigation would require commit-reveal (UX cost) or oracle (trust cost). |
+| **Free off-chain enumeration over wallet × pool.** The swapper can compute (listing, owned_nft) bucket pairs at zero cost and submit only the one tx where buckets match. | Dead-collection premise: no NFT is materially more valuable than others. The swapper still cannot grind any *specific* (listing, nb) pair into matching — for each pair the outcome is fully determined by on-chain hash. Picking the most appealing match from a constrained set is acceptable; outcome distribution over the pool stays effectively uniform. |
+| **Extra output at config script address.** A careless transaction includes a junk output alongside the legitimate config UTxO. | The validator uses `list.expect_find`, which finds the legitimate one (it carries the config NFT, of which exactly one exists chain-wide thanks to the one-shot mint). The junk output has no protocol meaning; the ADA on it is locked behind the spend validator forever. Self-injurious only — see "ACCEPTED FOOTGUN" comment in `config.ak`. |
 | **Junk outputs at listing address.** Anyone can pay-to-script with malformed UTxOs; swap txs may also piggyback junk outputs at `self.address`. | The validator only certifies the designated successor in a swap. Malformed UTxOs are un-swappable (they fail S2-S7). Off-chain filtering (§10.2) hides them from the FE; the indexer excludes them from the count of N used to size M. |
 | **CIP-27/68 reserved-label injection.** A swapper deposits a CIP-68 reference token (label `100`) or CIP-27 royalty token (label `500`) as `NB`. | Only hurts the resulting lister (who pulls a useless asset on cancel). Not exploitable against other users. Filtering today doesn't future-proof against new label standards; revisit if a future label lands. |
 | **Permissionless config minting.** Anyone can deploy a competing config for a collection. | Curation is an off-chain problem (FE shows only the curated set). Admin-keyed minting would centralize the protocol unnecessarily. |
@@ -445,12 +453,12 @@ The old config UTxO and its listings remain on-chain and remain spendable foreve
 
 - **Config validator — mint handler:** positive (correct seed consumed, +1 minted, asset name == 28 bytes, well-typed datum); negative (no seed, double-mint attempt, wrong asset name length, datum violates floors).
 - **Config validator — spend handler:** positive (admin signs, NFT preserved, datum within floors); negative (missing admin sig, NFT missing on output, M = 0, lister_fee below floor, rotation without new admin sig).
-- **Spend validator — Swap:** every invariant S1-S12 with at least one positive and one negative test. Especially:
-  - Double-satisfaction multi-swap atomic txs (must fail).
-  - Wrong `nb_input_index` (UA index pointing at an input that doesn't contain NB).
-  - Junk outputs at `self.address` co-existing with a valid swap (must succeed; junk is ignored).
-- **Spend validator — Cancel:** with/without lister sig.
-- **Bucket math:** golden tests pinning specific `(collection_policy, asset_name, ua.outRef)` → bucket values across a few `M` values.
+- **Spend validator — Swap:** invariants S1-S9 have at least one positive and one negative unit test. S10 (bucket equation) is **not meaningfully unit-tested**: all fixtures use `cfg.m = 1`, so the modulo comparison is trivially satisfied. S10 enforcement is verified by Codex source inspection only; golden tests are deferred to §12.2 integration (cross-check with the off-chain Java/Evolution-SDK computation). Other negatives explicitly covered:
+  - Double-satisfaction multi-swap atomic txs (must fail — S4 or S8 binding kicks in).
+  - Listing input with no NFT under collection_policy / two NFTs / quantity 2 (S2 strict-shape rejection).
+  - Output listing under wrong policy / quantity 2 / with extra asset (S5 strict-shape rejection).
+- **Spend validator — Cancel:** with/without lister sig; corrupt-`update_ref` field datum (must still succeed via partial decode, as long as the datum is `Constr 0 [bytes, ...]`).
+- **Bucket math goldens:** deferred to §12.2 integration; see "S10" above.
 
 ### 12.2 Integration tests (Yaci DevKit)
 
@@ -463,7 +471,7 @@ End-to-end transaction flows on a local devnet:
 
 ### 12.3 Property-based tests
 
-- Bucket equation symmetry: for any fixed `(policy, m, ua.outRef)`, the function from asset_name to bucket is well-defined and stable.
+- Bucket equation symmetry: for any fixed `(policy, m, self.outRef)`, the function from asset_name to bucket is well-defined and stable.
 - For the swap path, the on-chain validator's bucket equality is true if and only if the off-chain computation says so. (Catches type/encoding mismatches between validator and off-chain.)
 
 ### 12.4 Adversarial review
