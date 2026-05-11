@@ -1,0 +1,78 @@
+use aiken/crypto.{VerificationKeyHash}
+use cardano/address.{Address}
+
+// ============================================================================
+// Protocol-level constants
+// ============================================================================
+
+/// Hardcoded floor on the per-collection lister_fee.
+///
+/// The config validator enforces `lister_fee >= MIN_LISTER_FEE` on every
+/// admin update, giving listers a compile-time guarantee that the admin can
+/// never strip their incentive to zero. 1 ADA = 1_000_000 lovelace.
+pub const min_lister_fee: Int = 1_000_000
+
+// ============================================================================
+// Config UTxO (mint handler creates it; spend handler updates it)
+// ============================================================================
+
+/// Per-collection configuration.
+///
+/// `collection_policy_id` is NOT a datum field — it lives as the config NFT's
+/// asset name (28 bytes, enforced at mint). Once minted it is immutable.
+///
+/// `treasury_addr` should always be a base/payment-key address in practice
+/// (wallet, possibly HW). Script credentials are technically allowed but the
+/// script must accept payments with our tagged inline datum and not require
+/// any other signatures or datum fields — see SPEC §3.1 note.
+pub type ConfigDatum {
+  m: Int,
+  protocol_fee: Int,
+  lister_fee: Int,
+  treasury_addr: Address,
+  admin_pkh: VerificationKeyHash,
+}
+
+/// On-chain validation of `ConfigDatum` invariants. Used by both mint (M4)
+/// and spend (C3-C5) handlers — same bounds enforced everywhere.
+pub fn is_valid_config_datum(datum: ConfigDatum) -> Bool {
+  and {
+    datum.m >= 1,
+    datum.protocol_fee >= 0,
+    datum.lister_fee >= min_lister_fee,
+  }
+}
+
+// ============================================================================
+// Listing UTxO (held at parameterized spend-script address)
+// ============================================================================
+
+/// Per-NFT listing slot. The NFT inside the UTxO changes per swap; the
+/// `lister_pkh` is fixed at initial creation and never changes.
+///
+/// `update_ref` is the double-satisfaction binding for the listing-recreation
+/// path. On initial pay-to-script creation it is `None` and never validated.
+/// On every swap, the new listing output must carry
+/// `Some(compute_output_tag(consumed.outRef))`. This forces each consumed
+/// listing input to demand a uniquely-bound successor output.
+pub type ListingDatum {
+  lister_pkh: VerificationKeyHash,
+  update_ref: Option<ByteArray>,
+}
+
+// ============================================================================
+// Listing redeemer
+// ============================================================================
+
+/// Index hints in `Swap` turn O(N) input/output scans into O(1). Wrong indexes
+/// cause downstream equality/value checks to fail; no security cost.
+pub type ListingRedeemer {
+  Swap {
+    na_asset_name: ByteArray,
+    nb_asset_name: ByteArray,
+    nb_input_index: Int,
+    listing_output_index: Int,
+    treasury_output_index: Int,
+  }
+  Cancel
+}
