@@ -93,6 +93,7 @@ class ConfigRegistrationServiceTest {
     @Mock private CuratedCollectionRepository curatedCollectionRepository;
     @Mock private BackendService backendService;
     @Mock private UtxoService utxoService;
+    @Mock private ListingScriptAddressDeriver listingScriptAddressDeriver;
 
     private ConfigRegistrationService service;
 
@@ -101,9 +102,11 @@ class ConfigRegistrationServiceTest {
         adminKeyPair = TestKeyPair.generate();
         adminPkh = Blake2bUtil.blake2bHash224(adminKeyPair.publicKey);
         lenient().when(backendService.getUtxoService()).thenReturn(utxoService);
+        lenient().when(listingScriptAddressDeriver.deriveAddress(anyString()))
+                .thenReturn("addr1_fake_listing_script_for_unit_tests");
         service = new ConfigRegistrationService(
                 configRepository, curatedCollectionRepository, backendService,
-                Networks.mainnet(), new Cip8SignatureVerifier());
+                Networks.mainnet(), new Cip8SignatureVerifier(), listingScriptAddressDeriver);
     }
 
     @Test
@@ -133,7 +136,9 @@ class ConfigRegistrationServiceTest {
         assertThat(curatedCap.getValue().getSlug()).isEqualTo("hosky");
         assertThat(curatedCap.getValue().getConfigNftPolicy()).isEqualTo(POLICY);
         assertThat(curatedCap.getValue().getCollectionPolicyId()).isEqualTo(COLLECTION_ASSET_NAME);
-        assertThat(curatedCap.getValue().getListingScriptAddress()).isNull();
+        assertThat(curatedCap.getValue().getListingScriptAddress())
+                .isEqualTo("addr1_fake_listing_script_for_unit_tests");
+        verify(listingScriptAddressDeriver, times(1)).deriveAddress(POLICY);
     }
 
     @Test

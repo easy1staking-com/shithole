@@ -45,6 +45,11 @@ dependencies {
     // depends on these transitively, so they sit on the main compile classpath
     // but not test compile — declare explicitly so both see them.
     implementation("com.bloxbean.cardano:cardano-client-plutus-aiken:0.8.0-pre4")
+    // aiken-java-binding ships a JNI wrapper over the Aiken UPLC runtime —
+    // we use it for `applyParamsToScript` so the BE can derive each registered
+    // config's listing-script address from the unapplied compiled code in
+    // plutus.json + the config_nft_policy parameter.
+    implementation("com.bloxbean.cardano:aiken-java-binding:0.1.0")
 
     // CCL annotation processor for blueprint-driven model generation from contracts/plutus.json
     compileOnly("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")

@@ -84,6 +84,7 @@ public class ConfigRegistrationService {
     private final BackendService backendService;
     private final Network appNetwork;
     private final Cip8SignatureVerifier signatureVerifier;
+    private final ListingScriptAddressDeriver listingScriptAddressDeriver;
 
     /**
      * Validate the on-chain config UTxO, persist the {@code configs} +
@@ -230,6 +231,11 @@ public class ConfigRegistrationService {
                 .updatedAt(now)
                 .build();
 
+        // Derive the listing-script address for this config (applies the
+        // config_nft_policy as a UPLC parameter to the unapplied listing
+        // validator; result is what the indexer subscribes to per collection).
+        String listingScriptAddress = listingScriptAddressDeriver.deriveAddress(policyLower);
+
         Integer displayOrder = request.getDisplayOrder() != null ? request.getDisplayOrder() : 0;
         CuratedCollectionEntity curatedEntity = CuratedCollectionEntity.builder()
                 .slug(request.getSlug())
@@ -241,9 +247,7 @@ public class ConfigRegistrationService {
                 .mascotImageUrl(theme != null ? theme.getMascotImageUrl() : null)
                 .displayOrder(displayOrder)
                 .promotedAt(now)
-                // listing_script_address is parameterised on the listing script and is a
-                // separate follow-up; the column is nullable so we leave it null for now.
-                .listingScriptAddress(null)
+                .listingScriptAddress(listingScriptAddress)
                 .build();
 
         return new RegistrationDecision(configEntity, curatedEntity, theme);
