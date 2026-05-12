@@ -310,70 +310,119 @@ For a busy collection (10k NFTs, 100k swaps lifetime), `listing_events` grows to
 
 ---
 
-## CIP-171 config discovery
+## Config registration
 
-The curation registry is auto-populated from on-chain CIP-171 records (tx-metadata label 1984). Per [CIP-171](https://github.com/cardano-foundation/CIPs/blob/main/CIP-0171/README.md) the metadata structure for an Aiken-compiled script (constructor 0) is:
+The curation registry is populated via `POST /api/configs` — an FE-driven, trustless endpoint that requires a CIP-8 admin signature over the metadata. The admin deploys a config UTxO via the FE; on confirmation the FE posts to this endpoint with the policy id, the curation metadata (slug + display_name + theme + display_order), and a CIP-8 signature from the on-chain admin key.
+
+> **History.** v1 originally planned CIP-171 auto-discovery from tx-metadata label 1984. That path was deferred — see [§Future: CIP-171 auto-discovery (deferred)](#future-cip-171-auto-discovery-deferred) at the end of this section for the original plan, kept for reference.
+
+### Endpoint
 
 ```
-Constr 0 [
-  sourceUrl    : Bytes (UTF-8)       e.g. "https://github.com/easy1staking-com/shithole"
-  commitHash   : Bytes               20-byte SHA-1 or 32-byte SHA-256 of the git commit
-  sourcePath   : Bytes (UTF-8)       optional, e.g. "contracts"
-  compilerVersion : Bytes (UTF-8)    e.g. "v1.1.21"
-  parameters   : Map<script_hash, params>   per-script Aiken parameter values
-]
+POST /api/configs
+Content-Type: application/json
+
+{
+  "config_nft_policy": "<56-hex-char script hash>",
+  "slug":              "<[a-z0-9]+(-[a-z0-9]+)*, 2..32 chars>",
+  "display_name":      "<1..64 chars, no ASCII control characters>",
+  "theme": {                                  // optional, all fields nullable
+    "background_url":   "<https:// URL, 1..512 chars>",
+    "accent_color":     "<CSS hex color, #rgb or #rrggbb>",
+    "mascot_image_url": "<https:// URL, 1..512 chars>"
+  },
+  "display_order": 0,                         // optional, integer ≥ 0, default 0
+  "signature": {
+    "key":       "<hex of COSE_Key from CIP-30 signData>",
+    "signature": "<hex of COSE_Sign1 from CIP-30 signData>"
+  }
+}
 ```
 
-### Discovery pipeline
+Response on success: **201 Created** with the persisted shape including the on-chain-derived fields (`collection_policy_id`, `m`, `protocol_fee`, `lister_fee`, `admin_pkh`, `treasury_addr_bech32`, `utxo_tx_id`, `utxo_output_index`).
 
-1. **`Cip171Processor`** (custom Yaci Store processor) reads tx-metadata at label 1984 from every block after the configured start slot. CBOR chunks are reassembled and decoded as PlutusData.
-2. **Allowlist filter**: keep only records where the decoded Constr is 0 (Aiken), `sourceUrl ∈ ALLOWED_SOURCE_URLS` (typically just `github.com/easy1staking-com/shithole`), and `compilerVersion ∈ ALLOWED_COMPILER_VERSIONS` (typically `v1.1.21+`).
-3. **Verification step (v1 = `Option (iii)`):** match the `(sourceUrl, commitHash, compilerVersion)` tuple against a hardcoded `RELEASED_VERSIONS` table that maps each released shithole tag to its expected config-validator script hash (computed once at release time and committed to the BE repo). If the on-chain `config_nft_policy` for the deployment equals the expected script hash, the candidate is **verified-authentic** and registered.
-4. **Database**: candidate written to `candidate_configs(config_nft_policy, source_url, commit_hash, compiler_version, discovered_at, status)` with `status = pending`.
-5. **Address-watch registration**: once a candidate is promoted (see below), the BE derives the parameterized listing-script address from the `config_nft_policy` and adds it to Yaci Store's watch list. New listings at that address start being indexed.
+### Canonical signature payload
 
-### Verification strategy — current and future
+The CIP-8 signature MUST be computed over the UTF-8 bytes of the following newline-delimited payload (field values inserted verbatim; empty string `""` substituted for any null/missing optional field; no trailing newline):
+
+```
+shithole/register-config
+<config_nft_policy>           // lowercase hex
+<slug>
+<display_name>
+<display_order>               // decimal integer string
+<theme.background_url>        // or "" if null
+<theme.accent_color>          // or "" if null
+<theme.mascot_image_url>      // or "" if null
+```
+
+Field validation guarantees no field can contain `\n`, so the encoding is unambiguous. The leading `"shithole/register-config"` line is a domain separator that prevents the signature from being reused for any other purpose.
+
+FE call from a CIP-30 wallet (`hashPayload=false, externalPayload=false`):
+
+```ts
+const payload = `shithole/register-config\n${policy}\n${slug}\n${displayName}\n${displayOrder}\n${bg}\n${accent}\n${mascot}`;
+const { key, signature } = await wallet.signData(adminAddress, toHex(utf8(payload)));
+```
+
+### Verification pipeline (BE)
+
+In order:
+
+1. **Bean-validation + service-level shape mirrors** — policy hex 56 chars, slug regex, display_name regex, theme fields regex. → 400 on any mismatch.
+2. **Cheap duplicate pre-check** — `existsById(slug)` and `existsByConfigNftPolicy(policy)` against both `configs` and `curated_collections`. → 409 on hit (saves a Blockfrost round-trip for the common duplicate case).
+3. **CIP-8 parse + payload echo** — `COSESign1.deserialize` + `COSEKey.deserialize` from hex; reject `unprotected.hashed=true` (we only support inlined payloads); byte-compare `COSESign1.payload` to the canonically constructed payload bytes. → 401 `signature_payload_mismatch` or `signature_key_malformed` if anything fails. **Runs before Blockfrost** so a missing project-id doesn't mask malformed signatures.
+4. **Address derivation** — `Address(ScriptCredential(config_nft_policy))` via `AddressProvider.getEntAddress`. Network selector is `app.network` (mainnet | preprod | preview).
+5. **Blockfrost UTxO lookup** — `UtxoService.getUtxos(addr, count, page, asc)`. Page through up to `MAX_UTXO_PAGES`. On `!result.isSuccessful()`: code 404 → empty list (address never used); any other status → 502 `blockfrost_unavailable` (status code logged, response body NOT returned to the client).
+6. **Strict asset-shape filter** — for each UTxO, count assets whose unit starts with `config_nft_policy`. If `> 1` same-policy assets OR the single matching asset has the wrong unit length / quantity ≠ 1 → 422 `datum_invariant_violation`. The legitimate shape: exactly one asset, unit length 112 hex chars (policy + 28-byte asset name), quantity 1.
+7. **Resolve match count** — across all pages: 0 → 404 `config_utxo_not_found`; >1 → 409 `ambiguous_config`; 1 → continue.
+8. **Datum decode** — `ConfigDatumConverter.deserialize(inlineDatumHex)`. Decode failure or null required fields → 422 `invalid_config_datum`.
+9. **Datum invariants + numeric upper bounds** — `m ∈ [1, MAX_M=1_000_000]`, `protocol_fee ∈ [0, MAX_FEE=1_000_000_000]`, `lister_fee ∈ [MIN_LISTER_FEE=1_000_000, MAX_FEE]`. Caps are application-defensive, well below `Integer.MAX_VALUE` / `Long.MAX_VALUE` to avoid overflow in the subsequent `intValueExact` / `longValueExact` calls. → 422 `datum_invariant_violation`.
+10. **Treasury address decode** — both verification-key and script credentials supported on the payment side; only inline stake credential (or no stake credential) supported on the stake side. Pointer addresses → 422.
+11. **CIP-8 signer is admin** — `blake2b_224(pubKey) == datum.admin_pkh` (lowercase hex compare). Mismatch → 403 `signature_not_admin`. **Only after datum decode** so we know who the on-chain admin is.
+12. **Ed25519 verify** — `EdDSASigningProvider.verify(coseSign1.signature, sigStructure.serializeAsBytes(), pubKey)`. Failure → 401 `signature_invalid`.
+13. **Persist** — `REQUIRES_NEW` transaction. Re-runs the duplicate pre-check inside the tx, then `saveAndFlush` both rows; the unique indexes guarantee concurrent-submit races surface as `DataIntegrityViolationException`, which the controller maps to **409 `duplicate_registration`**.
+
+### Error responses
+
+| Status | `reason` tag                  | Trigger |
+|--------|-------------------------------|---------|
+| 400    | `invalid_request`             | Bean validation, malformed JSON, service-level shape failure |
+| 401    | `signature_key_malformed`     | Hex decode / CBOR parse failed |
+| 401    | `signature_payload_mismatch`  | `payload` bytes ≠ canonical; or `hashed=true` |
+| 401    | `signature_invalid`           | Ed25519 verify returned false |
+| 403    | `signature_not_admin`         | Recovered pubkey hash ≠ on-chain `admin_pkh` |
+| 404    | `config_utxo_not_found`       | Blockfrost returned no UTxOs holding the config NFT |
+| 409    | `duplicate_slug`              | Slug already in `curated_collections` |
+| 409    | `duplicate_config`            | Policy already registered (in either `configs` or `curated_collections`) |
+| 409    | `duplicate_registration`      | Concurrent-submit race hit a unique-index violation |
+| 409    | `ambiguous_config`            | Multiple UTxOs hold the policy's NFT (shouldn't happen for legitimate deployments) |
+| 422    | `invalid_config_datum`        | Inline datum missing or undecodable as `ConfigDatum` |
+| 422    | `datum_invariant_violation`   | M / fees out of bounds, treasury address shape unsupported, asset-shape strict-check failed |
+| 502    | `blockfrost_unavailable`      | Non-2xx Blockfrost response, network failure, or `ApiException` from CCL |
+
+The 502 response body is a constant `"Backend temporarily unavailable"`; the full upstream error is logged at WARN. No upstream message bytes leak to the client.
+
+### Security posture
+
+- **No auth header**: registration is gated by the CIP-8 admin signature, not by an API key or HTTP basic auth. Anyone can hit the endpoint; only the admin can produce a valid signature.
+- **`listing_script_address` is NOT populated by this endpoint** — it requires parameter application of the listing validator with `config_nft_policy` and is a separate follow-up. Column kept nullable; indexer fills it later.
+- **Replay across slugs/themes**: prevented by the canonical-payload echo check in step 3. A valid signature for one `(policy, slug, display_name, theme, display_order)` tuple cannot be reused with a different tuple.
+- **Replay against the same tuple**: prevented by the unique constraints (`configs.config_nft_policy` PK, `curated_collections.slug` PK, `curated_collections.config_nft_policy` UNIQUE). A second valid POST 409s.
+
+### Future: CIP-171 auto-discovery (deferred)
+
+The original v1 plan was permissionless auto-discovery from on-chain CIP-171 metadata records (tx-metadata label 1984), with an operator promotion step. We deferred it to keep v1 shippable: CIP-171 adds a separate Yaci Store processor + CBOR-chunk reassembly + a script-hash verification table that's a project-lifecycle artifact (every release would need a table update). The FE-driven path is simpler and keeps curation gated by an explicit admin signature.
+
+When re-enabled (v1.5+), the deferred design is:
 
 | Phase | Strategy | Trust model |
 |---|---|---|
-| **v1 (now)** | Hardcoded `RELEASED_VERSIONS` table mapping `(sourceUrl, commit, compiler) → expected_script_hash`. Computed at release time, committed to BE source. | Trust the BE repo's released-versions table; permissionless deployment, fast verification. |
-| **v1.5 (later)** | Same, but with periodic CI workflow that rebuilds at advertised commits and updates the table. | Same trust model, fresher data. |
-| **v2 (hardening)** | BE shells out to a local `aiken` CLI installed alongside it. On candidate discovery, clones the source repo at the advertised commit, runs `aiken build`, computes the script hash, verifies. | Trust only Cardano + Aiken toolchain; no trust in BE repo's static table. |
+| **v1.5** | Hardcoded `RELEASED_VERSIONS` table mapping `(sourceUrl, commit, compiler) → expected_script_hash`, computed at release time and committed to BE source. | Trust the BE repo's released-versions table. |
+| **v1.6** | Same, but with periodic CI workflow that rebuilds at advertised commits and updates the table. | Same trust model, fresher data. |
+| **v2** | BE shells out to a local `aiken` CLI. On candidate discovery, clones the source at the advertised commit, runs `aiken build`, computes the script hash, verifies. | Trust only Cardano + the Aiken toolchain. |
 
-### Allowlist of released versions (config schema)
-
-```yaml
-shithole:
-  cip171:
-    enabled: true
-    allowed-sources:
-      - "https://github.com/easy1staking-com/shithole"
-    allowed-compilers:
-      - "v1.1.21"
-    released-versions:
-      - commit: "abcd1234..."            # full git commit hash hex
-        compiler: "v1.1.21"
-        expected-config-validator-hash: "deadbeef..."  # 28-byte script hash hex
-      # one entry per release
-```
-
-### Promotion path (admin-private profile only)
-
-```
-POST /api/admin/configs/{config_nft_policy}/promote
-Body: { "slug": "hosky", "theme": { ... } }
-Auth: admin signature header (HMAC of body using admin key) OR HTTP basic auth on the private network
-```
-
-Marks the candidate's `status = promoted`, writes `(slug, theme)` to the public-facing `curated_collections` table. The collection is now visible at the public `GET /api/curated` endpoint.
-
-### Demotion (rare)
-
-A separate `DELETE /api/admin/configs/{config_nft_policy}/curation` endpoint moves a promoted entry back to `pending`. On-chain config remains spendable forever; only the public FE surface goes dark. (Per SPEC §10.3: no on-chain retire.)
-
-### Why not curate via Git-committed JSON
-
-The previous approach (a Git-tracked JSON list of `config_nft_policy` values) required a code change + deploy for every new collection. The CIP-171 approach is permissionless on the read side: anyone can deploy a config + publish its CIP-171 record, the BE auto-discovers it, the operator just decides whether to surface it. The "released versions" allowlist is a separate concern (which *binaries* of shithole are accepted) — that one *does* need a code change + deploy when a new release ships.
+The `candidate_configs` table is preserved (empty) in the BE schema for the re-enable. The FK from `curated_collections.config_nft_policy` to `candidate_configs` was dropped in V1_0_2 since under the FE-driven flow there's no `candidate_configs` row to point at.
 
 ---
 
