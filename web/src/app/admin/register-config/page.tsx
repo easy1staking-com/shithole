@@ -61,13 +61,15 @@ export default function RegisterConfigPage() {
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [step, setStep] = useState<Step>({ kind: "idle" });
 
-  // Auto-fill admin_pkh from the connected wallet — derived (no effect).
-  // The user can override by typing into the field; once a non-empty
-  // value is in state, we stop overriding from the wallet.
-  const adminPkhValue =
-    values.adminPkhHex !== undefined && values.adminPkhHex !== null
-      ? values.adminPkhHex
-      : (paymentKeyHashHex ?? "");
+  // admin_pkh is ALWAYS the payment-key hash of the connected wallet —
+  // never user-editable. The CIP-8 signing path uses the same wallet via
+  // `wallet.signData`, so the on-chain admin_pkh recorded in the datum
+  // must hash-match the signing key the BE will recover. Allowing an
+  // override here would let the admin mint a config NFT whose datum
+  // points at a key they don't actually control, and the BE would
+  // reject the registration with `signature_not_admin` after the
+  // (irreversible) deploy tx confirms.
+  const adminPkhValue = paymentKeyHashHex ?? "";
 
   const network = useMemo(() => getNetworkName(), []);
   const projectId = useMemo(() => getBlockfrostProjectId(), []);
@@ -150,6 +152,14 @@ export default function RegisterConfigPage() {
     return parsed.data;
   }, [values, adminPkhValue]);
 
+  // Hard-block both directions of network mismatch. CIP-30 network IDs:
+  // 0 = testnet (preprod/preview/devnet), 1 = mainnet. Submit is disabled
+  // when the wallet's network doesn't match the app's configured network.
+  const networkMismatch =
+    networkId !== null &&
+    ((network === "mainnet" && networkId !== 1) ||
+      (network !== "mainnet" && networkId !== 0));
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStep({ kind: "idle" });
@@ -168,6 +178,15 @@ export default function RegisterConfigPage() {
         kind: "error",
         at: "wallet",
         message: "wallet address not resolved yet — try reconnecting",
+      });
+      return;
+    }
+    if (networkMismatch) {
+      setStep({
+        kind: "error",
+        at: "wallet",
+        message:
+          "wallet network does not match app network — switch the wallet network and try again",
       });
       return;
     }
@@ -390,9 +409,11 @@ export default function RegisterConfigPage() {
               </span>
             )}
           </p>
-          {networkId !== null && network !== "mainnet" && networkId === 1 && (
-            <p className="mt-1 text-xs text-amber-400">
-              wallet is on mainnet but app is configured for {network} — please switch
+          {networkMismatch && (
+            <p className="mt-1 text-xs text-red-400">
+              wallet is on {networkId === 1 ? "mainnet" : "testnet"} but app is
+              configured for {network} — switch the wallet network before
+              submitting; the deploy tx will fail otherwise.
             </p>
           )}
         </div>
@@ -484,21 +505,15 @@ export default function RegisterConfigPage() {
           <Field
             label="admin verification-key hash (56 hex)"
             error={errors.adminPkhHex}
-            hint={
-              paymentKeyHashHex &&
-              (values.adminPkhHex === undefined ||
-                values.adminPkhHex === paymentKeyHashHex)
-                ? "auto-filled from connected wallet (edit to override)"
-                : "override only if a different key should govern this config"
-            }
+            hint="derived from the connected wallet — not editable. The CIP-8 signature step uses the same wallet."
           >
             <input
               type="text"
               value={adminPkhValue}
-              onChange={(e) =>
-                setField("adminPkhHex", e.target.value.trim().toLowerCase())
-              }
-              className={inputClasses}
+              readOnly
+              disabled
+              aria-readonly
+              className={`${inputClasses} cursor-not-allowed opacity-70`}
               maxLength={56}
             />
           </Field>

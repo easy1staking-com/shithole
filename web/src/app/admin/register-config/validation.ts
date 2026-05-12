@@ -30,12 +30,17 @@ export const registerConfigFormSchema = z
       .int()
       .min(1, "must be >= 1")
       .max(MAX_M, `must be <= ${MAX_M}`),
+    // BE rejects fees above MAX_FEE_LOVELACE (1000 ADA). Caught FE-side
+     // *before* the on-chain deploy so the admin doesn't end up with a
+     // confirmed but unregistrable config UTxO.
     protocolFeeAda: z
       .number({ message: "must be a number" })
-      .min(0, "must be >= 0"),
+      .min(0, "must be >= 0")
+      .max(1000, "must be <= 1000 ADA (MAX_FEE_LOVELACE)"),
     listerFeeAda: z
       .number({ message: "must be a number" })
-      .min(1, "must be >= 1 ADA (MIN_LISTER_FEE floor)"),
+      .min(1, "must be >= 1 ADA (MIN_LISTER_FEE floor)")
+      .max(1000, "must be <= 1000 ADA (MAX_FEE_LOVELACE)"),
     treasuryAddrBech32: z
       .string()
       .min(1, "required")

@@ -358,25 +358,72 @@ public class ListingEventsIndexer {
     /**
      * Find the NFT (single 1-quantity asset under {@code collectionPolicyId})
      * in the output's value. Returns the {@code policy_id || asset_name} bytes
-     * for the {@code listing_events.nft_unit} column, or null if no such asset.
+     * for the {@code listing_events.nft_unit} column, or null if the UTxO
+     * fails the strict listing-shape filter from SPEC §10.2.
+     *
+     * <p>Strict filter (per SPEC §10.2):
+     * <ul>
+     *   <li>Exactly ONE non-ADA asset under {@code collection_policy_id}.</li>
+     *   <li>That asset's quantity is exactly 1.</li>
+     *   <li>That asset's name is non-empty and bounded (Cardano caps asset
+     *       names at 32 bytes = 64 hex chars).</li>
+     *   <li>No other non-ADA assets in the UTxO (no co-tenant tokens).</li>
+     *   <li>Lovelace ≥ Cardano min-UTxO floor (we use a conservative 1 ADA
+     *       — actual minUTxO depends on the output shape, so this is a lower
+     *       bound; a Babbage-era listing carrying a single NFT + small datum
+     *       can't go below ~1.5 ADA in practice).</li>
+     * </ul>
      */
     private byte[] findCollectionNftUnit(AddressUtxo out, String collectionPolicyId) {
         if (out.getAmounts() == null || collectionPolicyId == null) return null;
+
+        // Lovelace floor — defends against zero-ADA-quirk junk outputs.
+        BigInteger lovelace = out.getLovelaceAmount() != null
+                ? out.getLovelaceAmount() : BigInteger.ZERO;
+        if (lovelace.compareTo(MIN_UTXO_LOVELACE) < 0) {
+            return null;
+        }
+
+        Amt match = null;
         for (Amt a : out.getAmounts()) {
             if (a == null) continue;
             if (a.getPolicyId() == null) continue;
-            if (!collectionPolicyId.equalsIgnoreCase(a.getPolicyId())) continue;
-            if (a.getQuantity() == null) continue;
-            if (a.getQuantity().compareTo(BigInteger.ONE) != 0) continue;
-            // Unit = policy_id || asset_name (Amt.unit pre-concatenated, or fall back).
-            String unit = a.getUnit();
-            if (unit == null) {
-                unit = a.getPolicyId() + (a.getAssetName() == null ? "" : a.getAssetName());
+            // Skip the lovelace row (some yaci-store versions include it in amounts).
+            if (a.getPolicyId().isEmpty()
+                    || "lovelace".equalsIgnoreCase(a.getUnit())) continue;
+
+            if (collectionPolicyId.equalsIgnoreCase(a.getPolicyId())) {
+                // Quantity exactly 1.
+                if (a.getQuantity() == null
+                        || a.getQuantity().compareTo(BigInteger.ONE) != 0) {
+                    return null;
+                }
+                // Asset name non-empty and within the 32-byte cap.
+                String name = a.getAssetName();
+                if (name == null || name.isEmpty() || name.length() > 64) {
+                    return null;
+                }
+                // No co-tenant under the same policy.
+                if (match != null) {
+                    return null;
+                }
+                match = a;
+            } else {
+                // No other non-ADA assets allowed (no co-tenant of any other policy).
+                return null;
             }
-            return hexToBytesSafe(unit);
         }
-        return null;
+        if (match == null) return null;
+
+        String unit = match.getUnit();
+        if (unit == null) {
+            unit = match.getPolicyId() + (match.getAssetName() == null ? "" : match.getAssetName());
+        }
+        return hexToBytesSafe(unit);
     }
+
+    /** Conservative lower bound on a listing UTxO's lovelace (~1 ADA). */
+    private static final BigInteger MIN_UTXO_LOVELACE = BigInteger.valueOf(1_000_000L);
 
     private static byte[] hexToBytesSafe(String hex) {
         if (hex == null || hex.isEmpty()) return null;

@@ -45,8 +45,14 @@ public class WatchAddressRegistry {
 
     private final CuratedCollectionRepository curatedCollectionRepository;
 
-    /** {@code listing_script_address (bech32) → curated row snapshot}. */
-    private final Map<String, WatchedCollection> watched = new ConcurrentHashMap<>();
+    /**
+     * Atomic snapshot of {@code listing_script_address → curated row}. Readers
+     * see a stable, immutable map; writers atomically swap in a new map. This
+     * closes the clear-then-fill window that a {@code ConcurrentHashMap.clear()
+     * + putAll()} pair would expose to concurrent readers.
+     */
+    private final java.util.concurrent.atomic.AtomicReference<Map<String, WatchedCollection>> watched =
+            new java.util.concurrent.atomic.AtomicReference<>(Map.of());
 
     @PostConstruct
     void load() {
@@ -58,9 +64,13 @@ public class WatchAddressRegistry {
      * a re-load just overwrites entries by key. We never remove entries during
      * the run — a curated collection cannot be un-curated in v1, but if that
      * changes the reconcile() will need to drop missing keys.
+     *
+     * <p>Builds the next snapshot into a fresh map, then atomically swaps it
+     * in. Readers either see the old snapshot or the new one, never a half-
+     * populated transient state.
      */
     @Scheduled(fixedDelay = 60_000L, initialDelay = 60_000L)
-    public synchronized void reconcile() {
+    public void reconcile() {
         List<CuratedCollectionEntity> rows;
         try {
             rows = curatedCollectionRepository.findAll();
@@ -69,7 +79,7 @@ public class WatchAddressRegistry {
             log.warn("WatchAddressRegistry reconcile failed, will retry: {}", e.getMessage());
             return;
         }
-        Map<String, WatchedCollection> next = new HashMap<>(watched);
+        Map<String, WatchedCollection> next = new HashMap<>(watched.get());
         for (CuratedCollectionEntity row : rows) {
             String addr = row.getListingScriptAddress();
             if (addr == null || addr.isBlank()) {
@@ -82,9 +92,9 @@ public class WatchAddressRegistry {
                     addr);
             next.put(addr, wc);
         }
-        watched.clear();
-        watched.putAll(next);
-        log.debug("WatchAddressRegistry reconciled: {} watched address(es)", watched.size());
+        Map<String, WatchedCollection> snapshot = Map.copyOf(next);
+        watched.set(snapshot);
+        log.debug("WatchAddressRegistry reconciled: {} watched address(es)", snapshot.size());
     }
 
     @EventListener
@@ -99,25 +109,29 @@ public class WatchAddressRegistry {
                 event.getConfigNftPolicy(),
                 event.getCollectionPolicyId(),
                 event.getListingScriptAddress());
-        watched.put(event.getListingScriptAddress(), wc);
+        watched.updateAndGet(prev -> {
+            Map<String, WatchedCollection> next = new HashMap<>(prev);
+            next.put(event.getListingScriptAddress(), wc);
+            return Map.copyOf(next);
+        });
         log.info("WatchAddressRegistry +slug={} address={}",
                 event.getSlug(), event.getListingScriptAddress());
     }
 
     public boolean isWatched(String address) {
-        return address != null && watched.containsKey(address);
+        return address != null && watched.get().containsKey(address);
     }
 
     public WatchedCollection get(String address) {
-        return address == null ? null : watched.get(address);
+        return address == null ? null : watched.get().get(address);
     }
 
     public Set<String> all() {
-        return Set.copyOf(watched.keySet());
+        return watched.get().keySet();
     }
 
     public int size() {
-        return watched.size();
+        return watched.get().size();
     }
 
     /** Snapshot of the curated row needed for indexing. Immutable. */

@@ -52,6 +52,12 @@ store:
     # boot fails unless DevKit is running and supplies genesis paths. Override
     # via `PROTOCOL_MAGIC=42` once DevKit is up.
     protocol-magic: ${PROTOCOL_MAGIC:1}
+    # Operator-set starting slot. Wired to the same env var the indexer
+    # comments document (SHITHOLE_INDEXER_START_SLOT). Yaci backfills blocks
+    # at/after this slot only; without it, sync starts from genesis which is
+    # impractical for a curation indexer. Leave at 0 only if your env knows
+    # what it's doing (e.g., DevKit with a fresh ledger).
+    sync-start-slot: ${SHITHOLE_INDEXER_START_SLOT:0}
   utxo:
     pruning-enabled: false
 
