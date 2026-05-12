@@ -428,20 +428,32 @@ These are **per-collection defaults**, not protocol-wide. Different collections 
 
 ### 10.2 Backend (Java 21 + Spring Boot + Yaci Store + Postgres)
 
-- **Indexer:** track all UTxOs at curated spend-script addresses + their config UTxOs + relevant mint events. Custom Yaci Store processors filter for the parameterized policies.
-- **Strict listing-shape filter (load-bearing):** the spend-script address is permissionless. The indexer treats a UTxO as a *valid listing* only if **all** of:
+The BE has five responsibilities. **Operational specifics (Blockfrost vs. Koios, IPFS gateway fan-out, deployment profiles, secrets handling, sizing) live in [docs/BACKEND.md](./docs/BACKEND.md), updated independently of this spec.** This section is the high-level "what."
+
+- **Indexer.** Track UTxOs at curated spend-script addresses + their config UTxOs. Yaci Store is **scoped to contract addresses only** — we do not index mint-tx history globally (DB-size discipline). External metadata sources (Blockfrost) fill that gap.
+- **Strict listing-shape filter (load-bearing).** The spend-script address is permissionless. The indexer treats a UTxO as a *valid listing* only if **all** of:
   - Inline datum decodes as a `ListingDatum`.
   - Value contains exactly one non-ADA asset.
-  - That asset's policy id equals the corresponding config's `collection_policy_id` (= the config NFT's asset name).
+  - That asset's policy id equals the config's `collection_policy_id` (= the config NFT's asset name).
   - That asset has quantity 1.
   - No other non-ADA assets present.
   - Lovelace ≥ Cardano min-UTxO for the output shape.
 
-  Anything failing this filter is a junk UTxO: ignored by the FE, not counted in N when sizing M, and not surfaced as a swap target. Junk cannot be grouped into the bucket distribution because it cannot satisfy the swap invariants — its presence on-chain is harmless to swappers but visually noisy if exposed.
-- **Metadata cache:** resolve and cache CIP-25 (label-less, on-chain JSON in tx metadata) and CIP-68 (label-prefixed reference tokens) metadata for every NFT touching the system. Multi-tier thumbnails (64 / 256 / 1024 px).
-- **Stats:** swap volume per collection, listing age, accrued ADA per listing.
-- **Curation registry:** authoritative list of `(slug, config_nft_policy, theme)` consumed by the FE. The collection_policy_id is derived from the config NFT's asset name; need not be stored separately.
-- **Datum/redeemer model generation:** use the Cardano Client Lib (CCL) **blueprint** module with annotation processors to generate Java model classes from Aiken's compiled `plutus.json` blueprint output. Avoids hand-maintained Java mirrors of `ConfigDatum`, `ListingDatum`, and `ListingRedeemer`. Build via Gradle (not Maven).
+  Anything failing this filter is a junk UTxO: ignored by the FE, not counted in N when sizing M, and not surfaced as a swap target. Junk is harmless on-chain (can't satisfy swap invariants) but visually noisy if exposed.
+- **NFT metadata + image cache.** First sighting of an NFT triggers a Blockfrost `/assets/{unit}` fetch (one HTTP call returns parsed CIP-25/CIP-68 metadata including the `image` URL). Image bytes fetched via public IPFS-gateway fan-out (`ipfs.io`, `dweb.link`, `w3s.link`, `gateway.pinata.cloud`); three thumbnail tiers (64/256/1024 px JPEG) stored in Postgres BYTEA. Permanent fetch failure → 404 → FE shows the "could not be retrieved from the mud" placeholder. See `docs/BACKEND.md` for retry policy and v1.5 self-pinning escalation.
+- **Stats + M-staleness tracking.** Swap volume per collection, listing age, accrued ADA per listing. Continuously computes `recommended_m = ceil(N / 3)` per collection; exposes `current_m`, `recommended_m`, `recommended_m_ratio` on the collection endpoint. Structured-log warning when `current_m / recommended_m > threshold` (the asymmetric failure mode — shrunken pool degrades swap UX; growth is benign).
+- **Curation registry.** Authoritative list of `(slug, config_nft_policy, theme)` consumed by the FE. The `collection_policy_id` is derived from the config NFT's asset name; no separate field needed.
+
+**Two deployment profiles** (full spec in `docs/BACKEND.md`):
+
+| Profile | Where it runs | Admin seed | Rebalancer cron | Tx submission |
+|---|---|---|---|---|
+| **Public** | Internet-facing, behind a CDN | Not loaded | Disabled | Disabled |
+| **Admin-private** | Operator's local / private network | Loaded from env var | Enabled, `@Scheduled` | Enabled |
+
+Feature-flagged (`shithole.rebalancer.enabled`) via `@ConditionalOnProperty` — public binaries are bit-identical to private; the missing env var neuters the feature. The admin-private profile's `RebalancerService` periodically rebalances `M` per the staleness-tracking rule above by signing config-update txs with the loaded admin key (skipping any collections whose admin pkh doesn't match).
+
+**Datum/redeemer model generation.** CCL **blueprint** annotation processor reads `../contracts/plutus.json` and generates Java types for `ConfigDatum`, `ListingDatum`, `ListingRedeemer` under `build/generated/`. No hand-maintained Java mirrors. Build via **Gradle** (not Maven).
 
 ### 10.3 Curation lifecycle
 
