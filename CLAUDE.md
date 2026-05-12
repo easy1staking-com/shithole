@@ -14,8 +14,10 @@ A Cardano dApp giving dead / rugpulled NFT collections a second life via random 
   - `09395b6` api: trustless `POST /api/configs` with CIP-8 admin signature (V1_0_2 drops the candidate_configs FK).
   - `403d782` docs: SPEC §10.2/§10.3 + docs/BACKEND.md realigned for the FE-driven curation pivot.
 - **Pivot**: CIP-171 auto-discovery deferred for v1. Curation goes through `POST /api/configs` with a CIP-8 admin signature from the on-chain `admin_pkh`.
-- **`9b84ef5` api: listing_script_address derivation via aiken-java-binding (JNI UPLC apply-params); 29 tests green.**
-- **Next**: real Yaci Store indexer wiring (subscribe to `AddressUtxoEvent` for each registered config's listing script address; populate `listing_events`). FE-side `wallet.signData` integration to drive `POST /api/configs`.
+- **`9b84ef5` api: listing_script_address derivation via aiken-java-binding (JNI UPLC apply-params).**
+- **`e3f3ec5` api: Yaci Store indexer wiring — WatchAddressRegistry + ListingEventsIndexer (genesis/swap/cancel-or-recover) + UtxoRollbackEvent handler. 47 tests green.**
+- **`759f2c9` web: admin register-config flow end-to-end — CIP-30 wallet, Evolution SDK config-deploy, byte-identical CIP-8 canonical payload, POST /api/configs.**
+- **Next**: Codex pass on `e3f3ec5` + `759f2c9` (both unreviewed). Then end-to-end smoke against a Yaci DevKit / preprod node (the FE tx byte representation hasn't been exercised against a real chain yet). Cancel-vs-recover classification by redeemer (currently both → `spent_unknown`).
 
 ## Concept
 
