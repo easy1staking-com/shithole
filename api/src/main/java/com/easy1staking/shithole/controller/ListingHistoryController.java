@@ -41,18 +41,32 @@ public class ListingHistoryController {
      *
      * <ul>
      *   <li>tx_hash: exactly 64 lowercase hex chars (32-byte blake2b)</li>
-     *   <li>output_index: 1-5 decimal digits, no leading zeros except for "0"</li>
+     *   <li>output_index: 0 or 1-10 decimal digits, no leading zeros. Range
+     *       enforced numerically below to allow the full 32-bit signed range
+     *       that matches the DB column type ({@code INT}).</li>
      * </ul>
      */
     private static final Pattern INITIAL_OUTREF_PATTERN =
-            Pattern.compile("^(?<tx>[0-9a-f]{64})_(?<idx>0|[1-9][0-9]{0,4})$");
+            Pattern.compile("^(?<tx>[0-9a-f]{64})_(?<idx>0|[1-9][0-9]{0,9})$");
 
     private final FixtureService fixtureService;
 
     @GetMapping(value = "/listings/{initialOutref}/history",
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ListingHistoryDto> history(@PathVariable String initialOutref) {
-        if (!INITIAL_OUTREF_PATTERN.matcher(initialOutref).matches()) {
+        var matcher = INITIAL_OUTREF_PATTERN.matcher(initialOutref);
+        if (!matcher.matches()) {
+            return ResponseEntity.badRequest().build();
+        }
+        // Parse the index and enforce the 32-bit signed range explicitly — the
+        // 1-10 digit cap on the regex still admits values like 9999999999 which
+        // overflow Integer.
+        try {
+            long idx = Long.parseLong(matcher.group("idx"));
+            if (idx < 0 || idx > Integer.MAX_VALUE) {
+                return ResponseEntity.badRequest().build();
+            }
+        } catch (NumberFormatException nfe) {
             return ResponseEntity.badRequest().build();
         }
         try {

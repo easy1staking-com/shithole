@@ -28,8 +28,10 @@ public interface ListingEventRepository extends JpaRepository<ListingEventEntity
 
     /**
      * Return the row for {@code (txHash, outputIndex)} only if it is still
-     * an active listing (i.e. {@code spent_action IS NULL}). Backed by the
-     * {@code listing_events_active} partial index.
+     * an active listing (i.e. {@code spent_action IS NULL}). Postgres uses
+     * the primary-key btree for this lookup; the {@code listing_events_active}
+     * partial index is for the {@code (config_nft_policy, lister_pkh)} scan
+     * paths used elsewhere.
      */
     @Query("select e from ListingEventEntity e "
             + "where e.txHash = :txHash "
@@ -55,10 +57,14 @@ public interface ListingEventRepository extends JpaRepository<ListingEventEntity
 
     /**
      * Look up the listing event whose {@code update_ref_hash} matches the
-     * given hash. Used at response-shaping time to resolve
-     * {@code ListingDatum.update_ref} (a {@code compute_output_tag} hash)
-     * back to the structured outref of the consumed listing. Backed by the
-     * {@code listing_events_by_update_ref} partial index.
+     * given hash. Note the directionality: {@code update_ref_hash} is stored
+     * on the SUCCESSOR row (the swap that created this listing), not on the
+     * predecessor. To resolve {@code ListingDatum.update_ref} (a
+     * {@code compute_output_tag(prev_outref)} hash) back to the structured
+     * outref of the PREVIOUSLY consumed listing, call this finder to locate
+     * the successor row, then look up the previous row in the same lineage at
+     * {@code swap_index - 1}. Backed by the {@code listing_events_by_update_ref}
+     * partial index.
      */
     @Query("select e from ListingEventEntity e where e.updateRefHash = :hash")
     Optional<ListingEventEntity> findByUpdateRefHash(@Param("hash") byte[] hash);

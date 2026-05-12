@@ -4,7 +4,17 @@ A Cardano dApp giving dead / rugpulled NFT collections a second life via random 
 
 ## Status
 
-**SPEC.md v0.3 LOCKED** (2026-05-10) after a clean second Codex adversarial review. Build plan agreed at `/Users/giovanni/.claude/plans/snug-herding-penguin.md`. Currently in Phase 1 — Repo skeleton + tooling.
+**SPEC.md v0.5** (2026-05-12). Build plan at `/Users/giovanni/.claude/plans/snug-herding-penguin.md`.
+
+- **Phase 2 (Aiken contracts) LOCKED** at 60c1688 (2026-05-11) — 53 tests green.
+- **Phase 3 (BE + FE bootstrap) in flight**:
+  - `671776b` web: FE plumbing (types, MSW, React Query, two pages).
+  - `6fd425a` api: BE plumbing (entities, repos, DTOs, fixture-serving controllers).
+  - `7697ece` api: Yaci Store 2.1.0-pre3, CCL 0.8.0-pre4, swap-history lineage table (V1_0_1).
+  - `09395b6` api: trustless `POST /api/configs` with CIP-8 admin signature (V1_0_2 drops the candidate_configs FK).
+  - `403d782` docs: SPEC §10.2/§10.3 + docs/BACKEND.md realigned for the FE-driven curation pivot.
+- **Pivot**: CIP-171 auto-discovery deferred for v1. Curation goes through `POST /api/configs` with a CIP-8 admin signature from the on-chain `admin_pkh`.
+- **Next**: real Yaci Store indexer wiring (subscribe to `AddressUtxoEvent` for each registered config's listing script address; populate `listing_events`). FE-side `wallet.signData` integration to drive the new endpoint. `listing_script_address` derivation (needs UPLC apply-params — FE-supplied via Evolution SDK is the likely route).
 
 ## Concept
 

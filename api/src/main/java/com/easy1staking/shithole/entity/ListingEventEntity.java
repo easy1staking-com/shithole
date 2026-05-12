@@ -7,8 +7,10 @@ import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.time.OffsetDateTime;
 
@@ -24,11 +26,20 @@ import java.time.OffsetDateTime;
  * documented in {@code docs/BACKEND.md} §"Swap-history lineage tracking".
  * Bytes columns use {@code BYTEA} on Postgres; Java side these are
  * {@code byte[]} (raw tx-hash / policy / pkh / unit bytes, never hex).
+ *
+ * <p>Deliberately not {@code @Data}: Lombok's generated {@code equals}/
+ * {@code hashCode} compare {@code byte[]} fields by reference, which is
+ * surprising when entities land in {@code Set}s or test assertions. JPA
+ * identity is carried by {@link ListingEventId} (which DOES implement
+ * {@code Arrays.equals}/{@code hashCode}); construct one explicitly when you
+ * need identity comparisons across entities.
  */
 @Entity
 @Table(name = "listing_events")
 @IdClass(ListingEventId.class)
-@Data
+@Getter
+@Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
