@@ -8,8 +8,13 @@ services:
       POSTGRES_USER: shithole
       POSTGRES_PASSWORD: shithole
       POSTGRES_DB: shithole
+    # Bind to host :5433 so it doesn't collide with a host-level Postgres on
+    # :5432 (homebrew Postgres on Giovanni's macOS dev machine). The container
+    # internally still listens on 5432. IntelliJ-driven local dev points at the
+    # host-level Postgres directly; this compose service is for headless / CI /
+    # automation testing (e.g. when the conversation tool needs to spin DB up).
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

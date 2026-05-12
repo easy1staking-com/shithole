@@ -199,6 +199,117 @@ Defer until v1 metrics show this is needed.
 
 ---
 
+## Swap-history lineage tracking
+
+Listings are not just live UTxOs — each listing has a *lineage* from genesis (initial pay-to-script) through any number of swaps to a terminal action (cancel or recover). The lister + a curious observer should be able to see the full timeline of a listing: when it was created, every swap that hit it (NA → NB, who initiated, when), and how it ended.
+
+### Data model
+
+One append-only `listing_events` table holds every listing UTxO ever observed at any curated spend-script address. The live listings are the rows where `spent_action IS NULL`; the history of any listing is its lineage chain ordered by `swap_index`.
+
+```sql
+CREATE TABLE listing_events (
+  tx_hash              BYTEA NOT NULL,
+  output_index         INT   NOT NULL,
+  initial_tx_hash      BYTEA NOT NULL,        -- the pay-to-script that started this lineage
+  initial_output_index INT   NOT NULL,
+  swap_index           INT   NOT NULL,        -- 0 = genesis; 1+ = result of swap N
+  config_nft_policy    BYTEA NOT NULL,
+  lister_pkh           BYTEA NOT NULL,
+  nft_unit             BYTEA NOT NULL,        -- NFT currently in this UTxO
+  lovelace             BIGINT NOT NULL,
+  update_ref_hash      BYTEA,                 -- null on genesis; compute_output_tag(prev_outref) on swaps
+  created_at_slot      BIGINT NOT NULL,
+  created_at           TIMESTAMPTZ NOT NULL,
+  spent_at_slot        BIGINT,                -- null = still active
+  spent_at             TIMESTAMPTZ,
+  spent_by_tx_hash     BYTEA,
+  spent_action         VARCHAR(16),           -- 'swap' | 'cancel' | 'recover' | NULL (= active)
+  PRIMARY KEY (tx_hash, output_index),
+  FOREIGN KEY (initial_tx_hash, initial_output_index)
+    REFERENCES listing_events(tx_hash, output_index)
+);
+
+CREATE INDEX listing_events_active
+  ON listing_events (config_nft_policy, lister_pkh)
+  WHERE spent_action IS NULL;
+
+CREATE INDEX listing_events_lineage
+  ON listing_events (initial_tx_hash, initial_output_index, swap_index);
+
+CREATE INDEX listing_events_by_update_ref
+  ON listing_events (update_ref_hash)
+  WHERE update_ref_hash IS NOT NULL;
+```
+
+Same pattern as ada-watch's identity-by-initial-outref approach.
+
+### Indexer behavior
+
+On every block at/after the configured `start-slot`:
+
+1. **Genesis case** — a tx outputs a UTxO at a curated listing address with `datum.update_ref == None`:
+   - Insert row with `(initial_tx_hash, initial_output_index) == (tx_hash, output_index)`, `swap_index = 0`.
+
+2. **Swap case** — a tx outputs a UTxO at a curated listing address with `datum.update_ref == Some(hash)`:
+   - Find the listing UTxO consumed in the same tx (same script address among `tx.inputs`).
+   - Sanity-check: `compute_output_tag(consumed.outref) == hash` (matches the validator's invariant S6 from SPEC §6.3).
+   - Insert new row with the consumed row's lineage, `swap_index = consumed.swap_index + 1`.
+   - Update the consumed row's `spent_action = 'swap'`, `spent_at_slot`, `spent_at`, `spent_by_tx_hash`.
+
+3. **Cancel / Recover case** — a tx consumes a listing UTxO without producing a continuing listing output:
+   - Update the consumed row's `spent_action = 'cancel'` (lister signature) or `'recover'` (admin signature on a datumless UTxO).
+   - `spent_at_slot`, `spent_at`, `spent_by_tx_hash` populated.
+
+Yaci Store maintains a `block` table with slot → timestamp; the indexer joins to it for the `*_at` timestamp columns.
+
+### History endpoint
+
+```
+GET /api/listings/{initial_tx_hash}_{initial_output_index}/history
+→ {
+  "initial_outref": { "tx_id": "<hex>", "output_index": <int> },
+  "events": [
+    {
+      "swap_index": 0,
+      "tx_hash": "<hex>",
+      "output_index": <int>,
+      "slot": <int>,
+      "timestamp": "<iso8601>",
+      "nft_unit": "<hex>",
+      "lovelace": <int>,
+      "action": "create"        // genesis row marker
+    },
+    {
+      "swap_index": 1,
+      "tx_hash": "<hex>",
+      "output_index": <int>,
+      "slot": <int>,
+      "timestamp": "<iso8601>",
+      "na_unit": "<hex>",       // NFT that left
+      "nb_unit": "<hex>",       // NFT that arrived
+      "lovelace": <int>,
+      "action": "swap"
+    },
+    // ...
+    {
+      "swap_index": <N>,
+      "slot": <int>,
+      "timestamp": "<iso8601>",
+      "action": "cancel"        // or "recover"
+    }
+  ]
+}
+```
+
+The `Listing` DTO returned by `GET /api/collections/{slug}/listings` includes `update_ref: { tx_id, output_index } | null` — the BE resolves the `update_ref_hash` to the previous outref via `listing_events_by_update_ref` index at response time. FE displays this as "this listing was last swapped on …" with a link to the history endpoint.
+
+### Storage cost
+
+For a busy collection (10k NFTs, 100k swaps lifetime), `listing_events` grows to ~110k rows × ~200 bytes = ~22 MB. Negligible. Indexes ~3× that. Postgres on a TB disk fits dozens of collections comfortably.
+
+---
+
 ## CIP-171 config discovery
 
 The curation registry is auto-populated from on-chain CIP-171 records (tx-metadata label 1984). Per [CIP-171](https://github.com/cardano-foundation/CIPs/blob/main/CIP-0171/README.md) the metadata structure for an Aiken-compiled script (constructor 0) is:
@@ -275,6 +386,7 @@ All secrets live in environment variables, never in source/config files/logs:
 | Blockfrost API key | `BLOCKFROST_PROJECT_ID` | Both (mainnet/preprod, scoped) |
 | Admin wallet seed (rebalancer) | `ADMIN_SEED` | Admin-private only |
 | Postgres connection password | `DATABASE_PASSWORD` (or `JDBC_URL`-embedded) | Both |
+| Postgres host port | `5432` for the operator's local host-level Postgres (preferred for IntelliJ-driven dev); `5433` for the docker-compose service (for headless / CI / automation testing). | Both |
 | Pinata / IPFS pinning key (v1.5) | `PINATA_JWT` | Admin-private only, if v1.5 lands |
 
 `@Value("${BLOCKFROST_PROJECT_ID:}")` with empty default; service refuses to start if the value is empty AND the feature that needs it is enabled.
