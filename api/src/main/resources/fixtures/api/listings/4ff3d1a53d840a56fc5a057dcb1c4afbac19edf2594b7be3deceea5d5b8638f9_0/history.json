@@ -1,0 +1,18 @@
+{
+  "initial_outref": {
+    "tx_id": "4ff3d1a53d840a56fc5a057dcb1c4afbac19edf2594b7be3deceea5d5b8638f9",
+    "output_index": 0
+  },
+  "events": [
+    {
+      "swap_index": 0,
+      "tx_hash": "4ff3d1a53d840a56fc5a057dcb1c4afbac19edf2594b7be3deceea5d5b8638f9",
+      "output_index": 0,
+      "slot": 130000000,
+      "timestamp": "2026-05-12T00:00:00Z",
+      "nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303031",
+      "lovelace": 2000000,
+      "action": "create"
+    }
+  ]
+}

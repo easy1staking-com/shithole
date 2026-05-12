@@ -9,10 +9,13 @@ spring:
   jpa:
     hibernate:
       # Flyway owns the schema end-to-end. We disable Hibernate's schema validation
-      # because Yaci Store 0.1.6 ships migrations whose declared column widths
-      # (e.g. `address_utxo.output_index` as SMALLINT) don't match its own JPA
-      # entities (INTEGER). Switch to `validate` once we move past the legacy
-      # starter version.
+      # because Yaci Store still ships migrations whose declared column widths
+      # don't match its own JPA entities: `address_utxo.output_index` is SMALLINT
+      # in {@code db/store/postgresql/V0_200_1__init.sql} (yaci-store-utxo 2.1.0-pre3)
+      # while {@code AddressUtxoEntity#outputIndex} is declared as
+      # {@code java.lang.Integer}. {@code validate} would refuse to start. Until
+      # the upstream entity uses {@code Short}/the migration uses {@code INT},
+      # this stays at {@code none}.
       ddl-auto: none
     properties:
       hibernate:
@@ -30,7 +33,14 @@ spring:
 
 # Yaci Store config — points at local Yaci DevKit Cardano node by default.
 # For preprod/mainnet, override via env vars or a profile.
+#
+# Property keys verified against yaci-store 2.1.0-pre3 (`store.cardano.*` ->
+# `YaciStoreProperties$Cardano`, `store.utxo.*` -> `UtxoStoreAutoConfigProperties$Utxo`).
+# `store.sync-auto-start` defaults to true in 2.x; we hold it at false until the
+# indexer phase explicitly opts in (auto-configs are currently excluded in
+# {@code ShitholeApi} so these keys are inert for the bootstrap phase).
 store:
+  sync-auto-start: false
   cardano:
     host: ${REMOTE_NODE_URL:localhost}
     port: ${REMOTE_NODE_PORT:3001}
