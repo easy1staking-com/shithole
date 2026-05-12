@@ -28,6 +28,12 @@ clean:
 # Aiken contracts
 contracts-build:
 	cd contracts && aiken build
+	# Keep the FE-side copy in sync. web/public/contracts/plutus.json is
+	# served as a static asset to the admin register-config flow; if the
+	# Aiken build emits new bytes here the copy MUST update or the FE will
+	# silently build txs against a stale blueprint.
+	mkdir -p web/public/contracts
+	cp contracts/plutus.json web/public/contracts/plutus.json
 
 contracts-test:
 	cd contracts && aiken check -D
