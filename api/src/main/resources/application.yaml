@@ -51,10 +51,20 @@ store:
 # Network: devnet | preprod | preview | mainnet
 network: ${NETWORK:devnet}
 
-# Blockfrost — used by the NFT metadata pipeline (docs/BACKEND.md §metadata).
-# Empty default; services that need it will fail fast on startup.
+# Application network selector — controls address derivation + Blockfrost URL
+# in the config-registration path. Independent of the indexer `network` key
+# above so callers can run a mainnet config-registration flow against a
+# devnet indexer during development. Accepted values: mainnet | preprod.
+app:
+  network: ${APP_NETWORK:mainnet}
+
+# Blockfrost — used by the NFT metadata pipeline (docs/BACKEND.md §metadata)
+# and by the config-registration endpoint (POST /api/configs).
+# Empty URL default → BlockfrostConfig.defaultBlockfrostUrl() picks the URL
+# based on `app.network` so callers don't accidentally hit mainnet when
+# running against a non-mainnet network.
 blockfrost:
-  url: ${BLOCKFROST_URL:https://cardano-mainnet.blockfrost.io/api/v0/}
+  url: ${BLOCKFROST_URL:}
   project-id: ${BLOCKFROST_PROJECT_ID:}
 
 # Application-level configuration.

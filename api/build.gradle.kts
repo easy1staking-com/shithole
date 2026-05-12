@@ -31,6 +31,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 
     // Cardano Client Lib (CCL) — pre-release pinned for the blueprint annotation processor.
@@ -39,6 +40,11 @@ dependencies {
     implementation("com.bloxbean.cardano:cardano-client-lib:0.8.0-pre4")
     implementation("com.bloxbean.cardano:cardano-client-backend-blockfrost:0.8.0-pre4")
     implementation("com.bloxbean.cardano:cardano-client-backend-ogmios:0.8.0-pre4")
+    // Aiken blueprint runtime types referenced by the generated model classes
+    // (`VerificationKeyHash`, `ScriptHash`, ...). Only the annotation processor
+    // depends on these transitively, so they sit on the main compile classpath
+    // but not test compile — declare explicitly so both see them.
+    implementation("com.bloxbean.cardano:cardano-client-plutus-aiken:0.8.0-pre4")
 
     // CCL annotation processor for blueprint-driven model generation from contracts/plutus.json
     compileOnly("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")

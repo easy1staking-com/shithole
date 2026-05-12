@@ -1,0 +1,31 @@
+-- Shithole BE schema — v1.0.2 (drop candidate_configs FK)
+--
+-- Reference: SPEC.md §10.3 (curation lifecycle) + project memory entry
+--   "Open design questions" → CIP-171 deferred (2026-05-12).
+--
+-- Pivot rationale
+-- ---------------
+-- v1.0.0 had `curated_collections.config_nft_policy` reference
+-- `candidate_configs.config_nft_policy` because the original lifecycle was
+--   CIP-171 auto-discovery → `candidate_configs(status='pending')`
+--   → admin promotes → `curated_collections`.
+--
+-- We have since pivoted away from CIP-171 auto-discovery for v1. The new
+-- flow is:
+--   admin deploys a config UTxO via the FE → on confirmation, the FE POSTs
+--   to `POST /api/configs` with the config NFT policy + curation metadata.
+--   The BE trustlessly validates by reading the config UTxO from chain via
+--   Blockfrost, decoding the inline datum, and writing both the `configs`
+--   and `curated_collections` rows in one transactional method.
+--
+-- Under the new flow there is no `candidate_configs` row to point at:
+-- the row in `curated_collections` is now the canonical curated entry,
+-- created directly from on-chain verification. The FK would always violate
+-- because `candidate_configs` will be empty in the new flow.
+--
+-- We keep the `candidate_configs` *table* (and the column on
+-- `curated_collections`, which is now just plain text data) so we can
+-- re-enable CIP-171 later without another migration. Only the FK constraint
+-- is dropped.
+ALTER TABLE curated_collections
+    DROP CONSTRAINT IF EXISTS fk_curated_collections_candidate;
