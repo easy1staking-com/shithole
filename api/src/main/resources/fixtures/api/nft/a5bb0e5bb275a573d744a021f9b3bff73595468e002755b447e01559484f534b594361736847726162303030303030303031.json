@@ -1,0 +1,36 @@
+{
+  "unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303031",
+  "policy_id": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559",
+  "asset_name_hex": "484f534b594361736847726162303030303030303031",
+  "asset_name": "HOSKYCashGrab000000001",
+  "fingerprint": "asset1e0xu0wl6tsn9xl9nmye30lg0l0u8m076jc6jec",
+  "quantity": 1,
+  "onchain_metadata_standard": "CIP25v1",
+  "name": "HOSKY C(ash Grab)NFT 1",
+  "image_ipfs_uri": "ipfs://Qmbqc9uHKu8TSmj7S3asqcYk1b6trjP6sMm2BofEeNkF3s",
+  "image_url": "/mocks/fixtures/hosky/images/HOSKYCashGrab000000001.png",
+  "traits": [
+    {
+      "Background": "Cyan"
+    },
+    {
+      "Fur": "Original"
+    },
+    {
+      "Eyes": "Original"
+    },
+    {
+      "Ear Decoration": "Double Left Rings"
+    },
+    {
+      "Neck": "Red Collar Gold Spikes"
+    },
+    {
+      "Mouth": "Original"
+    },
+    {
+      "Frame": "Ikea"
+    }
+  ],
+  "description": null
+}

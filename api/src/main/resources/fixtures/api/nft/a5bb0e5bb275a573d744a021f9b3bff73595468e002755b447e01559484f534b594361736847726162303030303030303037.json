@@ -1,0 +1,36 @@
+{
+  "unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303037",
+  "policy_id": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559",
+  "asset_name_hex": "484f534b594361736847726162303030303030303037",
+  "asset_name": "HOSKYCashGrab000000007",
+  "fingerprint": "asset1t5zyuh5hyas6ltjw7cg7y5qg52rwngq5f4kn6r",
+  "quantity": 1,
+  "onchain_metadata_standard": "CIP25v1",
+  "name": "HOSKY C(ash Grab)NFT 7",
+  "image_ipfs_uri": "ipfs://QmZhVVd4Be94o2HgpggLBdFAvynn4VukBLSH7V9KrBUU37",
+  "image_url": "/mocks/fixtures/hosky/images/HOSKYCashGrab000000007.png",
+  "traits": [
+    {
+      "Background": "Baby Blue"
+    },
+    {
+      "Fur": "Golden Labrador"
+    },
+    {
+      "Eyes": "Crazy Eyes"
+    },
+    {
+      "Hat": "Blood Poo"
+    },
+    {
+      "Neck": "Red Collar"
+    },
+    {
+      "Mouth": "Original"
+    },
+    {
+      "Frame": "Wood"
+    }
+  ],
+  "description": null
+}

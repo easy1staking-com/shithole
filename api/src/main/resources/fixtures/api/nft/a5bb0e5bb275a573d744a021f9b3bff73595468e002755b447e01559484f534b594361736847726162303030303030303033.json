@@ -1,0 +1,36 @@
+{
+  "unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303033",
+  "policy_id": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559",
+  "asset_name_hex": "484f534b594361736847726162303030303030303033",
+  "asset_name": "HOSKYCashGrab000000003",
+  "fingerprint": "asset1wt8xt6z2xkcwfldm6um4nyz37202empkknar2u",
+  "quantity": 1,
+  "onchain_metadata_standard": "CIP25v1",
+  "name": "HOSKY C(ash Grab)NFT 3",
+  "image_ipfs_uri": "ipfs://QmcEHJxUNBjHM8TUnXGEjoAMc143er1dVNSiR7e4snBap7",
+  "image_url": "/mocks/fixtures/hosky/images/HOSKYCashGrab000000003.png",
+  "traits": [
+    {
+      "Background": "Green"
+    },
+    {
+      "Fur": "Original"
+    },
+    {
+      "Eyes": "Original"
+    },
+    {
+      "Ear Decoration": "Double Right Rings"
+    },
+    {
+      "Neck": "Blue Collar"
+    },
+    {
+      "Mouth": "Original"
+    },
+    {
+      "Glasses": "Mirrored Glasses"
+    }
+  ],
+  "description": null
+}

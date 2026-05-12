@@ -33,14 +33,16 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 
-    // Cardano Client Lib (CCL) — pinned to latest stable; bump to pre-release in dev as needed
-    implementation("com.bloxbean.cardano:cardano-client-lib:0.7.1")
-    implementation("com.bloxbean.cardano:cardano-client-backend-blockfrost:0.7.1")
-    implementation("com.bloxbean.cardano:cardano-client-backend-ogmios:0.7.1")
+    // Cardano Client Lib (CCL) — pre-release pinned for the blueprint annotation processor.
+    // 0.7.1's processor mis-generates Option<a> imports (`option<cardano…>` literal in source).
+    // 0.8.0-pre3 fixes that.
+    implementation("com.bloxbean.cardano:cardano-client-lib:0.8.0-pre3")
+    implementation("com.bloxbean.cardano:cardano-client-backend-blockfrost:0.8.0-pre3")
+    implementation("com.bloxbean.cardano:cardano-client-backend-ogmios:0.8.0-pre3")
 
     // CCL annotation processor for blueprint-driven model generation from contracts/plutus.json
-    compileOnly("com.bloxbean.cardano:cardano-client-annotation-processor:0.7.1")
-    annotationProcessor("com.bloxbean.cardano:cardano-client-annotation-processor:0.7.1")
+    compileOnly("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre3")
+    annotationProcessor("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre3")
 
     // Yaci Store — auto-indexes UTxOs into our Postgres
     implementation("com.bloxbean.cardano:yaci-store-spring-boot-starter:0.1.6")

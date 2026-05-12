@@ -2,19 +2,27 @@ spring:
   application:
     name: shithole-api
   datasource:
-    url: jdbc:postgresql://localhost:5432/shithole
-    username: shithole
-    password: shithole
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/shithole}
+    username: ${DB_USERNAME:shithole}
+    password: ${DB_PASSWORD:shithole}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: validate
+      # Flyway owns the schema end-to-end. We disable Hibernate's schema validation
+      # because Yaci Store 0.1.6 ships migrations whose declared column widths
+      # (e.g. `address_utxo.output_index` as SMALLINT) don't match its own JPA
+      # entities (INTEGER). Switch to `validate` once we move past the legacy
+      # starter version.
+      ddl-auto: none
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc.lob.non_contextual_creation: true
   flyway:
     enabled: true
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/shithole}
+    user: ${DB_USERNAME:shithole}
+    password: ${DB_PASSWORD:shithole}
     locations:
       - classpath:db/store/{vendor}
       - classpath:db/store/shithole
@@ -24,18 +32,64 @@ spring:
 # For preprod/mainnet, override via env vars or a profile.
 store:
   cardano:
-    host: localhost
-    port: 3001
-    protocol-magic: 42  # Yaci DevKit default
+    host: ${REMOTE_NODE_URL:localhost}
+    port: ${REMOTE_NODE_PORT:3001}
+    protocol-magic: ${PROTOCOL_MAGIC:42}  # Yaci DevKit default
   utxo:
     pruning-enabled: false
 
 # Network: devnet | preprod | preview | mainnet
-network: devnet
-api-prefix: /api
+network: ${NETWORK:devnet}
+
+# Blockfrost — used by the NFT metadata pipeline (docs/BACKEND.md §metadata).
+# Empty default; services that need it will fail fast on startup.
+blockfrost:
+  url: ${BLOCKFROST_URL:https://cardano-mainnet.blockfrost.io/api/v0/}
+  project-id: ${BLOCKFROST_PROJECT_ID:}
+
+# Application-level configuration.
+shithole:
+  # Public mount point for the REST API.
+  api-prefix: /api
+
+  # Indexer start slot — operator supplies the slot when deploying. Yaci Store
+  # backfills only blocks at/after this slot for our scoped contract addresses.
+  indexer:
+    start-slot: <REPLACE_ME>
+
+  # Rebalancer (docs/BACKEND.md §rebalancer). Off by default; only the admin-private
+  # profile turns this on alongside the ADMIN_SEED env var.
+  rebalancer:
+    enabled: false
+    seed: ${ADMIN_SEED:}
+    collections: []
+    cron: "0 0 4 * * *"
+    staleness-threshold: 3.0
+    dry-run: false
+
+  # CIP-171 config discovery (docs/BACKEND.md §CIP-171). Off for v1 bootstrap;
+  # enabled once the Cip171Processor lands.
+  cip171:
+    enabled: false
+    allowed-sources:
+      - "https://github.com/easy1staking-com/shithole"
+    allowed-compilers:
+      - "v1.1.21"
+    released-versions: []
+
+  # Bootstrap-only: paths to packaged JSON fixtures used by controllers
+  # until DB-backed implementations are wired up.
+  fixtures:
+    curated: fixtures/api/curated.json
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
 
 logging:
   level:

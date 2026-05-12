@@ -1,0 +1,164 @@
+{
+  "total": 10,
+  "page": 0,
+  "size": 20,
+  "data": [
+    {
+      "utxo_ref": {
+        "tx_id": "4ff3d1a53d840a56fc5a057dcb1c4afbac19edf2594b7be3deceea5d5b8638f9",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "9655dc8fbc5373af3d7833a67819c86bd6cddd192976a564064e502e",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303031",
+      "lovelace": 2000000,
+      "accrued_lovelace": 0,
+      "update_ref": null,
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "e25e57dc2851fd17e73a0f2623363afd9f36bf476ee9d653f2c3dfa70bfeb783",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "ccd92f73c3f42c6228a31632ff72f453bedf54d265bf800495342a3f",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303032",
+      "lovelace": 3000000,
+      "accrued_lovelace": 1000000,
+      "update_ref": {
+        "tx_id": "10ee637da6cea7b17df4926eab20f7d7d3bc7f6a08f6346b77552e9a918ccee1",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "d02b0f383789ff7d27de2128f52aaa6dbd353b1aa387c4bf289d9dcef082a66d",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "479bc8f5493ade8489e9eb2b6ff5a24a777f8266f28cd28727acafc1",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303033",
+      "lovelace": 4000000,
+      "accrued_lovelace": 2000000,
+      "update_ref": {
+        "tx_id": "24d3e087bfe0c15f606db97836449852a44414f98f425301fb08affb3d64c11c",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "78dec37fb806b3af5cead4015cce941a1f2f2074de94cdf4ee897d66525aba66",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "9655dc8fbc5373af3d7833a67819c86bd6cddd192976a564064e502e",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303034",
+      "lovelace": 5000000,
+      "accrued_lovelace": 3000000,
+      "update_ref": {
+        "tx_id": "50f6096d18f5436cd23d8b3eb782f58fa619e912a4f426b65f981402e2a95eb6",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "a17bed96aeebcdb94f24be754fcab9ba205146c63c736c641bb4261c0d302520",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "ccd92f73c3f42c6228a31632ff72f453bedf54d265bf800495342a3f",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303035",
+      "lovelace": 6000000,
+      "accrued_lovelace": 4000000,
+      "update_ref": {
+        "tx_id": "38ab545a7a2350cf0eccd4e859a2b40a1557eb0accecb6701378cb06570af29c",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "6ebd4922ca316beeddde7e289f3f456c7eb4d65a8719c284f84096ed1368afb0",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "479bc8f5493ade8489e9eb2b6ff5a24a777f8266f28cd28727acafc1",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303036",
+      "lovelace": 2000000,
+      "accrued_lovelace": 0,
+      "update_ref": {
+        "tx_id": "d95df10d6d3d65a9f0be9bbfa7c56bf7ed8b516ec44f52a3cd6a1582b7e70934",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "53a56b443464051691c1779dd11a7fc2e6b29ca11807fc19b5b9ec57f3c4942b",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "9655dc8fbc5373af3d7833a67819c86bd6cddd192976a564064e502e",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303037",
+      "lovelace": 3000000,
+      "accrued_lovelace": 1000000,
+      "update_ref": {
+        "tx_id": "f44c2dfda97846e20fa6a6da5829a8589d7b1e26794192f5a252db46ab6b0820",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "7c073a36e8c3785adad0ae4bbe4b584d797dc1efe13d96592493a046836c4fa3",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "ccd92f73c3f42c6228a31632ff72f453bedf54d265bf800495342a3f",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303038",
+      "lovelace": 4000000,
+      "accrued_lovelace": 2000000,
+      "update_ref": {
+        "tx_id": "bf9ecc5dae097b3ba5791e265603f24f99fec997bbc7382fefbfdfe9f8f94551",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "804d9e1f098bbbe73186fe9ad3a481a1df89fe59f027b02b3bddb8a085880314",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "479bc8f5493ade8489e9eb2b6ff5a24a777f8266f28cd28727acafc1",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303039",
+      "lovelace": 5000000,
+      "accrued_lovelace": 3000000,
+      "update_ref": {
+        "tx_id": "50f0aa6d082625d6ccb3fbf56457d50202c1653519f50789d02d38ffb7a013d2",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    },
+    {
+      "utxo_ref": {
+        "tx_id": "607eefa4afb19ed291bef00c862dd79c0b9e3744a69d061f51765f6c7925e4be",
+        "output_index": 0
+      },
+      "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+      "lister_pkh": "9655dc8fbc5373af3d7833a67819c86bd6cddd192976a564064e502e",
+      "current_nft_unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303130",
+      "lovelace": 6000000,
+      "accrued_lovelace": 4000000,
+      "update_ref": {
+        "tx_id": "6e0550412e62bea076a1cfb2b7b6e6892484e31e399a985d0b475c6bb15a173c",
+        "output_index": 0
+      },
+      "created_at": "2026-05-12T00:00:00Z"
+    }
+  ]
+}

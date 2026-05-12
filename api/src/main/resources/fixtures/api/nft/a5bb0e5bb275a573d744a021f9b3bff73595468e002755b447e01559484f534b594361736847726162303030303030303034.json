@@ -1,0 +1,36 @@
+{
+  "unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303034",
+  "policy_id": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559",
+  "asset_name_hex": "484f534b594361736847726162303030303030303034",
+  "asset_name": "HOSKYCashGrab000000004",
+  "fingerprint": "asset13xwzsn48svx2pgcslc9v6yyqtt4g3gu4h08ltg",
+  "quantity": 1,
+  "onchain_metadata_standard": "CIP25v1",
+  "name": "HOSKY C(ash Grab)NFT 4",
+  "image_ipfs_uri": "ipfs://QmY3SF3fkkZg4WPDy9mVbqVQW9LE8PWYuW6xjHLgcX5XfV",
+  "image_url": "/mocks/fixtures/hosky/images/HOSKYCashGrab000000004.png",
+  "traits": [
+    {
+      "Background": "Peach"
+    },
+    {
+      "Fur": "Original"
+    },
+    {
+      "Eyes": "Pink Eye"
+    },
+    {
+      "Hat": "Spin Top Error"
+    },
+    {
+      "Neck": "Red Collar"
+    },
+    {
+      "Mouth": "Sad-Ish"
+    },
+    {
+      "Frame": "Check Mate"
+    }
+  ],
+  "description": null
+}
