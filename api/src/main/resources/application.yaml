@@ -36,15 +36,22 @@ spring:
 #
 # Property keys verified against yaci-store 2.1.0-pre3 (`store.cardano.*` ->
 # `YaciStoreProperties$Cardano`, `store.utxo.*` -> `UtxoStoreAutoConfigProperties$Utxo`).
-# `store.sync-auto-start` defaults to true in 2.x; we hold it at false until the
-# indexer phase explicitly opts in (auto-configs are currently excluded in
-# {@code ShitholeApi} so these keys are inert for the bootstrap phase).
+# `store.sync-auto-start` is now true: the indexer phase needs the upstream
+# chain-sync loop running so `AddressUtxoEvent`s are published. Empty
+# genesis-file paths fall back to a `ByronGenesis(protocolMagic)` stub in
+# yaci-store 2.x — production deployments must supply real genesis paths via
+# `store.cardano.*-genesis-file`.
 store:
-  sync-auto-start: false
+  sync-auto-start: ${YACI_SYNC_AUTO_START:true}
   cardano:
     host: ${REMOTE_NODE_URL:localhost}
     port: ${REMOTE_NODE_PORT:3001}
-    protocol-magic: ${PROTOCOL_MAGIC:42}  # Yaci DevKit default
+    # Default to preprod (protocol-magic=1) for headless dev because Yaci
+    # Store 2.x's bundled genesis files only cover MAINNET / PREPROD / PREVIEW
+    # / SANCHONET — Yaci DevKit's protocol-magic=42 falls outside that set and
+    # boot fails unless DevKit is running and supplies genesis paths. Override
+    # via `PROTOCOL_MAGIC=42` once DevKit is up.
+    protocol-magic: ${PROTOCOL_MAGIC:1}
   utxo:
     pruning-enabled: false
 
@@ -74,8 +81,11 @@ shithole:
 
   # Indexer start slot — operator supplies the slot when deploying. Yaci Store
   # backfills only blocks at/after this slot for our scoped contract addresses.
+  # `enabled` (default true) controls whether the listing-events indexer
+  # components are wired. Disable at boot if the indexer is in the way.
   indexer:
-    start-slot: <REPLACE_ME>
+    enabled: ${SHITHOLE_INDEXER_ENABLED:true}
+    start-slot: ${SHITHOLE_INDEXER_START_SLOT:0}
 
   # Rebalancer (docs/BACKEND.md §rebalancer). Off by default; only the admin-private
   # profile turns this on alongside the ADMIN_SEED env var.
@@ -101,6 +111,13 @@ shithole:
   # until DB-backed implementations are wired up.
   fixtures:
     curated: fixtures/api/curated.json
+
+# Yaci Store 2.x's plugin/scheduler admin controllers expect a top-level
+# `apiPrefix` property (used in `@RequestMapping("${apiPrefix}/admin/...")`).
+# We mirror our application prefix here so Spring can resolve the placeholder
+# during request-mapping registration. Without this, the WebMvc handler-mapping
+# refresh fails at startup with "Could not resolve placeholder 'apiPrefix'".
+apiPrefix: ${shithole.api-prefix:/api}
 
 server:
   port: ${SERVER_PORT:8080}

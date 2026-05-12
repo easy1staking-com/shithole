@@ -94,6 +94,7 @@ class ConfigRegistrationServiceTest {
     @Mock private BackendService backendService;
     @Mock private UtxoService utxoService;
     @Mock private ListingScriptAddressDeriver listingScriptAddressDeriver;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     private ConfigRegistrationService service;
 
@@ -106,7 +107,8 @@ class ConfigRegistrationServiceTest {
                 .thenReturn("addr1_fake_listing_script_for_unit_tests");
         service = new ConfigRegistrationService(
                 configRepository, curatedCollectionRepository, backendService,
-                Networks.mainnet(), new Cip8SignatureVerifier(), listingScriptAddressDeriver);
+                Networks.mainnet(), new Cip8SignatureVerifier(), listingScriptAddressDeriver,
+                eventPublisher);
     }
 
     @Test

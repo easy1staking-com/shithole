@@ -20,6 +20,7 @@ import com.easy1staking.shithole.blueprint.generated.shithole.types.model.Config
 import com.easy1staking.shithole.blueprint.generated.shithole.types.model.converter.ConfigDatumConverter;
 import com.easy1staking.shithole.entity.ConfigEntity;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
+import com.easy1staking.shithole.indexer.ConfigRegisteredEvent;
 import com.easy1staking.shithole.model.ConfigRegistrationRequestDto;
 import com.easy1staking.shithole.model.ConfigRegistrationResponseDto;
 import com.easy1staking.shithole.model.ThemeDto;
@@ -28,6 +29,7 @@ import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import com.easy1staking.shithole.service.exception.ConfigRegistrationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -85,6 +87,7 @@ public class ConfigRegistrationService {
     private final Network appNetwork;
     private final Cip8SignatureVerifier signatureVerifier;
     private final ListingScriptAddressDeriver listingScriptAddressDeriver;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Validate the on-chain config UTxO, persist the {@code configs} +
@@ -278,6 +281,17 @@ public class ConfigRegistrationService {
         }
         configRepository.saveAndFlush(configEntity);
         curatedCollectionRepository.saveAndFlush(curatedEntity);
+
+        // Notify the indexer's watch-set so the just-registered listing
+        // address is picked up without waiting for the 60s reconcile backstop.
+        // The event publisher is no-op-safe if no listener is registered
+        // (e.g. the indexer is disabled via shithole.indexer.enabled=false).
+        eventPublisher.publishEvent(new ConfigRegisteredEvent(
+                this,
+                curatedEntity.getSlug(),
+                curatedEntity.getConfigNftPolicy(),
+                curatedEntity.getCollectionPolicyId(),
+                curatedEntity.getListingScriptAddress()));
 
         return ConfigRegistrationResponseDto.builder()
                 .configNftPolicy(configEntity.getConfigNftPolicy())
