@@ -406,7 +406,7 @@ The 502 response body is a constant `"Backend temporarily unavailable"`; the ful
 ### Security posture
 
 - **No auth header**: registration is gated by the CIP-8 admin signature, not by an API key or HTTP basic auth. Anyone can hit the endpoint; only the admin can produce a valid signature.
-- **`listing_script_address` is NOT populated by this endpoint** — it requires parameter application of the listing validator with `config_nft_policy` and is a separate follow-up. Column kept nullable; indexer fills it later.
+- **`listing_script_address` is populated at registration** — derived via `aiken-java-binding`'s `AikenScriptUtil.applyParamToScript` (JNI wrapper over the Aiken UPLC runtime), applying the `config_nft_policy` as a `BytesPlutusData` parameter to the generated `ListingSpendValidator.COMPILED_CODE`. Result is bech32-encoded as an enterprise script address (`addr1w…` mainnet / `addr_test1w…` preprod). The indexer subscribes to UTxO events at this exact address.
 - **Replay across slugs/themes**: prevented by the canonical-payload echo check in step 3. A valid signature for one `(policy, slug, display_name, theme, display_order)` tuple cannot be reused with a different tuple.
 - **Replay against the same tuple**: prevented by the unique constraints (`configs.config_nft_policy` PK, `curated_collections.slug` PK, `curated_collections.config_nft_policy` UNIQUE). A second valid POST 409s.
 

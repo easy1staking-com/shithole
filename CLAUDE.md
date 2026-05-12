@@ -14,7 +14,8 @@ A Cardano dApp giving dead / rugpulled NFT collections a second life via random 
   - `09395b6` api: trustless `POST /api/configs` with CIP-8 admin signature (V1_0_2 drops the candidate_configs FK).
   - `403d782` docs: SPEC §10.2/§10.3 + docs/BACKEND.md realigned for the FE-driven curation pivot.
 - **Pivot**: CIP-171 auto-discovery deferred for v1. Curation goes through `POST /api/configs` with a CIP-8 admin signature from the on-chain `admin_pkh`.
-- **Next**: real Yaci Store indexer wiring (subscribe to `AddressUtxoEvent` for each registered config's listing script address; populate `listing_events`). FE-side `wallet.signData` integration to drive the new endpoint. `listing_script_address` derivation (needs UPLC apply-params — FE-supplied via Evolution SDK is the likely route).
+- **`9b84ef5` api: listing_script_address derivation via aiken-java-binding (JNI UPLC apply-params); 29 tests green.**
+- **Next**: real Yaci Store indexer wiring (subscribe to `AddressUtxoEvent` for each registered config's listing script address; populate `listing_events`). FE-side `wallet.signData` integration to drive `POST /api/configs`.
 
 ## Concept
 
