@@ -57,6 +57,46 @@ export const handlers = [
     return HttpResponse.json(meta);
   }),
 
+  /**
+   * Mock for POST /api/configs. Returns 401 signature_invalid by default
+   * to mirror the real BE's behavior: in mock mode we never have a real
+   * on-chain admin to satisfy the verifier. The 401 still confirms the
+   * FE wire shape compiles and reaches the handler.
+   *
+   * To test the success path locally, set NEXT_PUBLIC_API_MODE=live and
+   * point at a running BE.
+   */
+  http.post("/api/configs", async ({ request }) => {
+    const body = (await request.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    if (!body || typeof body !== "object") {
+      return HttpResponse.json(
+        { reason: "invalid_request", message: "malformed JSON" },
+        { status: 400 },
+      );
+    }
+    // Minimal shape check so the FE form gets useful 400s in dev.
+    const required = ["config_nft_policy", "slug", "display_name", "signature"];
+    for (const k of required) {
+      if (!(k in body)) {
+        return HttpResponse.json(
+          { reason: "invalid_request", message: `missing field: ${k}` },
+          { status: 400 },
+        );
+      }
+    }
+    return HttpResponse.json(
+      {
+        reason: "signature_invalid",
+        message:
+          "mock-mode BE cannot verify CIP-8 signatures; set NEXT_PUBLIC_API_MODE=live for the real flow",
+      },
+      { status: 401 },
+    );
+  }),
+
   http.get("/api/nft/:unit/image", async ({ params }) => {
     const unit = params.unit as string;
     const url = imageUrlForUnit(unit);
