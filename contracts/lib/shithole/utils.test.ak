@@ -1,4 +1,7 @@
 use aiken/builtin
+use aiken/collection/list
+use aiken/fuzz
+use cardano/transaction.{OutputReference}
 use shithole/types.{ListingDatum}
 use shithole/utils
 
@@ -126,4 +129,30 @@ test extract_fails_when_first_field_is_constr() fail {
       [builtin.constr_data(0, []), builtin.b_data(test_lister_pkh)],
     )
   utils.extract_first_bytearray_field(data) == #""
+}
+
+// ============================================================================
+// Property tests
+// ============================================================================
+
+/// Any `Constr 0 [bytestring, tail...]` should round-trip the first field
+/// through `extract_first_bytearray_field` regardless of what's in the tail.
+/// Fuzzes the first field's byte length and contents AND the tail size.
+test prop_extract_recovers_arbitrary_first_field(
+  inputs via fuzz.both(fuzz.bytearray_between(0, 100), fuzz.int_between(0, 5)),
+) {
+  let (first_bytes, tail_size) = inputs
+  // Build a tail of `tail_size` arbitrary Data values (Ints).
+  let tail = list.range(1, tail_size) |> list.map(fn(n) { builtin.i_data(n) })
+  let data: Data = builtin.constr_data(0, [builtin.b_data(first_bytes), ..tail])
+  utils.extract_first_bytearray_field(data) == first_bytes
+}
+
+/// `compute_output_tag` must be deterministic: same outRef twice → same tag.
+test prop_compute_output_tag_deterministic(
+  inputs via fuzz.both(fuzz.bytearray_fixed(32), fuzz.int_between(0, 1_000)),
+) {
+  let (tx_id, output_index) = inputs
+  let oref = OutputReference { transaction_id: tx_id, output_index }
+  utils.compute_output_tag(oref) == utils.compute_output_tag(oref)
 }
