@@ -4,9 +4,11 @@ use aiken/collection/list
 use aiken/crypto.{blake2b_256}
 use aiken/primitive/bytearray
 use aiken/primitive/int.{from_bytearray_big_endian}
-use cardano/assets.{PolicyId, ada_asset_name, ada_policy_id, lovelace_of}
+use cardano/assets.{PolicyId, ada_asset_name, ada_policy_id}
 use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
-use shithole/types.{Cancel, ConfigDatum, ListingDatum, ListingRedeemer, Swap}
+use shithole/types.{
+  Cancel, ConfigDatum, ListingDatum, ListingRedeemer, Recover, Swap,
+}
 use shithole/utils
 
 // ============================================================================
@@ -38,10 +40,12 @@ validator listing(config_nft_policy: PolicyId) {
     own_ref: OutputReference,
     self: Transaction,
   ) {
-    expect Some(input_data) = datum
-
+    // Datum extraction happens inside each branch so the `Recover` path can
+    // specifically require `datum == None`. `Swap` and `Cancel` both still
+    // require `Some(data)`.
     when redeemer is {
       Swap { nb_asset_name, listing_output_index, treasury_output_index } -> {
+        expect Some(input_data) = datum
         expect input_datum: ListingDatum = input_data
         validate_swap(
           self,
@@ -62,8 +66,28 @@ validator listing(config_nft_policy: PolicyId) {
         // not a bytestring, will fail to decode here — but those can never
         // be produced by `Swap` (which writes a full `ListingDatum`) nor by
         // a legitimate initial listing creation.
+        expect Some(input_data) = datum
         let lister_pkh = utils.extract_first_bytearray_field(input_data)
         utils.signed_by(self, lister_pkh)
+      }
+
+      Recover -> {
+        // Admin rescue for UTxOs that landed at this address with NO datum
+        // (accidental pay-to-script). Strictly requires `datum == None` so
+        // the admin has zero power over any datum-bearing UTxO — `Swap` and
+        // initial listing creation always write a datum, so a legitimate
+        // listing can never reach this path.
+        expect None = datum
+        let cfg_input =
+          list.expect_find(
+            self.reference_inputs,
+            fn(i) {
+              assets.has_any_nft_strict(i.output.value, config_nft_policy)
+            },
+          )
+        expect InlineDatum(cfg_data) = cfg_input.output.datum
+        expect cfg: ConfigDatum = cfg_data
+        utils.signed_by(self, cfg.admin_pkh)
       }
     }
   }
@@ -110,14 +134,19 @@ fn validate_swap(
   let cfg_input =
     list.expect_find(
       reference_inputs,
-      fn(i) { assets.has_any_nft(i.output.value, config_nft_policy) },
+      fn(i) { assets.has_any_nft_strict(i.output.value, config_nft_policy) },
     )
+
   // Extract the (asset_name, quantity) pair from the config NFT —
   // collection_policy_id IS the asset name (28 bytes, enforced at mint).
-  expect [Pair(collection_policy_id, 1)] =
+  expect [Pair(actual_config_nft_policy, collection_nft)] =
     cfg_input.output.value
-      |> assets.tokens(config_nft_policy)
+      |> assets.to_dict()
+      |> dict.expect_tail()
       |> dict.to_pairs()
+  expect actual_config_nft_policy == config_nft_policy
+
+  expect [Pair(collection_policy_id, 1)] = dict.to_pairs(collection_nft)
   expect InlineDatum(cfg_data) = cfg_input.output.datum
   expect cfg: ConfigDatum = cfg_data
 
@@ -125,7 +154,7 @@ fn validate_swap(
   expect Some(own_input) = find_input(inputs, own_ref)
   let own_address = own_input.output.address
   let input_value = own_input.output.value
-  let input_lovelace = lovelace_of(input_value)
+  let input_lovelace = assets.expect_lovelace_of(input_value)
 
   // S2: input strictly carries one NFT under collection_policy (and nothing
   // else besides ADA). Single-traversal extraction:
@@ -202,7 +231,7 @@ fn validate_swap(
     // S8: treasury uniqueness tag (double-satisfaction Case 1)
     (out_treasury.datum == InlineDatum(own_tag))?,
     // S9: protocol fee paid
-    (lovelace_of(out_treasury.value) >= cfg.protocol_fee)?,
+    (assets.expect_lovelace_of(out_treasury.value) >= cfg.protocol_fee)?,
     // S10: bucket equation, anchored to own_ref — most expensive, evaluated last
     bucket_equation(
       collection_policy_id,

@@ -5,7 +5,9 @@ use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
 }
 use listing
-use shithole/types.{Cancel, ConfigDatum, ListingDatum, ListingRedeemer, Swap}
+use shithole/types.{
+  Cancel, ConfigDatum, ListingDatum, ListingRedeemer, Recover, Swap,
+}
 use shithole/utils
 
 // ============================================================================
@@ -30,6 +32,9 @@ const test_swapper_pkh =
 
 const test_treasury_pkh =
   #"33333333333333333333333333333333333333333333333333333333"
+
+const test_admin_pkh =
+  #"44444444444444444444444444444444444444444444444444444444"
 
 // Asset names for NA (in listing) and NB (deposited by swapper).
 // With cfg.m = 1, bucket math is trivially satisfied, so any names work.
@@ -71,7 +76,7 @@ fn valid_config_datum() -> ConfigDatum {
     protocol_fee: 1_000_000,
     lister_fee: 1_000_000,
     treasury_addr: test_treasury_addr(),
-    admin_pkh: #"00000000000000000000000000000000000000000000000000000001",
+    admin_pkh: test_admin_pkh,
   }
 }
 
@@ -732,6 +737,156 @@ test cancel_succeeds_with_corrupt_update_ref_field() {
     test_config_nft_policy,
     Some(weird_data),
     Cancel,
+    listing_outref(),
+    tx,
+  )
+}
+
+// ============================================================================
+// Config-ref-input strictness — added after v0.4 review
+//
+// `S1` switched from `assets.has_any_nft` to `assets.has_any_nft_strict`. A
+// config UTxO with extra non-ADA assets attached can no longer be found via
+// ref input — so swaps targeting that collection stop working. Self-injurious
+// only (admin attached the extra asset on a config update). This test pins
+// the new strict behavior.
+// ============================================================================
+
+test swap_fails_when_config_ref_has_extra_asset() fail {
+  // Config UTxO carries the config NFT AND an extra unrelated asset.
+  // has_any_nft_strict rejects → list.expect_find panics → swap fails.
+  let extra_policy = #"deadbeef00000000000000000000000000000000000000000000beef"
+  let polluted_config_input =
+    Input {
+      output_reference: OutputReference {
+        transaction_id: #"0000000000000000000000000000000000000000000000000000000000000099",
+        output_index: 0,
+      },
+      output: Output {
+        address: test_config_addr(),
+        value: assets.from_lovelace(2_000_000)
+          |> assets.add(test_config_nft_policy, test_collection_policy, 1)
+          |> assets.add(extra_policy, #"6a756e6b", 5),
+        datum: InlineDatum(valid_config_datum()),
+        reference_script: None,
+      },
+    }
+  let tx =
+    Transaction { ..happy_swap_tx(), reference_inputs: [polluted_config_input] }
+  invoke_swap(tx, happy_swap_redeemer())
+}
+
+// ============================================================================
+// Recover redeemer — admin rescue of datum-less UTxOs at the listing address
+//
+// Strictly requires `datum == None`. Admin must sign. Validator extracts
+// admin_pkh from the per-collection config UTxO (same ref-input lookup as
+// the Swap path).
+// ============================================================================
+
+/// A datum-less Input at the listing address — represents a UTxO that
+/// landed here by accident (someone pay-to-script'd with no inline datum).
+fn datumless_listing_input(oref: OutputReference) -> Input {
+  Input {
+    output_reference: oref,
+    output: Output {
+      address: test_listing_addr(),
+      value: assets.from_lovelace(2_000_000)
+        |> assets.add(test_collection_policy, test_na_name, 1),
+      datum: NoDatum,
+      reference_script: None,
+    },
+  }
+}
+
+test recover_succeeds_with_admin_sig_and_no_datum() {
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [datumless_listing_input(listing_outref())],
+      reference_inputs: [config_ref_input()],
+      extra_signatories: [test_admin_pkh],
+    }
+  listing.listing.spend(
+    test_config_nft_policy,
+    None,
+    Recover,
+    listing_outref(),
+    tx,
+  )
+}
+
+test recover_fails_without_admin_sig() fail {
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [datumless_listing_input(listing_outref())],
+      reference_inputs: [config_ref_input()],
+      extra_signatories: [],
+    }
+  listing.listing.spend(
+    test_config_nft_policy,
+    None,
+    Recover,
+    listing_outref(),
+    tx,
+  )
+}
+
+test recover_fails_with_wrong_signer() fail {
+  // Lister signs, but the listing has no datum — Recover requires admin sig,
+  // not lister sig.
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [datumless_listing_input(listing_outref())],
+      reference_inputs: [config_ref_input()],
+      extra_signatories: [test_lister_pkh],
+    }
+  listing.listing.spend(
+    test_config_nft_policy,
+    None,
+    Recover,
+    listing_outref(),
+    tx,
+  )
+}
+
+test recover_fails_with_some_datum() fail {
+  // Datum is present — admin cannot recover a datum-bearing UTxO. The
+  // legitimate Swap or Cancel paths must be used instead. This test pins
+  // the "admin has no power over legitimate listings" guarantee.
+  let listing_datum: Data =
+    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [listing_input_holding(test_na_name, listing_outref())],
+      reference_inputs: [config_ref_input()],
+      extra_signatories: [test_admin_pkh],
+    }
+  listing.listing.spend(
+    test_config_nft_policy,
+    Some(listing_datum),
+    Recover,
+    listing_outref(),
+    tx,
+  )
+}
+
+test recover_fails_without_config_ref_input() fail {
+  // No config ref input — validator can't find admin_pkh.
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [datumless_listing_input(listing_outref())],
+      reference_inputs: [],
+      extra_signatories: [test_admin_pkh],
+    }
+  listing.listing.spend(
+    test_config_nft_policy,
+    None,
+    Recover,
     listing_outref(),
     tx,
   )

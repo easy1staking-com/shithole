@@ -73,6 +73,12 @@ pub type ListingDatum {
 /// outcome a deterministic function of (consumed listing, deposited NFT)
 /// pairs — the swapper has no per-attempt manipulation axis. For dead
 /// collections this is the desired property.
+///
+/// Recover is an admin-only rescue path for UTxOs that landed at the listing
+/// address with NO datum (e.g. someone pay-to-script'd by accident). Datum
+/// is required to be `None` — admin has no power over any datum-bearing UTxO.
+/// Validator pulls `admin_pkh` from the per-collection config (read as ref
+/// input, same lookup pattern as Swap).
 pub type ListingRedeemer {
   Swap {
     nb_asset_name: ByteArray,
@@ -80,4 +86,5 @@ pub type ListingRedeemer {
     treasury_output_index: Int,
   }
   Cancel
+  Recover
 }

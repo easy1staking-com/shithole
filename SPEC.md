@@ -129,10 +129,13 @@ type ListingRedeemer {
     treasury_output_index: Int,     // index into tx.outputs of the protocol-fee payment
   }
   | Cancel
+  | Recover
 }
 ```
 
 `NA`'s asset name is read directly from the consumed listing's input value — it does not need to appear in the redeemer. The two output-index hints turn O(N) scans into O(1); wrong values cause downstream equality checks to fail (no security cost).
+
+`Recover` is an admin-only rescue path for UTxOs that accidentally landed at the listing address with **no inline datum**. Validator strictly requires `datum == None` (so admin has zero power over any datum-bearing UTxO — legitimate listings always carry a datum) and `tx.extra_signatories` to contain `admin_pkh` (read from the config UTxO via reference input). Admin's responsibility off-chain to return rescued assets to the original sender.
 
 ---
 
@@ -208,7 +211,20 @@ Multiple listings in one tx → one output per NFT.
 
 The validator does not constrain *which* input provides NB — Cardano's value-conservation rule handles that at the tx-body level. The validator only cares about (a) what's in the consumed listing input, (b) the new listing output, and (c) the treasury output.
 
-### 5.5 Cancel
+### 5.5 Recover (admin rescue)
+
+| Item | Detail |
+|---|---|
+| Signers | Admin (`config.datum.admin_pkh`) |
+| Inputs | 1+ UTxOs at the spend-script address with **no inline datum** |
+| Outputs | None constrained by validator — admin sends the assets wherever (typically back to the off-chain-known original sender) |
+| Mints | None |
+| Reference inputs | The config UTxO (required to read `admin_pkh`) |
+| Validators | Spend validator's `Recover` redeemer |
+
+Strictly requires `datum == None`. Cannot be used on legitimate listings (which always have a `ListingDatum`).
+
+### 5.6 Cancel
 
 | Item | Detail |
 |---|---|
@@ -257,7 +273,17 @@ The validator does **not** constrain the count, value, address, or datum of *oth
 
 There is no `S3` validating an "input that contains NB" (the previous UA-based design): the seed is now anchored to `self.outRef`, so the validator does not care which input supplies NB. Cardano's value-conservation rule at the tx-body level ensures NB must come from somewhere.
 
-### 6.4 Spend validator — `Cancel`
+### 6.4 Spend validator — `Recover`
+
+For input `self` (with no datum) at outRef `self.outRef`:
+
+| # | Invariant |
+|---|---|
+| R1 | `datum == None`. Strict — admin has no power over any UTxO carrying a datum. |
+| R2 | At least one ref input has a value passing `assets.has_any_nft_strict(value, config_nft_policy)` (same lookup as Swap's S1). Its datum is decoded as `ConfigDatum`. |
+| R3 | `tx.extra_signatories` contains the `admin_pkh` from the config datum. |
+
+### 6.5 Spend validator — `Cancel`
 
 | # | Invariant |
 |---|---|
@@ -344,6 +370,7 @@ As listings are swapped, the NFT inside each listing UTxO changes, so its bucket
 | **Double-satisfaction Case 1 (treasury).** One protocol-fee output satisfies multiple swap inputs. | Invariant S8 — treasury output's inline datum must equal `compute_output_tag(self.outRef)`. Each swap input demands a uniquely-tagged treasury output. |
 | **Double-satisfaction Case 2 (listing recreation).** One new listing output satisfies multiple consumed listing inputs. | Invariant S4 — `out_listing.datum.update_ref` field (inside the full-datum equality) must equal `Some(compute_output_tag(self.outRef))`. Each swap input demands a uniquely-bound listing output. |
 | **Corrupt-datum cancel lockout.** Listing UTxO ends up with a malformed datum (encoding drift, foreign tx, etc.) and the lister cannot recover. | Listing validator takes datum as `Option<Data>` and on `Cancel` extracts only the first field (lister_pkh) via Plutus builtin — no full-shape decode required. As long as the datum is `Constr 0 [bytestring, ...]`, the lister can always sign and reclaim. |
+| **Datum-less locked UTxO.** Someone pay-to-script'd the listing address with NO inline datum (accidental). The Swap and Cancel paths both require a datum, so without rescue the assets would be locked forever. | `Recover` redeemer (§6.4): admin can spend the UTxO with `datum == None` + admin signature read from the config UTxO. Admin's social responsibility to return the rescued assets to the original sender off-chain. Strict `datum == None` requirement ensures admin has no power over any legitimate listing (which always has a datum). |
 | **Hostile admin replacement.** Old admin tries to install a malicious successor unilaterally. | Invariant C6 — admin rotation requires both old and new admin signatures. |
 | **Lister-fee shrinkage by hostile admin.** Admin lowers `lister_fee` to drain incentive. | Invariant C5 — `lister_fee >= MIN_LISTER_FEE` (compile-time floor of 1 ADA). Admin can never go below this. |
 | **Bucket-mod-by-zero.** Admin sets `M = 0`. | Invariant C3 — `m >= 1` enforced on every config update. |
