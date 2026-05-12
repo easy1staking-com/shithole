@@ -1,0 +1,27 @@
+{
+  "unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303035",
+  "policy_id": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559",
+  "asset_name_hex": "484f534b594361736847726162303030303030303035",
+  "asset_name": "HOSKYCashGrab000000005",
+  "fingerprint": "asset1yv2sr3wc75tt459974076ykr4457d7h6mcu3f0",
+  "quantity": 1,
+  "onchain_metadata_standard": "CIP25v1",
+  "name": "HOSKY C(ash Grab)NFT 5",
+  "image_ipfs_uri": "ipfs://Qmc1irxoBV2dJ8xoenC4bHmR6LkgNqk9CEnavmoG1LbhHT",
+  "image_url": "/mocks/fixtures/hosky/images/HOSKYCashGrab000000005.png",
+  "traits": [
+    {
+      "Background": "Yellow"
+    },
+    {
+      "Fur": "Original"
+    },
+    {
+      "Eyes": "Original"
+    },
+    {
+      "Mouth": "Meh"
+    }
+  ],
+  "description": null
+}

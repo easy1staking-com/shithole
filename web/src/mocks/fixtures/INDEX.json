@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-05-12",
+  "source": "Blockfrost mainnet + public IPFS gateways",
+  "collections": [
+    "hosky"
+  ],
+  "nft_count": 10,
+  "endpoints_mocked": [
+    "GET /api/curated",
+    "GET /api/collections/hosky",
+    "GET /api/collections/hosky/listings",
+    "GET /api/nft/{unit}"
+  ]
+}

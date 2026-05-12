@@ -442,7 +442,7 @@ The BE has five responsibilities. **Operational specifics (Blockfrost vs. Koios,
   Anything failing this filter is a junk UTxO: ignored by the FE, not counted in N when sizing M, and not surfaced as a swap target. Junk is harmless on-chain (can't satisfy swap invariants) but visually noisy if exposed.
 - **NFT metadata + image cache.** First sighting of an NFT triggers a Blockfrost `/assets/{unit}` fetch (one HTTP call returns parsed CIP-25/CIP-68 metadata including the `image` URL). Image bytes fetched via public IPFS-gateway fan-out (`ipfs.io`, `dweb.link`, `w3s.link`, `gateway.pinata.cloud`); three thumbnail tiers (64/256/1024 px JPEG) stored in Postgres BYTEA. Permanent fetch failure → 404 → FE shows the "could not be retrieved from the mud" placeholder. See `docs/BACKEND.md` for retry policy and v1.5 self-pinning escalation.
 - **Stats + M-staleness tracking.** Swap volume per collection, listing age, accrued ADA per listing. Continuously computes `recommended_m = ceil(N / 3)` per collection; exposes `current_m`, `recommended_m`, `recommended_m_ratio` on the collection endpoint. Structured-log warning when `current_m / recommended_m > threshold` (the asymmetric failure mode — shrunken pool degrades swap UX; growth is benign).
-- **Curation registry.** Authoritative list of `(slug, config_nft_policy, theme)` consumed by the FE. The `collection_policy_id` is derived from the config NFT's asset name; no separate field needed.
+- **Curation registry + CIP-171 discovery.** Candidate configs are auto-discovered from on-chain CIP-171 metadata records (tx-metadata label 1984). Indexer reads label 1984, matches `(sourceUrl, commitHash, compilerVersion)` against an allowlist of released shithole versions, and registers matches as **candidate configs**. Admin promotes a candidate to the curated set via the admin-private API; promotion adds the `(slug, theme)` mapping and surfaces the collection in the public FE. The `collection_policy_id` is derived from the config NFT's asset name; no separate field needed. Full discovery flow + verification posture in [docs/BACKEND.md](./docs/BACKEND.md#cip-171-config-discovery).
 
 **Two deployment profiles** (full spec in `docs/BACKEND.md`):
 
@@ -458,10 +458,10 @@ Feature-flagged (`shithole.rebalancer.enabled`) via `@ConditionalOnProperty` —
 ### 10.3 Curation lifecycle
 
 A new dead collection joins by:
-1. Someone (typically the protocol operator) deploys a config UTxO via the one-shot mint path (§5.1).
-2. The operator verifies that the config NFT's asset name corresponds to a real on-chain collection with active or historical NFT activity. The 28-byte length check on-chain is necessary but not sufficient — this off-chain semantic check is what stops malicious garbage from being surfaced.
-3. The operator adds the new `(slug, config_nft_policy, theme)` to the BE curation list and redeploys.
-4. The FE picks up the new collection on its next API fetch.
+1. Anyone deploys a config UTxO via the one-shot mint path (§5.1) and publishes a CIP-171 verification record (tx-metadata label 1984) for the resulting config validator's bytecode.
+2. The BE's CIP-171 processor sees the record, matches `(sourceUrl, commitHash, compilerVersion)` against the allowlist of released shithole versions, confirms the derived script hash equals the on-chain `config_nft_policy`, and registers the deployment as a **candidate config** in the database.
+3. The protocol operator reviews candidates. For each promotion: verifies that the config NFT's asset name corresponds to a real on-chain collection with active or historical NFT activity (the 28-byte length check on-chain is necessary but not sufficient — this off-chain semantic check is what stops malicious garbage from being surfaced), then promotes the candidate via the admin-private API with a `(slug, theme)` payload.
+4. The FE picks up the promoted collection on its next API fetch.
 
 No "retire" path exists on-chain. To stop surfacing a collection, simply remove it from the BE curation list. The on-chain config and any outstanding listings remain spendable in perpetuity (cancel by lister always works).
 

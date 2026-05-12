@@ -199,6 +199,73 @@ Defer until v1 metrics show this is needed.
 
 ---
 
+## CIP-171 config discovery
+
+The curation registry is auto-populated from on-chain CIP-171 records (tx-metadata label 1984). Per [CIP-171](https://github.com/cardano-foundation/CIPs/blob/main/CIP-0171/README.md) the metadata structure for an Aiken-compiled script (constructor 0) is:
+
+```
+Constr 0 [
+  sourceUrl    : Bytes (UTF-8)       e.g. "https://github.com/easy1staking-com/shithole"
+  commitHash   : Bytes               20-byte SHA-1 or 32-byte SHA-256 of the git commit
+  sourcePath   : Bytes (UTF-8)       optional, e.g. "contracts"
+  compilerVersion : Bytes (UTF-8)    e.g. "v1.1.21"
+  parameters   : Map<script_hash, params>   per-script Aiken parameter values
+]
+```
+
+### Discovery pipeline
+
+1. **`Cip171Processor`** (custom Yaci Store processor) reads tx-metadata at label 1984 from every block after the configured start slot. CBOR chunks are reassembled and decoded as PlutusData.
+2. **Allowlist filter**: keep only records where the decoded Constr is 0 (Aiken), `sourceUrl ∈ ALLOWED_SOURCE_URLS` (typically just `github.com/easy1staking-com/shithole`), and `compilerVersion ∈ ALLOWED_COMPILER_VERSIONS` (typically `v1.1.21+`).
+3. **Verification step (v1 = `Option (iii)`):** match the `(sourceUrl, commitHash, compilerVersion)` tuple against a hardcoded `RELEASED_VERSIONS` table that maps each released shithole tag to its expected config-validator script hash (computed once at release time and committed to the BE repo). If the on-chain `config_nft_policy` for the deployment equals the expected script hash, the candidate is **verified-authentic** and registered.
+4. **Database**: candidate written to `candidate_configs(config_nft_policy, source_url, commit_hash, compiler_version, discovered_at, status)` with `status = pending`.
+5. **Address-watch registration**: once a candidate is promoted (see below), the BE derives the parameterized listing-script address from the `config_nft_policy` and adds it to Yaci Store's watch list. New listings at that address start being indexed.
+
+### Verification strategy — current and future
+
+| Phase | Strategy | Trust model |
+|---|---|---|
+| **v1 (now)** | Hardcoded `RELEASED_VERSIONS` table mapping `(sourceUrl, commit, compiler) → expected_script_hash`. Computed at release time, committed to BE source. | Trust the BE repo's released-versions table; permissionless deployment, fast verification. |
+| **v1.5 (later)** | Same, but with periodic CI workflow that rebuilds at advertised commits and updates the table. | Same trust model, fresher data. |
+| **v2 (hardening)** | BE shells out to a local `aiken` CLI installed alongside it. On candidate discovery, clones the source repo at the advertised commit, runs `aiken build`, computes the script hash, verifies. | Trust only Cardano + Aiken toolchain; no trust in BE repo's static table. |
+
+### Allowlist of released versions (config schema)
+
+```yaml
+shithole:
+  cip171:
+    enabled: true
+    allowed-sources:
+      - "https://github.com/easy1staking-com/shithole"
+    allowed-compilers:
+      - "v1.1.21"
+    released-versions:
+      - commit: "abcd1234..."            # full git commit hash hex
+        compiler: "v1.1.21"
+        expected-config-validator-hash: "deadbeef..."  # 28-byte script hash hex
+      # one entry per release
+```
+
+### Promotion path (admin-private profile only)
+
+```
+POST /api/admin/configs/{config_nft_policy}/promote
+Body: { "slug": "hosky", "theme": { ... } }
+Auth: admin signature header (HMAC of body using admin key) OR HTTP basic auth on the private network
+```
+
+Marks the candidate's `status = promoted`, writes `(slug, theme)` to the public-facing `curated_collections` table. The collection is now visible at the public `GET /api/curated` endpoint.
+
+### Demotion (rare)
+
+A separate `DELETE /api/admin/configs/{config_nft_policy}/curation` endpoint moves a promoted entry back to `pending`. On-chain config remains spendable forever; only the public FE surface goes dark. (Per SPEC §10.3: no on-chain retire.)
+
+### Why not curate via Git-committed JSON
+
+The previous approach (a Git-tracked JSON list of `config_nft_policy` values) required a code change + deploy for every new collection. The CIP-171 approach is permissionless on the read side: anyone can deploy a config + publish its CIP-171 record, the BE auto-discovers it, the operator just decides whether to surface it. The "released versions" allowlist is a separate concern (which *binaries* of shithole are accepted) — that one *does* need a code change + deploy when a new release ships.
+
+---
+
 ## Secrets posture
 
 All secrets live in environment variables, never in source/config files/logs:

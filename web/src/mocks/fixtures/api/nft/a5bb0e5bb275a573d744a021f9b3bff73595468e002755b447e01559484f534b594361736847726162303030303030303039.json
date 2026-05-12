@@ -1,0 +1,33 @@
+{
+  "unit": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303039",
+  "policy_id": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559",
+  "asset_name_hex": "484f534b594361736847726162303030303030303039",
+  "asset_name": "HOSKYCashGrab000000009",
+  "fingerprint": "asset18y25t0zkmeq87ewe3368wxvhlmd94mmgvzxhcu",
+  "quantity": 1,
+  "onchain_metadata_standard": "CIP25v1",
+  "name": "HOSKY C(ash Grab)NFT 9",
+  "image_ipfs_uri": "ipfs://QmTwDmGtiug8KvnpBsUEaoYtuuwSuwYWHDnWgR99zJcAJv",
+  "image_url": "/mocks/fixtures/hosky/images/HOSKYCashGrab000000009.png",
+  "traits": [
+    {
+      "Background": "Space"
+    },
+    {
+      "Fur": "Original"
+    },
+    {
+      "Eyes": "Original"
+    },
+    {
+      "Hat": "Fast Food Manager"
+    },
+    {
+      "Mouth": "Original"
+    },
+    {
+      "Mouth Decoration": "Tooth"
+    }
+  ],
+  "description": null
+}

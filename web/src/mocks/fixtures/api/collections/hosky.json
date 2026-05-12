@@ -1,0 +1,35 @@
+{
+  "slug": "hosky",
+  "config_nft_policy": "facade010000000000000000000000000000000000000000000000000000",
+  "collection_policy_id": "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559",
+  "display_name": "Hosky Cash Grab",
+  "theme": {
+    "background_url": null,
+    "accent_color": "#ff8c1a",
+    "mascot_image_url": null
+  },
+  "config": {
+    "m": 4,
+    "protocol_fee": 1000000,
+    "lister_fee": 1000000,
+    "treasury_addr": {
+      "payment_credential": {
+        "type": "verification_key",
+        "hash": "33333333333333333333333333333333333333333333333333333333"
+      },
+      "stake_credential": null
+    },
+    "admin_pkh": "44444444444444444444444444444444444444444444444444444444"
+  },
+  "listing_script_address": "addr1w_deadbeef000000000000000000000000",
+  "stats": {
+    "n_valid_listings": 10,
+    "total_accrued_lovelace": 20000000,
+    "swap_count_24h": 0
+  },
+  "m_staleness": {
+    "current_m": 4,
+    "recommended_m": 4,
+    "recommended_m_ratio": 1.0
+  }
+}
