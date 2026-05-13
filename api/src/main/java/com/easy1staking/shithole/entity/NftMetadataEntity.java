@@ -3,7 +3,6 @@ package com.easy1staking.shithole.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -74,15 +73,16 @@ public class NftMetadataEntity {
     @Column(name = "image_last_attempted_at")
     private OffsetDateTime imageLastAttemptedAt;
 
-    @Lob
+    // @Lob removed: Hibernate on Postgres would insert via the OID large-object
+    // path, which doesn't match the BYTEA column type (V1_0_0 migration). Plain
+    // byte[] maps to BYTEA directly with no LOB indirection — exactly what we
+    // want.
     @Column(name = "image_thumb_64")
     private byte[] imageThumb64;
 
-    @Lob
     @Column(name = "image_thumb_256")
     private byte[] imageThumb256;
 
-    @Lob
     @Column(name = "image_thumb_1024")
     private byte[] imageThumb1024;
 

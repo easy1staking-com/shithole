@@ -1,7 +1,7 @@
 package com.easy1staking.shithole.controller;
 
 import com.easy1staking.shithole.model.NftMetadataDto;
-import com.easy1staking.shithole.service.FixtureService;
+import com.easy1staking.shithole.service.NftMetadataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -12,14 +12,20 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.IOException;
 import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Per-NFT metadata + image. Bootstrap impl serves the metadata JSON from fixtures
- * and returns 404 for the image route until the IPFS-fan-out + thumbnail pipeline
- * is wired up (docs/BACKEND.md §image pipeline).
+ * Per-NFT metadata + image.
+ *
+ * <p>The metadata endpoint resolves CIP-25 fields via {@link NftMetadataService}
+ * (DB cache + Blockfrost fallback on miss).
+ *
+ * <p>The image endpoint stays {@code 404} for now — full image pipeline
+ * (IPFS gateway fan-out + Thumbnailator) is its own phase per
+ * {@code docs/BACKEND.md} §"Image pipeline". The FE renders against
+ * {@code image_url} / {@code image_ipfs_uri} from the metadata response
+ * directly in the meantime.
  */
 @RestController
 @RequestMapping("${shithole.api-prefix:/api}")
@@ -32,25 +38,16 @@ public class NftController {
 
     private static final Set<String> ALLOWED_SIZES = Set.of("64", "256", "1024");
 
-    private final FixtureService fixtureService;
+    private final NftMetadataService nftMetadataService;
 
     @GetMapping(value = "/nft/{unit}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<NftMetadataDto> nft(@PathVariable String unit) {
         if (!UNIT_PATTERN.matcher(unit).matches()) {
             return ResponseEntity.badRequest().build();
         }
-        try {
-            NftMetadataDto meta = fixtureService.loadFixture(
-                    "fixtures/api/nft/" + unit + ".json",
-                    NftMetadataDto.class);
-            if (meta == null) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.ok(meta);
-        } catch (IOException ex) {
-            log.error("failed to load NFT metadata fixture for unit={}", unit, ex);
-            return ResponseEntity.internalServerError().build();
-        }
+        return nftMetadataService.getOrFetch(unit)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /**
