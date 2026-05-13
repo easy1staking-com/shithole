@@ -76,3 +76,33 @@ dependencies {
 tasks.named<Test>("test") {
     useJUnitPlatform()
 }
+
+// ---------------------------------------------------------------------------
+// Operator tools — `api/src/main/java/com/easy1staking/shithole/tools/preprod/`.
+// Each Java main() class gets a small Gradle JavaExec task. Source the env
+// file (e.g. `set -a; source api/.env.preprod; set +a`) before invoking so
+// the tools can read ADMIN_SEED / BLOCKFROST_PROJECT_ID / etc.
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("preprodDeriveAddress") {
+    group = "preprod tools"
+    description = "Print the preprod payment address derived from ADMIN_SEED."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.DeriveAddressTool")
+    standardInput = System.`in`
+}
+
+tasks.register<JavaExec>("preprodCheckBalance") {
+    group = "preprod tools"
+    description = "Print the preprod UTxO set for the admin wallet via Blockfrost."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.CheckBalanceTool")
+    standardInput = System.`in`
+}
+
+tasks.register<JavaExec>("preprodMintCollection") {
+    group = "preprod tools"
+    description = "Mint a 10-NFT fake-dead-collection under a time-locked native script with CIP-25 metadata."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.MintCollectionTool")
+    standardInput = System.`in`
+}
