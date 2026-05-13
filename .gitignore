@@ -12,6 +12,12 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+# Populated env files for explicit network targets — never commit. The
+# matching .env.<env>.example templates ARE tracked.
+.env.preprod
+.env.mainnet
+.env.preview
+.env.devnet
 
 # Aiken
 contracts/build/
