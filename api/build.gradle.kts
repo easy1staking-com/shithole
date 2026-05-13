@@ -106,3 +106,11 @@ tasks.register<JavaExec>("preprodMintCollection") {
     mainClass.set("com.easy1staking.shithole.tools.preprod.MintCollectionTool")
     standardInput = System.`in`
 }
+
+tasks.register<JavaExec>("preprodListNft") {
+    group = "preprod tools"
+    description = "List one NFT at the registered listing-script address (use --args=\"ShitterNNN\" to pick)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.ListNftTool")
+    standardInput = System.`in`
+}

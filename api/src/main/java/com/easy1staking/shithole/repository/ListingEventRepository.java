@@ -68,4 +68,21 @@ public interface ListingEventRepository extends JpaRepository<ListingEventEntity
      */
     @Query("select e from ListingEventEntity e where e.updateRefHash = :hash")
     Optional<ListingEventEntity> findByUpdateRefHash(@Param("hash") byte[] hash);
+
+    /**
+     * Active listings under a config, most-recent first. Drives
+     * {@code GET /api/collections/{slug}/listings}. Hits the
+     * {@code listing_events_active} partial index.
+     */
+    @Query("select e from ListingEventEntity e "
+            + "where e.configNftPolicy = :policy "
+            + "and e.spentAction is null "
+            + "order by e.createdAt desc")
+    List<ListingEventEntity> findActiveByConfigNftPolicy(@Param("policy") byte[] policy);
+
+    /**
+     * Count of active listings under a config. Drives {@code N} in the
+     * collection-state response + the recommended-M math.
+     */
+    long countByConfigNftPolicyAndSpentActionIsNull(byte[] configNftPolicy);
 }

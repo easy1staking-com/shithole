@@ -31,6 +31,25 @@ public final class CheckBalanceTool {
         String address = account.baseAddress();
 
         BackendService backend = new BFBackendService(Constants.BLOCKFROST_PREPROD_URL, projectId);
+
+        // Also report the current preprod tip — Yaci's sync-start needs BOTH
+        // a slot AND a blockhash at that slot to skip ahead from genesis.
+        try {
+            var blockResult = backend.getBlockService().getLatestBlock();
+            if (blockResult.isSuccessful()) {
+                var b = blockResult.getValue();
+                System.out.println("preprod tip slot : " + b.getSlot());
+                System.out.println("preprod tip hash : " + b.getHash());
+                System.out.println();
+                System.out.println("Yaci sync-start fixture (paste these into api/.env.preprod):");
+                System.out.println("  SHITHOLE_INDEXER_START_SLOT=" + b.getSlot());
+                System.out.println("  SHITHOLE_INDEXER_START_BLOCKHASH=" + b.getHash());
+                System.out.println();
+            }
+        } catch (Exception ignored) {
+            // Tip query is best-effort; don't fail the balance check.
+        }
+
         Result<List<Utxo>> result = backend.getUtxoService().getUtxos(address, 100, 1);
         if (!result.isSuccessful()) {
             // The Blockfrost address endpoint returns 404 when an address has

@@ -52,12 +52,13 @@ store:
     # boot fails unless DevKit is running and supplies genesis paths. Override
     # via `PROTOCOL_MAGIC=42` once DevKit is up.
     protocol-magic: ${PROTOCOL_MAGIC:1}
-    # Operator-set starting slot. Wired to the same env var the indexer
-    # comments document (SHITHOLE_INDEXER_START_SLOT). Yaci backfills blocks
-    # at/after this slot only; without it, sync starts from genesis which is
-    # impractical for a curation indexer. Leave at 0 only if your env knows
-    # what it's doing (e.g., DevKit with a fresh ledger).
+    # Operator-set starting slot + blockhash. Yaci 2.x requires BOTH to skip
+    # ahead from genesis — passing only the slot makes Yaci fall back to a
+    # genesis-onward sync (slow). Get a fresh pair from `./gradlew preprodCheckBalance`,
+    # which prints the current tip's slot + hash. Leave both at the empty/0
+    # defaults only if you're starting a fresh DevKit ledger.
     sync-start-slot: ${SHITHOLE_INDEXER_START_SLOT:0}
+    sync-start-blockhash: ${SHITHOLE_INDEXER_START_BLOCKHASH:}
   utxo:
     pruning-enabled: false
 
@@ -112,6 +113,14 @@ shithole:
     allowed-compilers:
       - "v1.1.21"
     released-versions: []
+
+  # Curation gate. Comma-separated list of lowercase-hex admin pkhs that
+  # auto-promote into `curated_collections` (visible at GET /api/curated +
+  # the FE). Anything outside this list lands in `configs` only — the
+  # indexer still watches the listing-script address, but the public FE
+  # doesn't surface the collection. Empty list = no auto-curation.
+  curation:
+    operator-pkhs: ${OPERATOR_PKHS:}
 
   # Bootstrap-only: paths to packaged JSON fixtures used by controllers
   # until DB-backed implementations are wired up.

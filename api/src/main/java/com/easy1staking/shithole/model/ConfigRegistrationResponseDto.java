@@ -50,4 +50,14 @@ public class ConfigRegistrationResponseDto {
     private String displayName;
 
     private ThemeDto theme;
+
+    /**
+     * True if the submission's {@code admin_pkh} matches one of the configured
+     * operator pkhs and was therefore promoted into {@code curated_collections}
+     * (visible on {@code GET /api/curated} + the FE pit page). False means
+     * the config was registered (indexer watches its listings) but is not
+     * surfaced to the public FE — re-submit later from an operator-controlled
+     * wallet to promote, or expose via a future admin endpoint.
+     */
+    private boolean curated;
 }
