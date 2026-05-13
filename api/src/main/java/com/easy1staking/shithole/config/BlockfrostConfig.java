@@ -3,6 +3,7 @@ package com.easy1staking.shithole.config;
 import com.bloxbean.cardano.client.api.UtxoSupplier;
 import com.bloxbean.cardano.client.backend.api.BackendService;
 import com.bloxbean.cardano.client.backend.api.DefaultUtxoSupplier;
+import com.bloxbean.cardano.client.backend.blockfrost.common.Constants;
 import com.bloxbean.cardano.client.backend.blockfrost.service.BFBackendService;
 import com.bloxbean.cardano.client.common.model.Network;
 import com.bloxbean.cardano.client.common.model.Networks;
@@ -62,12 +63,17 @@ public class BlockfrostConfig {
         return new DefaultUtxoSupplier(backendService.getUtxoService());
     }
 
+    /**
+     * Network-aware default Blockfrost URL. Delegates to CCL's
+     * {@link Constants} so any upstream change (e.g. a new sanchonet host)
+     * propagates without a code change here.
+     */
     private String defaultBlockfrostUrl() {
         return switch (appNetwork.toLowerCase()) {
-            case "mainnet" -> "https://cardano-mainnet.blockfrost.io/api/v0/";
-            case "preprod" -> "https://cardano-preprod.blockfrost.io/api/v0/";
-            case "preview" -> "https://cardano-preview.blockfrost.io/api/v0/";
-            default -> "https://cardano-mainnet.blockfrost.io/api/v0/";
+            case "mainnet" -> Constants.BLOCKFROST_MAINNET_URL;
+            case "preprod" -> Constants.BLOCKFROST_PREPROD_URL;
+            case "preview" -> Constants.BLOCKFROST_PREVIEW_URL;
+            default -> Constants.BLOCKFROST_MAINNET_URL;
         };
     }
 }
