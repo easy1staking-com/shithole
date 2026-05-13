@@ -1,113 +1,103 @@
 "use client";
 
-import Link from "next/link";
 import { use } from "react";
 
-import { nftImageUrl } from "@/lib/api/client";
-import { useCollection, useListings, useNftMetadata } from "@/lib/api/hooks";
-import type { Listing } from "@/types/api";
+import { MudPit } from "@/components/pit/MudPit";
+import { PitHeader } from "@/components/pit/PitHeader";
+import { WalletDrawer } from "@/components/pit/WalletDrawer";
+import { useCollection, useListings } from "@/lib/api/hooks";
 
+/**
+ * The pit page — hero interaction of the dApp.
+ *
+ * <p>Iteration 1: themed mud-pit visual with atmospheric sampled
+ * floaters, collection header (name + stats + accent + mascot), and a
+ * sticky-bottom wallet drawer enumerating the wallet's holdings of this
+ * collection. No interactions yet (swap + list flows land in iter-2).
+ *
+ * <p>The pit fills the upper viewport on mobile; on desktop it lives
+ * inside a max-width container next to nothing yet — future iterations
+ * may add a sidebar (lineage / stats / leaderboard).
+ */
 type Params = { slug: string };
 
 export default function PitPage({ params }: { params: Promise<Params> }) {
   const { slug } = use(params);
   const collection = useCollection(slug);
+  // Larger page size than the FE will surface in the mud — gives the
+  // sampler more material to pick atmospheric floaters from.
   const listings = useListings(slug, { page: 0, size: 50 });
 
-  return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-6 py-12">
-      <nav className="text-xs text-zinc-500">
-        <Link href="/" className="hover:text-zinc-300">
-          ← back to all pits
-        </Link>
-      </nav>
+  // Per-collection theme background, applied to the page container.
+  const bgUrl = collection.data?.theme?.background_url ?? null;
 
-      {collection.isLoading && (
-        <p className="text-sm text-zinc-500">peering into the pit…</p>
-      )}
-      {collection.error && (
-        <p className="text-sm text-red-400" role="alert">
-          could not load this pit: {collection.error.message}
-        </p>
-      )}
+  return (
+    <div
+      className="relative flex min-h-screen flex-col"
+      style={
+        bgUrl
+          ? {
+              backgroundImage: `linear-gradient(rgba(8,8,12,0.85), rgba(8,8,12,0.95)), url(${bgUrl})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
+          : undefined
+      }
+    >
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-32 pt-8">
+        {collection.isLoading && (
+          <p className="text-sm text-zinc-500">peering into the pit…</p>
+        )}
+        {collection.error && (
+          <p className="text-sm text-red-400" role="alert">
+            could not load this pit: {collection.error.message}
+          </p>
+        )}
+
+        {collection.data && (
+          <>
+            <PitHeader collection={collection.data} />
+
+            <div className="relative">
+              {/* The mud-pit visual. Empty pool → static mud with a copy
+               *  overlay; loaded pool → the sampler picks 8-12 floaters. */}
+              {listings.isLoading && (
+                <p className="text-xs text-zinc-500">counting NFTs in the mud…</p>
+              )}
+              <MudPit
+                listings={listings.data?.data ?? []}
+                accentColor={collection.data.theme?.accent_color}
+              />
+              {/* Centered overlay copy on an empty pool. */}
+              {listings.data && listings.data.data.length === 0 && (
+                <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                  <p className="rounded-full bg-black/40 px-4 py-2 text-sm font-medium text-zinc-300 backdrop-blur">
+                    nobody has dumped anything here yet
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* A subtle stat strip below the pit — pool size + accrued. */}
+            {listings.data && listings.data.data.length > 0 && (
+              <p className="text-center text-xs text-zinc-500">
+                showing a sample of{" "}
+                <span className="text-zinc-300">{Math.min(listings.data.data.length, 12)}</span>{" "}
+                from{" "}
+                <span className="text-zinc-300">{listings.data.total}</span>{" "}
+                drowned souls
+              </p>
+            )}
+          </>
+        )}
+      </main>
 
       {collection.data && (
-        <header className="space-y-3 border-b border-zinc-800 pb-6">
-          <div className="flex items-center gap-3">
-            <span
-              className="h-4 w-4 rounded-full"
-              style={{ backgroundColor: collection.data.theme.accent_color }}
-              aria-hidden
-            />
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {collection.data.display_name}
-            </h1>
-          </div>
-          <dl className="grid grid-cols-2 gap-2 text-xs text-zinc-400 sm:grid-cols-4">
-            <Stat label="listings" value={collection.data.stats.n_valid_listings} />
-            <Stat label="M (buckets)" value={collection.data.config.m} />
-            <Stat
-              label="protocol fee"
-              value={`${(collection.data.config.protocol_fee / 1_000_000).toFixed(2)} ₳`}
-            />
-            <Stat
-              label="lister fee"
-              value={`${(collection.data.config.lister_fee / 1_000_000).toFixed(2)} ₳`}
-            />
-          </dl>
-        </header>
-      )}
-
-      {listings.isLoading && <p className="text-sm text-zinc-500">counting NFTs…</p>}
-      {listings.error && (
-        <p className="text-sm text-red-400" role="alert">
-          could not load listings: {listings.error.message}
-        </p>
-      )}
-
-      {listings.data && (
-        <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {listings.data.data.map((l) => (
-            <li key={`${l.utxo_ref.tx_id}#${l.utxo_ref.output_index}`}>
-              <ListingCard listing={l} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div>
-      <dt className="uppercase tracking-wide text-zinc-500">{label}</dt>
-      <dd className="font-mono text-zinc-200">{value}</dd>
-    </div>
-  );
-}
-
-function ListingCard({ listing }: { listing: Listing }) {
-  const nft = useNftMetadata(listing.current_nft_unit);
-  const accruedAda = (listing.accrued_lovelace / 1_000_000).toFixed(2);
-
-  return (
-    <article className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
-      <div className="aspect-square bg-zinc-950">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={nftImageUrl(listing.current_nft_unit, 256)}
-          alt={nft.data?.name ?? listing.current_nft_unit}
-          className="h-full w-full object-cover"
-          loading="lazy"
+        <WalletDrawer
+          collectionPolicyId={collection.data.collection_policy_id}
+          accentColor={collection.data.theme?.accent_color}
         />
-      </div>
-      <div className="space-y-1 p-3">
-        <p className="truncate text-sm font-medium text-zinc-100">
-          {nft.data?.name ?? "loading…"}
-        </p>
-        <p className="font-mono text-xs text-zinc-400">accrued {accruedAda} ₳</p>
-      </div>
-    </article>
+      )}
+    </div>
   );
 }
