@@ -49,7 +49,7 @@ dependencies {
     // we use it for `applyParamsToScript` so the BE can derive each registered
     // config's listing-script address from the unapplied compiled code in
     // plutus.json + the config_nft_policy parameter.
-    implementation("com.bloxbean.cardano:aiken-java-binding:0.1.0")
+    implementation("com.bloxbean.cardano:aiken-java-binding:0.1.1-preview2")
 
     // CCL annotation processor for blueprint-driven model generation from contracts/plutus.json
     compileOnly("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")
@@ -112,5 +112,13 @@ tasks.register<JavaExec>("preprodListNft") {
     description = "List one NFT at the registered listing-script address (use --args=\"ShitterNNN\" to pick)."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.easy1staking.shithole.tools.preprod.ListNftTool")
+    standardInput = System.`in`
+}
+
+tasks.register<JavaExec>("preprodSwap") {
+    group = "preprod tools"
+    description = "Execute one on-chain Swap: find an (NA,NB) bucket match across wallet + pool, build/sign/submit the swap tx."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.PreprodSwapTool")
     standardInput = System.`in`
 }
