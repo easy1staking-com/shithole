@@ -271,14 +271,24 @@ public final class PreprodSwapTool {
         // wrapped in a Constr) — SPEC §4 + listing.ak S8.
         PlutusData treasuryDatum = BytesPlutusData.of(outputTag);
 
-        // Swap redeemer = ListingRedeemer.Swap { nb_asset_name, listing_idx, treasury_idx }
+        // Swap redeemer via the CCL-generated SwapData/SwapConverter classes
+        // (auto-emitted from plutus.json by the annotation processor). Strict
+        // typing — no risk of swapping the Constr alternative or putting
+        // fields in the wrong order. Byte-equivalent to a hand-built
+        // ConstrPlutusData.of(0L, BytesPlutusData(...), BigIntPlutusData(0),
+        // BigIntPlutusData(1)) but more refactor-safe if the Aiken type
+        // changes shape.
+        //
         // Per SPEC §6.3 S5: nb_asset_name = name of the asset in the successor
         // listing output = the swapper's deposit (= match.na in this tool's
         // legacy naming; see findBucketMatch for the inversion note).
-        PlutusData swapRedeemer = ConstrPlutusData.of(0L,
-                BytesPlutusData.of(HexUtil.decodeHexString(match.na.assetNameHex)),
-                BigIntPlutusData.of(0L),  // listing_output_index
-                BigIntPlutusData.of(1L)); // treasury_output_index
+        var swap = new com.easy1staking.shithole.blueprint.generated.shithole.types.model.listingredeemer.impl.SwapData();
+        swap.setNbAssetName(HexUtil.decodeHexString(match.na.assetNameHex));
+        swap.setListingOutputIndex(BigInteger.ZERO);
+        swap.setTreasuryOutputIndex(BigInteger.ONE);
+        PlutusData swapRedeemer =
+                new com.easy1staking.shithole.blueprint.generated.shithole.types.model.listingredeemer.converter.SwapConverter()
+                        .toPlutusData(swap);
 
         // Successor listing value: NA NFT + (consumed.lovelace + listerFee).
         long successorLovelace = match.nb.lovelace + listerFee;
