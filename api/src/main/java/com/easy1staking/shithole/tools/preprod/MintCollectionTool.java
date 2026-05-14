@@ -57,8 +57,13 @@ public final class MintCollectionTool {
 
     private MintCollectionTool() {}
 
-    /** Asset name prefix. Collection-specific; change per run if you want a fresh policy. */
-    private static final String ASSET_NAME_PREFIX = "Shitter";
+    /**
+     * Asset name prefix. Override via env {@code MINT_PREFIX} per run; the
+     * default 'Shitter' is the original test collection. Setting a
+     * different prefix gives a fresh policy + a thematic name (e.g.
+     * MINT_PREFIX=FakeHosky for a Hosky-themed test pit).
+     */
+    private static final String DEFAULT_ASSET_NAME_PREFIX = "Shitter";
 
     /** How many NFTs to mint. */
     private static final int COLLECTION_SIZE = 10;
@@ -69,6 +74,7 @@ public final class MintCollectionTool {
     public static void main(String[] args) throws Exception {
         String mnemonic = require("ADMIN_SEED");
         String projectId = require("BLOCKFROST_PROJECT_ID");
+        String assetNamePrefix = optional("MINT_PREFIX", DEFAULT_ASSET_NAME_PREFIX);
 
         Account account = new Account(Networks.preprod(), mnemonic);
         BackendService backend = new BFBackendService(Constants.BLOCKFROST_PREPROD_URL, projectId);
@@ -90,7 +96,7 @@ public final class MintCollectionTool {
         System.out.println("admin pkh    : " + adminPkhHex);
         System.out.println("policy id    : " + policyId);
         System.out.println("mint deadline: slot " + mintDeadline + " (~10 min from now)");
-        System.out.println("collection   : " + COLLECTION_SIZE + " NFTs, " + ASSET_NAME_PREFIX + "000..");
+        System.out.println("collection   : " + COLLECTION_SIZE + " NFTs, " + assetNamePrefix + "000..");
         System.out.println();
 
         // 2. Build assets + CIP-25 metadata (label 721).
@@ -100,16 +106,16 @@ public final class MintCollectionTool {
         ObjectNode label721 = jsonMapper.createObjectNode();
         ObjectNode policyMap = jsonMapper.createObjectNode();
         for (int i = 0; i < COLLECTION_SIZE; i++) {
-            String name = ASSET_NAME_PREFIX + String.format("%03d", i);
+            String name = assetNamePrefix + String.format("%03d", i);
             assets.add(Asset.builder()
                     .name(name)
                     .value(BigInteger.ONE)
                     .build());
 
             ObjectNode meta = jsonMapper.createObjectNode();
-            meta.put("name", ASSET_NAME_PREFIX + " #" + i);
+            meta.put("name", assetNamePrefix + " #" + i);
             meta.put("image",
-                    "https://placehold.co/256x256/9C5F1F/FFF.png?text=" + ASSET_NAME_PREFIX + "+%23" + i);
+                    "https://placehold.co/256x256/9C5F1F/FFF.png?text=" + assetNamePrefix + "+%23" + i);
             meta.put("mediaType", "image/png");
             meta.put("description", "A dead-collection test NFT for shithole preprod E2E.");
             policyMap.set(name, meta);
@@ -157,5 +163,10 @@ public final class MintCollectionTool {
             System.exit(2);
         }
         return v;
+    }
+
+    private static String optional(String name, String defaultValue) {
+        String v = System.getenv(name);
+        return (v == null || v.isBlank()) ? defaultValue : v;
     }
 }
