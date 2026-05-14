@@ -8,8 +8,10 @@ import { useNftMetadata } from "@/lib/api/hooks";
 import { useMyListings, type MyListingRow } from "@/lib/me/useMyListings";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { submitCancel, submitCancelAndRelist } from "@/lib/tx/cancel";
+import { DEFAULT_LISTING_LOVELACE } from "@/lib/tx/list";
 import { makeLucid } from "@/lib/tx/lucidClient";
 import { fetchUtxoByOutRef } from "@/lib/tx/swap";
+import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
@@ -39,12 +41,15 @@ export default function MePage() {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 pt-8 pb-24">
       <header>
-        <Link
-          href="/"
-          className="text-xs uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
-        >
-          ← back
-        </Link>
+        <div className="flex items-start justify-between gap-3">
+          <Link
+            href="/"
+            className="text-xs uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
+          >
+            ← back
+          </Link>
+          <WalletConnectButton />
+        </div>
         <h1 className="mt-3 text-3xl font-semibold text-zinc-100">your shit in the pits</h1>
         <p className="mt-1 text-sm text-zinc-400">
           everything you&apos;ve dumped, with what&apos;s accrued from passing swappers.
@@ -52,9 +57,10 @@ export default function MePage() {
       </header>
 
       {!addressBech32 && (
-        <p className="rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-400">
-          connect a wallet to see your listings.
-        </p>
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-400">
+          <p>connect a wallet to see your listings.</p>
+          <WalletConnectButton />
+        </div>
       )}
 
       {addressBech32 && isLoading && rows.length === 0 && (
@@ -114,7 +120,17 @@ function MyListingCard({ row }: { row: MyListingRow }) {
   const accent = collection.theme?.accent_color ?? "#b87333";
   const name = meta.data?.name ?? listing.current_nft_unit.slice(56);
   const image = meta.data?.image_url ?? null;
-  const accruedAda = listing.accrued_lovelace / 1_000_000;
+  // BE hardcodes accrued_lovelace=0 (CollectionController:152-154 — no
+  // per-row min_utxo tracking yet). Derive client-side from the listing's
+  // total lovelace minus our FE-enforced floor. Holds as long as every
+  // genesis listing was created with DEFAULT_LISTING_LOVELACE (which our
+  // list.ts enforces — third-party listers using a different floor would
+  // throw off the derivation by their extra padding).
+  const accruedLovelaceDerived = Math.max(
+    0,
+    listing.lovelace - Number(DEFAULT_LISTING_LOVELACE),
+  );
+  const accruedAda = accruedLovelaceDerived / 1_000_000;
   const totalAda = listing.lovelace / 1_000_000;
 
   const invalidate = useCallback(() => {
@@ -146,8 +162,8 @@ function MyListingCard({ row }: { row: MyListingRow }) {
     [api, invalidate],
   );
 
-  const handleCancelOnly = useCallback(() => {
-    runWithLucid("cancelling", async (lucid) => {
+  const handleWithdraw = useCallback(() => {
+    runWithLucid("withdrawing", async (lucid) => {
       const network = toEvolutionNetwork(getNetworkName());
       const consumed = await fetchUtxoByOutRef(
         lucid,
@@ -163,8 +179,8 @@ function MyListingCard({ row }: { row: MyListingRow }) {
     });
   }, [runWithLucid, listing, collection]);
 
-  const handleCancelAndRelist = useCallback(() => {
-    runWithLucid("claiming + relisting", async (lucid) => {
+  const handleClaim = useCallback(() => {
+    runWithLucid("claiming", async (lucid) => {
       const network = toEvolutionNetwork(getNetworkName());
       const consumed = await fetchUtxoByOutRef(
         lucid,
@@ -228,12 +244,12 @@ function MyListingCard({ row }: { row: MyListingRow }) {
         <div className="flex flex-col items-stretch gap-2 sm:items-end">
           <button
             type="button"
-            onClick={handleCancelAndRelist}
+            onClick={handleClaim}
             disabled={state.kind === "running" || accruedAda === 0}
             title={
               accruedAda === 0
                 ? "no ADA has accrued yet — nothing to claim"
-                : "pull the listing, take the accrued ADA, then put it back in the pit"
+                : "take the accrued ADA; NFT stays in the pit"
             }
             className="rounded-md px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
             style={{
@@ -241,16 +257,16 @@ function MyListingCard({ row }: { row: MyListingRow }) {
               color: "#0a0a0a",
             }}
           >
-            claim + relist
+            claim
           </button>
           <button
             type="button"
-            onClick={handleCancelOnly}
+            onClick={handleWithdraw}
             disabled={state.kind === "running"}
             className="rounded-md border border-zinc-700 px-4 py-1.5 text-xs uppercase tracking-wide text-zinc-300 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
             title="pull the NFT and ADA out of the pit; it'll no longer participate in swaps"
           >
-            cancel
+            withdraw
           </button>
         </div>
       </div>
