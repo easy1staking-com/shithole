@@ -406,6 +406,8 @@ function SettledPhase({
     outcomeUnit,
     naName: meta.data?.name,
     nbName: depositMeta.data?.name,
+    naImg: meta.data?.image_url,
+    nbImg: depositMeta.data?.image_url,
   });
   const tweetUrl = shareUrl
     ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(
@@ -496,6 +498,8 @@ function buildShareUrl(args: {
   outcomeUnit: string;
   naName?: string;
   nbName?: string;
+  naImg?: string;
+  nbImg?: string;
 }): string | null {
   const ctx = args.shareContext;
   if (!ctx) return null;
@@ -507,6 +511,10 @@ function buildShareUrl(args: {
   qs.set("na", args.outcomeUnit);
   if (args.nbName) qs.set("nb_name", args.nbName);
   if (args.naName) qs.set("na_name", args.naName);
+  // Pre-fill image URLs so the OG route renders without a BE round-trip
+  // (the FE already has them resolved from the NFT metadata cache).
+  if (args.nbImg) qs.set("nb_img", args.nbImg);
+  if (args.naImg) qs.set("na_img", args.naImg);
   if (args.accentColor) {
     qs.set("accent", args.accentColor.replace(/^#/, ""));
   }

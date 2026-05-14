@@ -14,13 +14,13 @@
  *   <li>{@code nb} — full unit hex of the NFT that went in (NB).</li>
  *   <li>{@code display_name} — collection display name for the caption.</li>
  *   <li>{@code na_name}, {@code nb_name} — optional pretty names for the cards.</li>
+ *   <li>{@code na_img}, {@code nb_img} — already-resolved HTTPS image URLs
+ *       (e.g. {@code https://ipfs.io/ipfs/Qm…}). The FE caller has these
+ *       in memory from the NFT metadata cache, so passing them avoids a
+ *       server-side fetch from the OG route to the BE. If omitted, the
+ *       OG route fetches {@code GET /api/nft/{unit}} to resolve.</li>
  *   <li>{@code accent} — hex color (no leading #) for the accent overlay.</li>
  * </ul>
- *
- * <p>The route runs in the Node runtime (default) so it can reach
- * the BE on localhost during dev. Production builds proxy through
- * {@code NEXT_PUBLIC_API_BASE_URL} or hit the BE directly via
- * {@code OG_BE_INTERNAL_URL}.
  */
 
 import { ImageResponse } from "next/og";
@@ -32,6 +32,27 @@ export const revalidate = 3600;
 
 function trim(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + "…";
+}
+
+/**
+ * Best-effort fetch of the BE's NFT metadata for a unit, returning the
+ * already-resolved {@code image_url} (an HTTPS IPFS gateway URL the BE
+ * computed from the CIP-25 {@code ipfs://} URI). Returns null on any
+ * failure — the OG render gracefully degrades to the placeholder frame.
+ */
+async function resolveImageUrl(apiBase: string, unit: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`${apiBase}/api/nft/${unit}`, {
+      // Cache per-unit at the edge so back-to-back OG renders for the
+      // same swap don't re-hit the BE.
+      next: { revalidate: 300 },
+    });
+    if (!resp.ok) return null;
+    const data = (await resp.json()) as { image_url?: string };
+    return data.image_url ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function utf8FromHexTail(hex: string): string {
@@ -64,16 +85,17 @@ export async function GET(req: Request): Promise<Response> {
   const accentParam = sp.get("accent") || "f5c518";
   const accent = `#${accentParam}`;
 
-  // Image source: the BE-served thumbnail proxy. In dev, NEXT_PUBLIC_API_BASE_URL
-  // is empty so we fall back to OG_BE_INTERNAL_URL (or localhost:8080).
-  // In production, NEXT_PUBLIC_API_BASE_URL takes precedence so the
-  // edge / serverless runtime can reach the BE.
+  // Prefer image URLs passed in the query (the FE has them in memory
+  // from the React Query cache). Fall back to a BE fetch for callers
+  // that only know the unit hex.
   const apiBase =
     process.env.OG_BE_INTERNAL_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     "http://localhost:8080";
-  const naImg = na ? `${apiBase}/api/nft/${na}/image?size=512` : null;
-  const nbImg = nb ? `${apiBase}/api/nft/${nb}/image?size=512` : null;
+  let naImg = sp.get("na_img") || null;
+  let nbImg = sp.get("nb_img") || null;
+  if (!naImg && na) naImg = await resolveImageUrl(apiBase, na);
+  if (!nbImg && nb) nbImg = await resolveImageUrl(apiBase, nb);
 
   return new ImageResponse(
     (
