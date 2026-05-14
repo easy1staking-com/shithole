@@ -20,6 +20,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +83,22 @@ public final class MintCollectionTool {
         // a hosky mascot WEBP hosted on the local dev server). Default:
         // per-NFT placeholder via placehold.co with the asset name.
         String imageUrlOverride = optional("MINT_IMAGE_URL", null);
+        // Optional path to a newline-separated file of image URLs, one
+        // per NFT. Trumps MINT_IMAGE_URL when set. Use this to mirror an
+        // existing collection's per-NFT IPFS URIs (e.g. test IPFS image
+        // resolution with the real Hosky CashGrab URIs).
+        String imageUrlsFile = optional("MINT_IMAGE_URLS_FILE", null);
+        List<String> imageUrls = null;
+        if (imageUrlsFile != null) {
+            imageUrls = Files.readAllLines(Path.of(imageUrlsFile)).stream()
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty() && !s.startsWith("#"))
+                    .toList();
+            if (imageUrls.size() < COLLECTION_SIZE) {
+                die("MINT_IMAGE_URLS_FILE " + imageUrlsFile + " has "
+                        + imageUrls.size() + " non-comment lines; need at least " + COLLECTION_SIZE);
+            }
+        }
 
         Account account = new Account(Networks.preprod(), mnemonic);
         BackendService backend = new BFBackendService(Constants.BLOCKFROST_PREPROD_URL, projectId);
@@ -120,9 +138,14 @@ public final class MintCollectionTool {
 
             ObjectNode meta = jsonMapper.createObjectNode();
             meta.put("name", assetNamePrefix + " #" + i);
-            String imageUrl = imageUrlOverride != null
-                    ? imageUrlOverride
-                    : "https://placehold.co/256x256/9C5F1F/FFF.png?text=" + assetNamePrefix + "+%23" + i;
+            String imageUrl;
+            if (imageUrls != null) {
+                imageUrl = imageUrls.get(i);
+            } else if (imageUrlOverride != null) {
+                imageUrl = imageUrlOverride;
+            } else {
+                imageUrl = "https://placehold.co/256x256/9C5F1F/FFF.png?text=" + assetNamePrefix + "+%23" + i;
+            }
             meta.put("image", imageUrl);
             meta.put("mediaType", mediaTypeFromUrl(imageUrl));
             meta.put("description", "A dead-collection test NFT for shithole preprod E2E.");
@@ -176,6 +199,11 @@ public final class MintCollectionTool {
     private static String optional(String name, String defaultValue) {
         String v = System.getenv(name);
         return (v == null || v.isBlank()) ? defaultValue : v;
+    }
+
+    private static void die(String msg) {
+        System.err.println(msg);
+        System.exit(2);
     }
 
     /** Best-effort mediaType from URL extension; defaults to image/png. */
