@@ -18,7 +18,12 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // Built via RegExp(...) to keep this file's source ASCII-safe.
 const DISPLAY_NAME = new RegExp("^[^\\x00-\\x1f\\x7f]{1,64}$");
 const HEX_COLOR = /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/;
-const HTTPS_URL = /^https:\/\/[\w.\-/?=&%~+,#:]+$/;
+// Either https:// or a same-origin absolute path. Leading `/[\w.\-]`
+// anchor blocks protocol-relative `//evil.com/...` while still letting
+// `/pit/foo.webp` through. Must mirror ThemeDto.URL_OR_PATH_REGEX on
+// the BE — divergence here would mean the FE submits a payload the
+// BE then rejects.
+const URL_OR_PATH = /^(https:\/\/|\/[\w.\-])[\w.\-/?=&%~+,#:]*$/;
 
 export const registerConfigFormSchema = z
   .object({
@@ -69,20 +74,20 @@ export const registerConfigFormSchema = z
   })
   .superRefine((val, ctx) => {
     if (val.themeBackgroundUrl && val.themeBackgroundUrl.length > 0) {
-      if (!HTTPS_URL.test(val.themeBackgroundUrl) || val.themeBackgroundUrl.length > 512) {
+      if (!URL_OR_PATH.test(val.themeBackgroundUrl) || val.themeBackgroundUrl.length > 512) {
         ctx.addIssue({
           code: "custom",
           path: ["themeBackgroundUrl"],
-          message: "must be https:// URL (max 512 chars, restricted charset)",
+          message: "must be https:// URL or same-origin /path (max 512 chars, restricted charset)",
         });
       }
     }
     if (val.themeMascotImageUrl && val.themeMascotImageUrl.length > 0) {
-      if (!HTTPS_URL.test(val.themeMascotImageUrl) || val.themeMascotImageUrl.length > 512) {
+      if (!URL_OR_PATH.test(val.themeMascotImageUrl) || val.themeMascotImageUrl.length > 512) {
         ctx.addIssue({
           code: "custom",
           path: ["themeMascotImageUrl"],
-          message: "must be https:// URL (max 512 chars, restricted charset)",
+          message: "must be https:// URL or same-origin /path (max 512 chars, restricted charset)",
         });
       }
     }
