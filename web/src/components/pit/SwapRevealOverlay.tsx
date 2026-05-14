@@ -56,6 +56,7 @@ export function SwapRevealOverlay({
   outcomeUnit,
   confirmation,
   accentColor,
+  shareContext,
   onDismiss,
   onRetry,
 }: {
@@ -69,6 +70,17 @@ export function SwapRevealOverlay({
   confirmation: ConfirmationStatus;
   /** Pit accent color for swirl tinting. */
   accentColor?: string | null;
+  /**
+   * Context the settled phase needs to construct a share URL. Optional
+   * — without it the share button is hidden. The {@code txHash} only
+   * appears once submit returns; the URL still works without it, but
+   * including it makes the share landing page more informative.
+   */
+  shareContext?: {
+    slug: string;
+    displayName: string;
+    txHash?: string;
+  };
   /** Called when the user clicks "done" or after the auto-dismiss timer. */
   onDismiss: () => void;
   /** Called when the user clicks the chain-rejected retry button. */
@@ -138,9 +150,12 @@ export function SwapRevealOverlay({
           {phase === "settled" && (
             <SettledPhase
               key="settled"
-              unit={outcomeUnit}
+              depositUnit={depositUnit}
+              outcomeUnit={outcomeUnit}
               accent={accent}
+              accentColor={accentColor}
               confirmation={confirmation}
+              shareContext={shareContext}
               onDismiss={onDismiss}
               onRetry={onRetry}
             />
@@ -169,9 +184,13 @@ function SplashPhase({ unit, accent }: { unit: string; accent: string }) {
   const name = meta.data?.name ?? unit.slice(56);
   return (
     <motion.div
-      initial={{ y: -120, scale: 1.1, opacity: 0 }}
-      animate={{ y: 80, scale: 0.55, opacity: 1 }}
-      exit={{ y: 140, scale: 0.3, opacity: 0 }}
+      // Spin the card while it falls. 1.5 rotations gives a clear sense
+      // of "tossed in" without the image becoming unreadable at any
+      // single frame. The exit overshoots to one more half-rotation so
+      // the handoff to the swirl phase feels continuous.
+      initial={{ y: -120, scale: 1.1, opacity: 0, rotate: -30 }}
+      animate={{ y: 80, scale: 0.55, opacity: 1, rotate: 540 }}
+      exit={{ y: 140, scale: 0.3, opacity: 0, rotate: 720 }}
       transition={{ duration: SPLASH_MS / 1000, ease: [0.5, 0, 0.4, 1] }}
       className="flex flex-col items-center gap-3"
     >
@@ -200,6 +219,16 @@ function SwirlPhase({
   accent: string;
   pending: boolean;
 }) {
+  // Offsets for the orbital dots — six dots at varied radii so their
+  // overlapping motion reads as turbulent rather than uniform.
+  const orbits = [
+    { radius: 48, size: 10, speed: 1.4, dir: 1, phase: 0 },
+    { radius: 62, size: 6, speed: 2.2, dir: -1, phase: 90 },
+    { radius: 36, size: 8, speed: 1.0, dir: 1, phase: 180 },
+    { radius: 70, size: 5, speed: 2.8, dir: -1, phase: 45 },
+    { radius: 55, size: 7, speed: 1.7, dir: 1, phase: 270 },
+    { radius: 42, size: 4, speed: 2.5, dir: -1, phase: 135 },
+  ];
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -208,32 +237,98 @@ function SwirlPhase({
       transition={{ duration: 0.4 }}
       className="flex flex-col items-center gap-6"
     >
+      {/* Wobble container — the whole apparatus shifts in a tight
+       *  Lissajous so the swirl has off-center drift instead of just
+       *  rotating in place. */}
       <motion.div
         className="relative h-40 w-40"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1.8, ease: "linear", repeat: Infinity }}
+        animate={{
+          x: [0, 6, -4, 5, -3, 0],
+          y: [0, -3, 5, -2, 4, 0],
+        }}
+        transition={{ duration: 3.2, ease: "easeInOut", repeat: Infinity }}
       >
-        {/* Three nested rings of fading dots — a cheap swirl with no SVG. */}
-        {[0, 1, 2].map((ring) => (
-          <div
-            key={ring}
-            className="absolute inset-0 rounded-full"
-            style={{
-              boxShadow: `inset 0 0 ${30 + ring * 18}px ${ring * 6}px ${accent}${ring === 0 ? "cc" : ring === 1 ? "88" : "55"}`,
-              transform: `scale(${1 - ring * 0.18})`,
-            }}
-            aria-hidden
-          />
-        ))}
-        <div
+        {/* Two conic-gradient sweeps — the asymmetric color band is
+         *  what actually reads as motion when the element rotates.
+         *  Different speeds + opposite directions give a "swirly water"
+         *  feel rather than a single spinning loader. */}
+        <motion.div
           className="absolute inset-0 rounded-full"
           style={{
-            background: `radial-gradient(closest-side, transparent 55%, ${accent}33 60%, transparent 75%)`,
+            background: `conic-gradient(from 0deg, transparent 0deg, ${accent}aa 60deg, transparent 140deg, ${accent}55 220deg, transparent 320deg)`,
+            mask: "radial-gradient(closest-side, transparent 35%, black 50%, black 95%, transparent 100%)",
+            WebkitMask:
+              "radial-gradient(closest-side, transparent 35%, black 50%, black 95%, transparent 100%)",
           }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.6, ease: "linear", repeat: Infinity }}
           aria-hidden
         />
+        <motion.div
+          className="absolute inset-2 rounded-full"
+          style={{
+            background: `conic-gradient(from 90deg, transparent 0deg, ${accent}88 80deg, transparent 200deg, ${accent}44 280deg, transparent 360deg)`,
+            mask: "radial-gradient(closest-side, transparent 30%, black 45%, black 95%, transparent 100%)",
+            WebkitMask:
+              "radial-gradient(closest-side, transparent 30%, black 45%, black 95%, transparent 100%)",
+          }}
+          animate={{ rotate: -360 }}
+          transition={{ duration: 2.3, ease: "linear", repeat: Infinity }}
+          aria-hidden
+        />
+
+        {/* Dark sunken center — gives the swirl a "hole" to be circling
+         *  around. Pulses softly so it doesn't feel inert. */}
+        <motion.div
+          className="absolute inset-[28%] rounded-full"
+          style={{
+            background: `radial-gradient(closest-side, ${accent}33 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.95) 100%)`,
+          }}
+          animate={{ scale: [1, 0.9, 1.05, 0.95, 1] }}
+          transition={{ duration: 1.8, ease: "easeInOut", repeat: Infinity }}
+          aria-hidden
+        />
+
+        {/* Orbital dots — each one is a tiny dot pinned at a fixed
+         *  off-center position, then its parent rotates around the
+         *  swirl's center. Different radii + speeds + directions, so
+         *  the dots cross each other constantly. */}
+        {orbits.map((o, i) => (
+          <motion.div
+            key={i}
+            className="absolute left-1/2 top-1/2"
+            style={{ x: -o.size / 2, y: -o.size / 2 }}
+            animate={{ rotate: 360 * o.dir }}
+            transition={{
+              duration: o.speed,
+              ease: "linear",
+              repeat: Infinity,
+              delay: i * 0.05,
+            }}
+            aria-hidden
+          >
+            <div
+              style={{
+                position: "absolute",
+                left: o.radius,
+                top: 0,
+                width: o.size,
+                height: o.size,
+                borderRadius: "50%",
+                backgroundColor: accent,
+                boxShadow: `0 0 ${o.size * 1.5}px ${accent}`,
+                transform: `rotate(${o.phase}deg)`,
+              }}
+            />
+          </motion.div>
+        ))}
       </motion.div>
-      <div className="text-center">
+
+      <motion.div
+        className="text-center"
+        animate={{ opacity: [0.65, 1, 0.65] }}
+        transition={{ duration: 1.4, ease: "easeInOut", repeat: Infinity }}
+      >
         <p className="text-sm font-medium uppercase tracking-widest text-zinc-300">
           swirling…
         </p>
@@ -242,7 +337,7 @@ function SwirlPhase({
             ? "the pit is digesting your s#!t"
             : "almost…"}
         </p>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -280,21 +375,44 @@ function RevealPhase({ unit, accent }: { unit: string; accent: string }) {
 }
 
 function SettledPhase({
-  unit,
+  depositUnit,
+  outcomeUnit,
   accent,
+  accentColor,
   confirmation,
+  shareContext,
   onDismiss,
   onRetry,
 }: {
-  unit: string;
+  depositUnit: string;
+  outcomeUnit: string;
   accent: string;
+  /** Original accentColor prop (might be null) — preserved for the share URL. */
+  accentColor?: string | null;
   confirmation: ConfirmationStatus;
+  shareContext?: { slug: string; displayName: string; txHash?: string };
   onDismiss: () => void;
   onRetry?: () => void;
 }) {
-  const meta = useNftMetadata(unit);
+  const meta = useNftMetadata(outcomeUnit);
+  const depositMeta = useNftMetadata(depositUnit);
   const image = meta.data?.image_url ?? null;
-  const name = meta.data?.name ?? unit.slice(56);
+  const name = meta.data?.name ?? outcomeUnit.slice(56);
+
+  const shareUrl = buildShareUrl({
+    shareContext,
+    accentColor,
+    depositUnit,
+    outcomeUnit,
+    naName: meta.data?.name,
+    nbName: depositMeta.data?.name,
+  });
+  const tweetUrl = shareUrl
+    ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+        `i just swapped some worthless s#!t for slightly different worthless s#!t on @s#!thole`,
+      )}&url=${encodeURIComponent(shareUrl)}`
+    : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -340,16 +458,60 @@ function SettledPhase({
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="rounded-md bg-amber-600 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-amber-50 hover:bg-amber-500"
-        >
-          admire it
-        </button>
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          {tweetUrl && (
+            <a
+              href={tweetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md border px-5 py-2 text-center text-sm font-semibold uppercase tracking-wide hover:opacity-90"
+              style={{ borderColor: accent, color: accent }}
+            >
+              share the carnage →
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded-md bg-amber-600 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-amber-50 hover:bg-amber-500"
+          >
+            admire it
+          </button>
+        </div>
       )}
     </motion.div>
   );
+}
+
+/**
+ * Compose the absolute /share/swap URL with all the context the OG
+ * card route needs. Returns null when {@code shareContext} is missing
+ * (the parent didn't pass one — we hide the share button in that case
+ * rather than emit a broken URL).
+ */
+function buildShareUrl(args: {
+  shareContext?: { slug: string; displayName: string; txHash?: string };
+  accentColor?: string | null;
+  depositUnit: string;
+  outcomeUnit: string;
+  naName?: string;
+  nbName?: string;
+}): string | null {
+  const ctx = args.shareContext;
+  if (!ctx) return null;
+  if (typeof window === "undefined") return null;
+  const qs = new URLSearchParams();
+  qs.set("slug", ctx.slug);
+  qs.set("display_name", ctx.displayName);
+  qs.set("nb", args.depositUnit);
+  qs.set("na", args.outcomeUnit);
+  if (args.nbName) qs.set("nb_name", args.nbName);
+  if (args.naName) qs.set("na_name", args.naName);
+  if (args.accentColor) {
+    qs.set("accent", args.accentColor.replace(/^#/, ""));
+  }
+  if (ctx.txHash) qs.set("tx", ctx.txHash);
+  return `${window.location.origin}/share/swap?${qs.toString()}`;
 }
 
 /**

@@ -95,7 +95,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   const [revealError, setRevealError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationStatus>(null);
   const [reveal, setReveal] = useState<
-    { depositUnit: string; outcomeUnit: string } | null
+    { depositUnit: string; outcomeUnit: string; txHash?: string } | null
   >(null);
 
   const handleDragStart = useCallback((nft: WalletCollectionNft) => {
@@ -212,6 +212,10 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
       // Submission succeeded → flip the swirl to reveal. Confirmation
       // continues in the background; the chip on the settled phase
       // tells the user whether the chain actually landed it.
+      // Capture txHash so the share-card URL can include it.
+      setReveal((prev) =>
+        prev ? { ...prev, txHash: result.txHash } : prev,
+      );
       setRevealStatus("success");
       setConfirmation("confirming");
 
@@ -474,6 +478,15 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
             outcomeUnit={reveal.outcomeUnit}
             confirmation={confirmation}
             accentColor={collection.data?.theme?.accent_color}
+            shareContext={
+              collection.data
+                ? {
+                    slug,
+                    displayName: collection.data.display_name,
+                    txHash: reveal.txHash,
+                  }
+                : undefined
+            }
             onDismiss={handleRevealDismiss}
             onRetry={handleRevealRetry}
           />
