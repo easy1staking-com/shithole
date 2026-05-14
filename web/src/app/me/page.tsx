@@ -50,7 +50,7 @@ export default function MePage() {
           </Link>
           <WalletConnectButton />
         </div>
-        <h1 className="mt-3 text-3xl font-semibold text-zinc-100">your shit in the pits</h1>
+        <h1 className="mt-3 text-3xl font-semibold text-zinc-100">your s#!t in the pits</h1>
         <p className="mt-1 text-sm text-zinc-400">
           everything you&apos;ve dumped, with what&apos;s accrued from passing swappers.
         </p>

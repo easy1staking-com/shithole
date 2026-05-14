@@ -122,7 +122,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
       const match = matches.get(nft.unit);
       if (!match) {
         setSwap({ kind: "idle" });
-        setToast("no shit in this pit matches yours. try another.");
+        setToast("no s#!t in this pit matches yours. try another.");
         // Auto-dismiss the toast.
         window.setTimeout(() => setToast(null), 3500);
         return;
@@ -304,8 +304,8 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
       setListing(true);
       setToast(
         picked.length === 1
-          ? "dumping 1 piece of shit into the pit…"
-          : `dumping ${picked.length} pieces of shit into the pit…`,
+          ? "dumping 1 piece of s#!t into the pit…"
+          : `dumping ${picked.length} pieces of s#!t into the pit…`,
       );
       try {
         const lucid = await makeLucid(api);
@@ -323,7 +323,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           await awaitTxConfirmation(lucid, result.txHash);
           setToast(
             picked.length === 1
-              ? "your shit is in the pit"
+              ? "your s#!t is in the pit"
               : `${picked.length} pieces dumped — they're in the pit`,
           );
           queryClient.invalidateQueries({

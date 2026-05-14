@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Shithole",
+  title: "S#!thole",
   description: "Give your dead NFTs a second life. Sort of.",
 };
 

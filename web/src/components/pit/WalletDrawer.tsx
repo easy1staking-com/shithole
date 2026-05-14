@@ -203,7 +203,7 @@ export function WalletDrawer({
             <div className="px-6 py-6 text-center text-sm text-zinc-500">
               {mode === "list"
                 ? "everything you own is already in the pit"
-                : "your wallet has no shit to dump in this pit"}
+                : "your wallet has no s#!t to dump in this pit"}
             </div>
           ) : (
             <div className="mx-auto grid w-full max-w-6xl grid-cols-3 gap-3 px-6 py-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
@@ -246,7 +246,7 @@ export function WalletDrawer({
 
       {!notConnected && nfts.data && nfts.data.length === 0 && !nfts.isLoading && (
         <div className="border-t border-zinc-800/60 bg-zinc-950 px-6 py-4 text-center text-sm text-zinc-500">
-          your wallet has no shit to dump in this pit
+          your wallet has no s#!t to dump in this pit
         </div>
       )}
 

@@ -239,7 +239,7 @@ function SwirlPhase({
         </p>
         <p className="mt-1 text-xs text-zinc-500">
           {pending
-            ? "the pit is digesting your shit"
+            ? "the pit is digesting your s#!t"
             : "almost…"}
         </p>
       </div>
@@ -315,7 +315,7 @@ function SettledPhase({
       )}
       <div className="text-center">
         <p className="text-xs uppercase tracking-widest text-zinc-500">
-          your new shit
+          your new s#!t
         </p>
         <p className="mt-1 max-w-xs truncate text-lg font-semibold text-zinc-100">
           {name}
@@ -431,7 +431,7 @@ function StuckPhase({
       </div>
       <div>
         <p className="text-lg font-semibold text-zinc-100">
-          your shit got stuck in the pipes
+          your s#!t got stuck in the pipes
         </p>
         {message && (
           <p className="mt-2 max-w-xs text-xs text-red-300/80">{message}</p>
