@@ -1,15 +1,31 @@
 "use client";
 
 import { AnimatePresence } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 
 import { PitDropZone } from "@/components/pit/PitDropZone";
 import { PitHeader } from "@/components/pit/PitHeader";
 import { SwapConfirm } from "@/components/pit/SwapConfirm";
+import {
+  SwapRevealOverlay,
+  type ConfirmationStatus,
+  type SwapStatus,
+} from "@/components/pit/SwapRevealOverlay";
 import { WalletDrawer } from "@/components/pit/WalletDrawer";
 import { useCollection, useListings } from "@/lib/api/hooks";
 import { useMatchability } from "@/lib/pit/useMatchability";
 import type { Match } from "@/lib/pit/bucketMath";
+import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
+import { makeLucid } from "@/lib/tx/lucidClient";
+import {
+  fetchUtxoByOutRef,
+  findConfigUtxo,
+  findUtxoCarrying,
+  submitSwap,
+} from "@/lib/tx/swap";
+import { addressViewToBech32 } from "@/lib/util/addressView";
+import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
 import { useWalletCollectionNfts, type WalletCollectionNft } from "@/lib/wallet/useWalletCollectionNfts";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
@@ -47,8 +63,9 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   const { slug } = use(params);
   const collection = useCollection(slug);
   const listings = useListings(slug, { page: 0, size: 50 });
+  const queryClient = useQueryClient();
 
-  const { addressBech32 } = useWalletStore();
+  const { api, addressBech32 } = useWalletStore();
   const collectionPolicyId = collection.data?.collection_policy_id;
   const walletNfts = useWalletCollectionNfts(
     addressBech32 ?? null,
@@ -70,6 +87,15 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   const [swap, setSwap] = useState<SwapState>({ kind: "idle" });
   // Transient toast text — shown for ~3s.
   const [toast, setToast] = useState<string | null>(null);
+  // Reveal overlay state — independent of `swap` so the animation can
+  // outlive the submit (e.g. show "stuck" overlay after the swap state
+  // already cleared to idle).
+  const [revealStatus, setRevealStatus] = useState<SwapStatus | null>(null);
+  const [revealError, setRevealError] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationStatus>(null);
+  const [reveal, setReveal] = useState<
+    { depositUnit: string; outcomeUnit: string } | null
+  >(null);
 
   const handleDragStart = useCallback((nft: WalletCollectionNft) => {
     setSwap({ kind: "dragging", nft });
@@ -109,28 +135,151 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
     setSwap({ kind: "idle" });
   }, []);
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
     if (swap.kind !== "confirming") return;
-    setSwap({ kind: "submitting", nft: swap.nft, match: swap.match });
-    // Stub: real swap tx + reveal animation lands in iter-2B. For now,
-    // log the intended swap + return to idle after a short beat so the
-    // dev can see the "swapping…" pulse on the button.
-    console.log(
-      "[2A stub] would swap",
-      swap.nft.unit,
-      "<=>",
-      swap.match.consumed.unit,
-      "at bucket",
-      swap.match.bucket,
-    );
-    window.setTimeout(() => {
+    if (!api || !addressBech32 || !collection.data || !collectionPolicyId) {
       setSwap({ kind: "idle" });
-      setToast(
-        `(stub) would deposit ${shortName(swap.nft.unit)} and take ${shortName(swap.match.consumed.unit)} out`,
+      setToast("connect a wallet first");
+      window.setTimeout(() => setToast(null), 3500);
+      return;
+    }
+
+    const deposit = swap.nft;
+    const match = swap.match;
+
+    // Locate the full Listing row (we need lister_pkh + lovelace, which
+    // aren't on the bucket-math PoolListingRef).
+    const consumedListing = listings.data?.data.find(
+      (l) =>
+        l.utxo_ref.tx_id === match.consumed.txHex &&
+        l.utxo_ref.output_index === match.consumed.outputIndex,
+    );
+    if (!consumedListing) {
+      setSwap({ kind: "idle" });
+      setToast("the matched listing vanished from the pool — try again");
+      window.setTimeout(() => setToast(null), 3500);
+      return;
+    }
+
+    // Fire the animation IMMEDIATELY (parallel to chain submission, per
+    // SPEC §11 / Giovanni's UX call: animation timing independent of latency).
+    setSwap({ kind: "submitting", nft: deposit, match });
+    setReveal({ depositUnit: deposit.unit, outcomeUnit: match.consumed.unit });
+    setRevealStatus("pending");
+    setConfirmation(null);
+    setRevealError(null);
+
+    try {
+      const network = toEvolutionNetwork(getNetworkName());
+      const lucid = await makeLucid(api);
+
+      const [configUtxo, depositUtxo, consumedUtxo] = await Promise.all([
+        findConfigUtxo(lucid, network, collection.data.config_nft_policy),
+        findUtxoCarrying(lucid, deposit.unit),
+        fetchUtxoByOutRef(
+          lucid,
+          match.consumed.txHex,
+          match.consumed.outputIndex,
+        ),
+      ]);
+      if (!depositUtxo) {
+        throw new Error(`wallet UTxO holding ${deposit.unit} not found`);
+      }
+
+      const treasuryBech32 = addressViewToBech32(
+        collection.data.config.treasury_addr,
+        network,
       );
+
+      const result = await submitSwap(lucid, {
+        network,
+        collectionPolicyHex: collectionPolicyId,
+        configNftPolicyHex: collection.data.config_nft_policy,
+        listingScriptAddress: collection.data.listing_script_address,
+        treasuryAddrBech32: treasuryBech32,
+        protocolFeeLovelace: BigInt(collection.data.config.protocol_fee),
+        listerFeeLovelace: BigInt(collection.data.config.lister_fee),
+        consumed: consumedUtxo,
+        consumedAssetNameHex: match.consumed.unit.slice(56),
+        consumedListerPkhHex: consumedListing.lister_pkh,
+        depositUtxo,
+        depositAssetNameHex: deposit.assetNameHex,
+        configUtxo,
+      });
+
+      console.log("swap submitted:", result.txHash);
+      // Submission succeeded → flip the swirl to reveal. Confirmation
+      // continues in the background; the chip on the settled phase
+      // tells the user whether the chain actually landed it.
+      setRevealStatus("success");
+      setConfirmation("confirming");
+
+      awaitTxConfirmation(lucid, result.txHash)
+        .then(() => {
+          setConfirmation("confirmed");
+          // The BE indexer reads on confirmation, so invalidate now —
+          // not at submit time. Invalidating earlier just refetches
+          // stale data.
+          queryClient.invalidateQueries({
+            queryKey: [
+              "walletCollection",
+              addressBech32,
+              collectionPolicyId,
+            ],
+          });
+          queryClient.invalidateQueries({ queryKey: ["listings", slug] });
+          queryClient.invalidateQueries({ queryKey: ["collection", slug] });
+        })
+        .catch((chainErr) => {
+          const chainMsg =
+            chainErr instanceof Error ? chainErr.message : String(chainErr);
+          console.warn("chain did not confirm:", chainMsg);
+          setConfirmation("rejected");
+        });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : String(err);
+      console.error("swap failed:", message);
+      // Submit-side failure → the "stuck in the pipes" overlay. Chain
+      // never saw the tx, so wallet/pool state is unchanged — no
+      // invalidation needed.
+      setRevealStatus("error");
+      setRevealError(message);
+    }
+  }, [
+    swap,
+    api,
+    addressBech32,
+    collection.data,
+    collectionPolicyId,
+    listings.data,
+    queryClient,
+    slug,
+  ]);
+
+  const handleRevealDismiss = useCallback(() => {
+    const wasSuccess = revealStatus === "success";
+    const wasConfirmed = confirmation === "confirmed";
+    const outcomeUnit = reveal?.outcomeUnit;
+    setReveal(null);
+    setRevealStatus(null);
+    setConfirmation(null);
+    setRevealError(null);
+    setSwap({ kind: "idle" });
+    if (wasSuccess && wasConfirmed && outcomeUnit) {
+      setToast(`fished out ${shortName(outcomeUnit)} — check your stash`);
       window.setTimeout(() => setToast(null), 4500);
-    }, 1200);
-  }, [swap]);
+    }
+  }, [revealStatus, confirmation, reveal]);
+
+  const handleRevealRetry = useCallback(() => {
+    // Tear down the overlay; the user is back at "drag your NFT in".
+    setReveal(null);
+    setRevealStatus(null);
+    setConfirmation(null);
+    setRevealError(null);
+    setSwap({ kind: "idle" });
+  }, []);
 
   // Window-level pointermove listener while dragging — Framer Motion's
   // onDrag fires on the dragged element which isn't a stable target for
@@ -219,15 +368,35 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
         )}
       </AnimatePresence>
 
-      {/* Confirm UI — bar (desktop) or sheet (mobile). */}
+      {/* Confirm UI — bar (desktop) or sheet (mobile). Hidden once the
+       *  reveal overlay takes over so they don't stack. */}
       <AnimatePresence>
-        {(swap.kind === "confirming" || swap.kind === "submitting") && (
+        {(swap.kind === "confirming" ||
+          (swap.kind === "submitting" && !reveal)) && (
           <SwapConfirm
             key={swap.nft.unit}
             deposit={swap.nft}
             onCancel={handleCancel}
             onConfirm={handleConfirm}
             submitting={swap.kind === "submitting"}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Reveal overlay — splash/swirl/reveal, independent of `swap`
+       *  so the chain success/error can resolve into the same animation. */}
+      <AnimatePresence>
+        {reveal && revealStatus && (
+          <SwapRevealOverlay
+            key="reveal"
+            status={revealStatus}
+            errorMessage={revealError}
+            depositUnit={reveal.depositUnit}
+            outcomeUnit={reveal.outcomeUnit}
+            confirmation={confirmation}
+            accentColor={collection.data?.theme?.accent_color}
+            onDismiss={handleRevealDismiss}
+            onRetry={handleRevealRetry}
           />
         )}
       </AnimatePresence>

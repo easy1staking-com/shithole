@@ -33,10 +33,19 @@ export type PlutusValidator = {
 
 let cached: PlutusBlueprint | null = null;
 
-/** Fetches /contracts/plutus.json once and caches it. */
+/**
+ * Fetches /contracts/plutus.json once and caches it in module memory.
+ *
+ * <p>Uses {@code cache: "no-cache"} (revalidate with the server every
+ * page load) instead of {@code "force-cache"}: the blueprint is small
+ * (~6KB) and an HTTP-level revalidation is cheap, while a stale
+ * {@code force-cache} hit silently produces the wrong applied-script
+ * hash. The module-level {@code cached} variable still prevents repeat
+ * fetches within a single session.
+ */
 export async function loadBlueprint(): Promise<PlutusBlueprint> {
   if (cached) return cached;
-  const resp = await fetch("/contracts/plutus.json", { cache: "force-cache" });
+  const resp = await fetch("/contracts/plutus.json", { cache: "no-cache" });
   if (!resp.ok) {
     throw new Error(
       `failed to load /contracts/plutus.json: ${resp.status} ${resp.statusText}`,
