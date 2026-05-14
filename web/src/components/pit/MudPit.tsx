@@ -112,10 +112,21 @@ type Sample = {
   opacity: number;
 };
 
+/** 4×3 grid layout — 12 cells max, covers the pit's visible area. */
+const FLOATER_COLS = 4;
+const FLOATER_ROWS = 3;
+const FLOATER_MAX = FLOATER_COLS * FLOATER_ROWS;
+
 /**
  * Pick min..max listings deterministically (by sorted tx_hash) and assign
- * each a stable position + rotation derived from its outref bytes. Same
- * pool state → same picks → same positions → no visual jitter on refetch.
+ * each one to a cell on a 4×3 grid over the pit's visible area, with a
+ * stable jitter inside the cell so the layout looks natural rather than
+ * uniform. Cell order is shuffled by a stable seed (derived from the
+ * pick count) so floaters don't fill row-major every time.
+ *
+ * <p>The grid covers x ∈ [5%, 95%] and y ∈ [15%, 85%] — wider than the
+ * previous heaped 10-90% / 25-75% bounds so floaters spread across more
+ * of the visible mud.
  */
 function sampleFloaters(
   listings: Listing[],
@@ -123,7 +134,10 @@ function sampleFloaters(
   max: number,
 ): Sample[] {
   if (listings.length === 0) return [];
-  const count = Math.max(1, Math.min(max, Math.max(min, listings.length)));
+  const count = Math.max(
+    1,
+    Math.min(FLOATER_MAX, Math.min(max, Math.max(min, listings.length))),
+  );
   // Deterministic order: by tx_hash hex (then output_index). Doesn't matter
   // what the order IS, only that it's stable.
   const sorted = [...listings].sort((a, b) => {
@@ -133,24 +147,60 @@ function sampleFloaters(
       : a.utxo_ref.output_index - b.utxo_ref.output_index;
   });
   const picks = sorted.slice(0, count);
-  return picks.map((listing) => {
-    // Seed RNG off the listing's outref so each NFT has its own stable
-    // pose regardless of pool size or other listings around it.
+
+  // Cell geometry. The "safe" area excludes the pit's rim shadow + the
+  // top/bottom edges where the source art darkens.
+  const X_MIN = 5;
+  const X_MAX = 95;
+  const Y_MIN = 15;
+  const Y_MAX = 85;
+  const cellW = (X_MAX - X_MIN) / FLOATER_COLS;
+  const cellH = (Y_MAX - Y_MIN) / FLOATER_ROWS;
+
+  // Deterministic cell-order shuffle, seeded by count. Floaters don't
+  // always march row-major; same count → same shuffle so the layout is
+  // stable across renders.
+  const cellOrder = Array.from({ length: FLOATER_MAX }, (_, i) => i);
+  shuffleSeeded(cellOrder, hashStr(`shithole-cells-${count}`));
+
+  return picks.map((listing, i) => {
+    // Cell assignment — first pick (by sorted tx_hash) gets cellOrder[0],
+    // second gets cellOrder[1], etc.
+    const cellIdx = cellOrder[i];
+    const col = cellIdx % FLOATER_COLS;
+    const row = Math.floor(cellIdx / FLOATER_COLS);
+    const cellCenterX = X_MIN + (col + 0.5) * cellW;
+    const cellCenterY = Y_MIN + (row + 0.5) * cellH;
+
+    // Per-listing RNG so size/rotation/opacity stay stable across renders
+    // even if the pool grows and the cell assignment shifts.
     const seed = hashStr(
       `${listing.utxo_ref.tx_id}#${listing.utxo_ref.output_index}`,
     );
     const rng = mulberry32(seed);
-    // 10..90% across, 25..75% down — keeps floaters inside the visible
-    // ellipse (won't render at the very edges where the SVG rim shadow
-    // is darkest).
-    const xPct = 10 + rng() * 80;
-    const yPct = 25 + rng() * 50;
+    // Jitter within ±35% of cell size — relaxed enough to feel organic,
+    // tight enough that adjacent cells don't visually overlap.
+    const jitterX = (rng() - 0.5) * cellW * 0.7;
+    const jitterY = (rng() - 0.5) * cellH * 0.7;
+    const xPct = cellCenterX + jitterX;
+    const yPct = cellCenterY + jitterY;
     const sizePct = 9 + rng() * 5; // 9..14% of the pit's width
     const rotateDeg = (rng() - 0.5) * 30; // -15..+15
     const sinkDeg = (rng() - 0.5) * 10; // -5..+5 perspective tilt
     const opacity = 0.78 + rng() * 0.22; // 0.78..1.0
     return { listing, xPct, yPct, sizePct, rotateDeg, sinkDeg, opacity };
   });
+}
+
+/** In-place Fisher-Yates shuffle with a mulberry32 RNG. */
+function shuffleSeeded(arr: number[], seed: number): void {
+  const rng = mulberry32(seed);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
 }
 
 /** Fast deterministic RNG: mulberry32. */
