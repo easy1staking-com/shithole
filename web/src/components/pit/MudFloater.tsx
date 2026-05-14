@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useState } from "react";
 
 import { useNftMetadata } from "@/lib/api/hooks";
 import type { Listing } from "@/types/api";
@@ -12,10 +13,19 @@ import type { Listing } from "@/types/api";
  * <p>Per-NFT pose (rotation, sink tilt, opacity) is passed in from the
  * {@link MudPit}'s deterministic sampler — same listing → same pose.
  *
- * <p>The drift animation is a low-frequency Y/rotation oscillation. Each
- * floater starts at a different phase ({@code driftDelaySec}) so the pool
- * doesn't pulse in unison. Reduced-motion preferences flatten the
- * animation to a static pose.
+ * <p>The drift animation is a low-frequency Y oscillation. Each floater
+ * starts at a different phase ({@code driftDelaySec}) so the pool doesn't
+ * pulse in unison. Animation is suspended when:
+ * <ul>
+ *   <li>the user prefers reduced motion;</li>
+ *   <li>the document is hidden (background tab / minimized).</li>
+ * </ul>
+ *
+ * <p>Earlier iterations animated both Y and rotation across 4 keyframes
+ * at a 6-9s loop — multiplied by 8-12 floaters that's a measurable
+ * steady-state CPU hit on laptops. Current version animates Y only on
+ * 3 keyframes at 12-15s, dropping the per-frame work to a third while
+ * keeping a subtle drift.
  */
 export function MudFloater({
   listing,
@@ -39,6 +49,9 @@ export function MudFloater({
   const meta = useNftMetadata(listing.current_nft_unit);
   const imageUrl = meta.data?.image_url ?? null;
   const name = meta.data?.name ?? listing.current_nft_unit.slice(0, 16) + "…";
+  const reduceMotion = useReducedMotion();
+  const visible = useDocumentVisible();
+  const animated = !reduceMotion && visible;
 
   return (
     <motion.div
@@ -48,23 +61,23 @@ export function MudFloater({
         top: `${yPct}%`,
         width: `${sizePct}%`,
         opacity,
+        // Static rotation lives on the OUTER container too, so the
+        // animation can drop the rotate keyframe without losing the
+        // per-NFT pose variety.
+        rotate: rotateDeg,
       }}
-      animate={{
-        y: [0, -3, 0, 3, 0],
-        rotate: [
-          rotateDeg,
-          rotateDeg + 1.5,
-          rotateDeg,
-          rotateDeg - 1.5,
-          rotateDeg,
-        ],
-      }}
-      transition={{
-        duration: 6 + (Math.abs(sinkDeg) % 3),
-        ease: "easeInOut",
-        repeat: Infinity,
-        delay: driftDelaySec,
-      }}
+      animate={animated ? { y: [0, -3, 0] } : { y: 0 }}
+      transition={
+        animated
+          ? {
+              duration: 12 + (Math.abs(sinkDeg) % 3),
+              ease: "easeInOut",
+              repeat: Infinity,
+              repeatType: "mirror",
+              delay: driftDelaySec,
+            }
+          : { duration: 0 }
+      }
       title={name}
     >
       <div
@@ -98,4 +111,22 @@ export function MudFloater({
       </div>
     </motion.div>
   );
+}
+
+/**
+ * Track document.visibilityState so animations can pause when the tab
+ * is backgrounded / window minimized. Saves CPU on idle background
+ * tabs and helps laptops stay cool when the user has multiple tabs
+ * open.
+ */
+function useDocumentVisible(): boolean {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const update = () => setVisible(document.visibilityState !== "hidden");
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+  return visible;
 }
