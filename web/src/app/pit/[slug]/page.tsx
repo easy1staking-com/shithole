@@ -17,6 +17,7 @@ import { useCollection, useListings } from "@/lib/api/hooks";
 import { useMatchability } from "@/lib/pit/useMatchability";
 import type { Match } from "@/lib/pit/bucketMath";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
+import { submitList } from "@/lib/tx/list";
 import { makeLucid } from "@/lib/tx/lucidClient";
 import {
   fetchUtxoByOutRef,
@@ -65,7 +66,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   const listings = useListings(slug, { page: 0, size: 50 });
   const queryClient = useQueryClient();
 
-  const { api, addressBech32 } = useWalletStore();
+  const { api, addressBech32, paymentKeyHashHex } = useWalletStore();
   const collectionPolicyId = collection.data?.collection_policy_id;
   const walletNfts = useWalletCollectionNfts(
     addressBech32 ?? null,
@@ -281,6 +282,81 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
     setSwap({ kind: "idle" });
   }, []);
 
+  /* ------------------------------------------------------------------ */
+  /* List flow (iter-3): batch-list 1..N NFTs at the listing-script addr */
+  /* ------------------------------------------------------------------ */
+
+  const [listing, setListing] = useState(false);
+
+  const handleListSubmit = useCallback(
+    async (picked: WalletCollectionNft[]) => {
+      if (!api || !addressBech32 || !collection.data || !collectionPolicyId) {
+        setToast("connect a wallet first");
+        window.setTimeout(() => setToast(null), 3500);
+        return;
+      }
+      if (!paymentKeyHashHex) {
+        setToast("wallet address still decoding — try again in a moment");
+        window.setTimeout(() => setToast(null), 3500);
+        return;
+      }
+      if (picked.length === 0) return;
+      setListing(true);
+      setToast(
+        picked.length === 1
+          ? "dumping 1 piece of shit into the pit…"
+          : `dumping ${picked.length} pieces of shit into the pit…`,
+      );
+      try {
+        const lucid = await makeLucid(api);
+        const result = await submitList(lucid, {
+          listingScriptAddress: collection.data.listing_script_address,
+          listerPkhHex: paymentKeyHashHex,
+          nfts: picked.map((n) => ({ unit: n.unit })),
+        });
+        setToast(
+          picked.length === 1
+            ? "submitted. settling on chain…"
+            : `submitted ${picked.length} listings. settling on chain…`,
+        );
+        try {
+          await awaitTxConfirmation(lucid, result.txHash);
+          setToast(
+            picked.length === 1
+              ? "your shit is in the pit"
+              : `${picked.length} pieces dumped — they're in the pit`,
+          );
+          queryClient.invalidateQueries({
+            queryKey: ["walletCollection", addressBech32, collectionPolicyId],
+          });
+          queryClient.invalidateQueries({ queryKey: ["listings", slug] });
+          queryClient.invalidateQueries({ queryKey: ["collection", slug] });
+        } catch (chainErr) {
+          const chainMsg =
+            chainErr instanceof Error ? chainErr.message : String(chainErr);
+          console.warn("list did not confirm:", chainMsg);
+          setToast("chain didn't accept the listing — try again");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("list failed:", message);
+        setToast(`couldn't list: ${message.slice(0, 100)}`);
+      } finally {
+        setListing(false);
+        window.setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [
+      api,
+      addressBech32,
+      collection.data,
+      collectionPolicyId,
+      paymentKeyHashHex,
+      queryClient,
+      slug,
+    ],
+  );
+
   // Window-level pointermove listener while dragging — Framer Motion's
   // onDrag fires on the dragged element which isn't a stable target for
   // "is the pointer over the pit" hit-testing during drag (the element
@@ -356,8 +432,11 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
         <WalletDrawer
           collectionPolicyId={collectionPolicyId}
           accentColor={collection.data.theme?.accent_color}
+          pool={listings.data?.data ?? []}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onListSubmit={handleListSubmit}
+          listing={listing}
         />
       )}
 

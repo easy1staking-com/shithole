@@ -10,7 +10,15 @@ export default function HomePage() {
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-6 py-16">
       <header className="space-y-2">
-        <h1 className="font-mono text-4xl font-semibold tracking-tight">shithole</h1>
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="font-mono text-4xl font-semibold tracking-tight">shithole</h1>
+          <Link
+            href="/me"
+            className="text-xs uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
+          >
+            your shit →
+          </Link>
+        </div>
         <p className="text-sm text-zinc-400">
           Wormhole carries value across chains. Shithole carries worthlessness in circles
           within one collection. Pick a pit.
