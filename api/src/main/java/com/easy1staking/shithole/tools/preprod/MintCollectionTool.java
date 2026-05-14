@@ -23,6 +23,7 @@ import java.math.BigInteger;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Operator tool: mint a 10-NFT "fake dead collection" under a time-locked
@@ -75,6 +76,11 @@ public final class MintCollectionTool {
         String mnemonic = require("ADMIN_SEED");
         String projectId = require("BLOCKFROST_PROJECT_ID");
         String assetNamePrefix = optional("MINT_PREFIX", DEFAULT_ASSET_NAME_PREFIX);
+        // Optional fixed image URL — if set, every NFT in the collection
+        // uses this image. Useful for thematic test mints (e.g. point at
+        // a hosky mascot WEBP hosted on the local dev server). Default:
+        // per-NFT placeholder via placehold.co with the asset name.
+        String imageUrlOverride = optional("MINT_IMAGE_URL", null);
 
         Account account = new Account(Networks.preprod(), mnemonic);
         BackendService backend = new BFBackendService(Constants.BLOCKFROST_PREPROD_URL, projectId);
@@ -114,9 +120,11 @@ public final class MintCollectionTool {
 
             ObjectNode meta = jsonMapper.createObjectNode();
             meta.put("name", assetNamePrefix + " #" + i);
-            meta.put("image",
-                    "https://placehold.co/256x256/9C5F1F/FFF.png?text=" + assetNamePrefix + "+%23" + i);
-            meta.put("mediaType", "image/png");
+            String imageUrl = imageUrlOverride != null
+                    ? imageUrlOverride
+                    : "https://placehold.co/256x256/9C5F1F/FFF.png?text=" + assetNamePrefix + "+%23" + i;
+            meta.put("image", imageUrl);
+            meta.put("mediaType", mediaTypeFromUrl(imageUrl));
             meta.put("description", "A dead-collection test NFT for shithole preprod E2E.");
             policyMap.set(name, meta);
         }
@@ -168,5 +176,18 @@ public final class MintCollectionTool {
     private static String optional(String name, String defaultValue) {
         String v = System.getenv(name);
         return (v == null || v.isBlank()) ? defaultValue : v;
+    }
+
+    /** Best-effort mediaType from URL extension; defaults to image/png. */
+    private static String mediaTypeFromUrl(String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        // Strip any query string before looking at the extension.
+        int q = lower.indexOf('?');
+        if (q >= 0) lower = lower.substring(0, q);
+        if (lower.endsWith(".webp")) return "image/webp";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        return "image/png";
     }
 }
