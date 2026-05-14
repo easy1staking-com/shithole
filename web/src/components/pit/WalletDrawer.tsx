@@ -10,6 +10,8 @@ import {
 } from "@/lib/wallet/useWalletCollectionNfts";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
+import { DraggableWalletCard } from "./DraggableWalletCard";
+
 /**
  * Bottom "shore" drawer — shows the connected wallet's holdings of THIS
  * pit's collection. The wallet drawer is the staging area for both
@@ -34,9 +36,16 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
 export function WalletDrawer({
   collectionPolicyId,
   accentColor,
+  onDragStart,
+  onDragEnd,
 }: {
   collectionPolicyId: string;
   accentColor?: string | null;
+  /** Drag started: parent records the candidate + arms the pit. */
+  onDragStart?: (nft: WalletCollectionNft) => void;
+  /** Drag released at the given client-space coords. Parent decides
+   *  if the release landed inside the pit. */
+  onDragEnd?: (nft: WalletCollectionNft, clientX: number, clientY: number) => void;
 }) {
   const { api, addressBech32, networkId } = useWalletStore();
   const accent = accentColor ?? "#b87333";
@@ -106,9 +115,19 @@ export function WalletDrawer({
       {expanded && nfts.data && nfts.data.length > 0 && (
         <div className="border-t border-zinc-800/60 bg-zinc-950">
           <div className="mx-auto grid w-full max-w-6xl grid-cols-3 gap-3 px-6 py-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-            {nfts.data.map((nft) => (
-              <WalletNftCard key={nft.unit} nft={nft} accent={accent} />
-            ))}
+            {nfts.data.map((nft) =>
+              onDragStart && onDragEnd ? (
+                <DraggableWalletCard
+                  key={nft.unit}
+                  nft={nft}
+                  accent={accent}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                />
+              ) : (
+                <WalletNftCard key={nft.unit} nft={nft} accent={accent} />
+              ),
+            )}
           </div>
         </div>
       )}
