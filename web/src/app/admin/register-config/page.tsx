@@ -559,7 +559,7 @@ export default function RegisterConfigPage() {
             />
           </Field>
           <Field
-            label="theme: background URL (optional, https://)"
+            label="theme: background URL (optional, https:// or /path)"
             error={errors.themeBackgroundUrl}
           >
             <input
@@ -587,7 +587,7 @@ export default function RegisterConfigPage() {
               />
             </Field>
             <Field
-              label="theme: mascot image URL (optional, https://)"
+              label="theme: mascot image URL (optional, https:// or /path)"
               error={errors.themeMascotImageUrl}
             >
               <input
