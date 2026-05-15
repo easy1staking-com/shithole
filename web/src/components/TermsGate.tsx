@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 const STORAGE_KEY = "shithole:terms-v1";
 const TERMS_VERSION = 1;
+const BYPASS_PARAM = "from=gate";
 
 type AcceptedRecord = {
   version: number;
@@ -25,10 +27,29 @@ export function TermsGate() {
   // null = not yet hydrated; true = show modal; false = already accepted.
   // Starts null to avoid a flash on SSR hydration.
   const [needsConsent, setNeedsConsent] = useState<boolean | null>(null);
+  // True if this tab was opened from the gate's terms link (carries
+  // ?from=gate). Detected once on mount; deliberately doesn't react to
+  // search-param changes so we keep the route statically renderable.
+  const [hasGateBypass, setHasGateBypass] = useState(false);
+  const pathname = usePathname();
   const dialogRef = useRef<HTMLDivElement>(null);
   const acceptButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Bypass: if the user lands on /terms?from=gate (the link inside the
+  // gate itself), don't show the modal on that route — they're reading
+  // the very document we're asking them to accept. The bypass only
+  // suppresses the modal on /terms; if they navigate elsewhere in the
+  // same tab without having accepted, the modal returns.
+  const onTermsBypass = pathname === "/terms" && hasGateBypass;
+
   useEffect(() => {
+    // Detect ?from=gate once. Reading window.location.search instead of
+    // useSearchParams() keeps every page statically renderable.
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("from") === "gate") setHasGateBypass(true);
+    }
+
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
@@ -44,7 +65,7 @@ export function TermsGate() {
   }, []);
 
   useEffect(() => {
-    if (needsConsent !== true) return;
+    if (needsConsent !== true || onTermsBypass) return;
 
     // Scroll-lock the body while the gate is up so users can't fiddle
     // with the app behind it.
@@ -80,7 +101,7 @@ export function TermsGate() {
       document.body.style.overflow = prevOverflow;
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [needsConsent]);
+  }, [needsConsent, onTermsBypass]);
 
   const accept = () => {
     const record: AcceptedRecord = {
@@ -96,7 +117,7 @@ export function TermsGate() {
     setNeedsConsent(false);
   };
 
-  if (needsConsent !== true) return null;
+  if (needsConsent !== true || onTermsBypass) return null;
 
   return (
     <div
@@ -176,7 +197,7 @@ export function TermsGate() {
         <p className="mt-4 text-xs text-zinc-400">
           The full version lives in the{" "}
           <a
-            href="/terms"
+            href={`/terms?${BYPASS_PARAM}`}
             target="_blank"
             rel="noopener noreferrer"
             className="underline hover:text-zinc-100"
