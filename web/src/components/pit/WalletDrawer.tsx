@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { useNftMetadata } from "@/lib/api/hooks";
@@ -56,14 +57,46 @@ export function WalletDrawer({
   /** True while a list submit is in flight — disables the CTA. */
   listing?: boolean;
 }) {
-  const { api, addressBech32, networkId } = useWalletStore();
+  const { api, addressBech32, networkId, refresh: refreshWallet } = useWalletStore();
   const accent = accentColor ?? "#b87333";
+  const queryClient = useQueryClient();
 
   const nfts = useWalletCollectionNfts(addressBech32, collectionPolicyId);
 
   const [expanded, setExpanded] = useState(false);
   const [mode, setMode] = useState<"swap" | "list">("swap");
   const [selectedUnits, setSelectedUnits] = useState<Set<string>>(new Set());
+  const [refreshing, setRefreshing] = useState(false);
+
+  /**
+   * Force a full re-check of the connected wallet + the pit pool:
+   * - re-polls the CIP-30 connection (catches "you switched accounts
+   *   in another tab"),
+   * - invalidates the wallet-collection cache (forces re-fetch from
+   *   Blockfrost — picks up newly-acquired NFTs),
+   * - invalidates the pool cache (in case someone else listed something
+   *   while we were looking).
+   */
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refreshWallet();
+      await queryClient.invalidateQueries({
+        queryKey: ["walletCollection"],
+      });
+      if (collectionPolicyId) {
+        // Wider invalidation — pool + collection state, since the BE
+        // indexer might also have new data the user wants to see.
+        await queryClient.invalidateQueries({ queryKey: ["listings"] });
+        await queryClient.invalidateQueries({ queryKey: ["collection"] });
+      }
+    } finally {
+      // Short tail so the spinner is visible even if the network call
+      // finishes faster than the eye can register.
+      window.setTimeout(() => setRefreshing(false), 400);
+    }
+  };
 
   const notConnected = !api || !addressBech32;
   const wrongNetwork =
@@ -154,6 +187,28 @@ export function WalletDrawer({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {!notConnected && (
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              title="Refresh your wallet stash (CIP-30 doesn't fire account-change events automatically)"
+              aria-label="refresh wallet"
+              className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500 disabled:opacity-50"
+            >
+              <span
+                className="inline-block"
+                style={{
+                  // Spin when refreshing — pure CSS, no extra deps.
+                  animation: refreshing
+                    ? "spin 0.8s linear infinite"
+                    : undefined,
+                }}
+              >
+                ↻
+              </span>
+            </button>
+          )}
           {!notConnected && nfts.data && nfts.data.length > 0 && (
             <button
               type="button"
@@ -206,7 +261,13 @@ export function WalletDrawer({
                 : "your wallet has no s#!t to dump in this pit"}
             </div>
           ) : (
-            <div className="mx-auto grid w-full max-w-6xl grid-cols-3 gap-3 px-6 py-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+            // Cap the stash grid height + enable vertical scroll so a
+            // wallet with many NFTs doesn't push the pit off-screen.
+            // 40vh on desktop / 50vh on mobile leaves the pit + reveal
+            // overlay visible while still showing a useful number of
+            // cards above the fold.
+            <div className="mx-auto w-full max-w-6xl max-h-[50vh] overflow-y-auto px-6 py-4 sm:max-h-[40vh]">
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
               {(mode === "list" ? listableNfts : nfts.data).map((nft) =>
                 selectable ? (
                   <SelectableWalletCard
@@ -228,6 +289,7 @@ export function WalletDrawer({
                   <WalletNftCard key={nft.unit} nft={nft} accent={accent} />
                 ),
               )}
+              </div>
             </div>
           )}
 
