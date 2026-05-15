@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && npm run postbuild:vercel-shim",
-    "postbuild:vercel-shim": "node -e \"const fs=require('node:fs');const src='.next/routes-manifest.json';const dst='.next/routes-manifest-deterministic.json';if(fs.existsSync(src)&&!fs.existsSync(dst))fs.copyFileSync(src,dst);\"",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
