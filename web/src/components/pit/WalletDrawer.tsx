@@ -213,10 +213,44 @@ export function WalletDrawer({
             <button
               type="button"
               onClick={() => setExpanded((e) => !e)}
-              className="rounded-md border border-zinc-700 px-3 py-1 text-xs uppercase tracking-wide text-zinc-300 hover:border-zinc-500"
+              className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500"
               aria-expanded={expanded}
+              aria-label={expanded ? "hide stash" : "show stash"}
+              title={expanded ? "hide stash" : "show stash"}
             >
-              {expanded ? "hide stash" : "show stash"}
+              {expanded ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                  aria-hidden
+                >
+                  <path d="M3 3l18 18" />
+                  <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83" />
+                  <path d="M9.88 5.09A10.94 10.94 0 0 1 12 4.5c4.64 0 8.57 3 9.96 7.18a10.55 10.55 0 0 1-4.06 5.41" />
+                  <path d="M6.1 6.1A10.55 10.55 0 0 0 2.04 11.68c1.39 4.18 5.32 7.18 9.96 7.18 1.51 0 2.95-.3 4.26-.85" />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                  aria-hidden
+                >
+                  <path d="M2.04 12.32a1 1 0 0 1 0-.64C3.43 7.51 7.36 4.5 12 4.5c4.64 0 8.57 3.01 9.96 7.18.07.21.07.43 0 .64-1.39 4.17-5.32 7.18-9.96 7.18-4.64 0-8.57-3.01-9.96-7.18z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
             </button>
           )}
           <WalletConnectButton />
