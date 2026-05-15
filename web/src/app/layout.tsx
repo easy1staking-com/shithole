@@ -20,6 +20,11 @@ export const metadata: Metadata = {
   // Matches our dark zinc-950 background so mobile dApp browsers don't
   // flash a white system bar against our dark UI.
   themeColor: "#09090b",
+  twitter: {
+    card: "summary_large_image",
+    site: "@Shithole_App",
+    creator: "@Shithole_App",
+  },
 };
 
 export default function RootLayout({

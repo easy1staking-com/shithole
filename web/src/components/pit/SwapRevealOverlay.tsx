@@ -411,7 +411,7 @@ function SettledPhase({
   });
   const tweetUrl = shareUrl
     ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-        `i just swapped some worthless s#!t for slightly different worthless s#!t on @s#!thole`,
+        `i just swapped some worthless s#!t for slightly different worthless s#!t on @Shithole_App`,
       )}&url=${encodeURIComponent(shareUrl)}`
     : null;
 
