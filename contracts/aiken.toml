@@ -1,6 +1,6 @@
 name = "easy1staking-com/shithole"
 version = "0.0.0"
-compiler = "v1.1.21"
+compiler = "v1.1.22"
 plutus = "v3"
 license = "Apache-2.0"
 description = "Shithole — Cardano dApp for swapping dead/rugpulled NFTs within their collection"
