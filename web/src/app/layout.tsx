@@ -15,17 +15,39 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Absolute base for any relative metadata URLs (og:image, twitter:image,
+// canonical, etc.). X silently drops relative image URLs, so this MUST
+// resolve to an absolute https URL by the time it hits the rendered HTML.
+// Next 16 uses metadataBase to do that resolution for us.
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://shithole.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "S#!thole",
-  description: "Give your dead NFTs a second life. Sort of.",
+  description:
+    "Give your dead NFTs a second life. Sort of. Cardano dApp for swapping NFTs within rugged collections.",
   // Mobile browser chrome (address bar, splash) picks up theme-color.
   // Matches our dark zinc-950 background so mobile dApp browsers don't
   // flash a white system bar against our dark UI.
   themeColor: "#09090b",
+  openGraph: {
+    type: "website",
+    siteName: "S#!thole",
+    title: "S#!thole — give your dead NFTs a second life. Sort of.",
+    description:
+      "Cardano dApp for swapping NFTs within rugged collections. Wormhole carries value across chains. We don't.",
+    url: SITE_URL,
+    images: [{ url: "/og/landing.png", width: 1200, height: 630 }],
+  },
   twitter: {
     card: "summary_large_image",
     site: "@Shithole_App",
     creator: "@Shithole_App",
+    title: "S#!thole — give your dead NFTs a second life. Sort of.",
+    description:
+      "Cardano dApp for swapping NFTs within rugged collections. Wormhole carries value across chains. We don't.",
+    images: ["/og/landing.png"],
   },
 };
 
