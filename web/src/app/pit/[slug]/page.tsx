@@ -318,6 +318,18 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           listerPkhHex: paymentKeyHashHex,
           nfts: picked.map((n) => ({ unit: n.unit })),
         });
+        // Optimistic local removal: the submitted NFTs leave the wallet
+        // as soon as the tx is signed. Drop them from the cached
+        // wallet-collection list immediately so the drawer updates
+        // without waiting for chain confirmation + Blockfrost
+        // indexing (~30-90s). On confirmation we invalidate to refetch
+        // fresh; on chain rejection we restore via invalidate too.
+        const pickedUnits = new Set(picked.map((n) => n.unit));
+        queryClient.setQueryData(
+          ["walletCollection", addressBech32, collectionPolicyId],
+          (prev: WalletCollectionNft[] | undefined) =>
+            prev ? prev.filter((n) => !pickedUnits.has(n.unit)) : prev,
+        );
         setToast(
           picked.length === 1
             ? "submitted. settling on chain…"
@@ -339,11 +351,22 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           const chainMsg =
             chainErr instanceof Error ? chainErr.message : String(chainErr);
           console.warn("list did not confirm:", chainMsg);
+          // Roll back the optimistic remove so the user sees their NFTs
+          // back in the drawer after a chain rejection.
+          queryClient.invalidateQueries({
+            queryKey: ["walletCollection", addressBech32, collectionPolicyId],
+          });
           setToast("chain didn't accept the listing — try again");
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         console.error("list failed:", message);
+        // Submit-side failure (wallet refused, tx-build threw, etc.) —
+        // the optimistic remove didn't fire because we hadn't gotten to
+        // the result yet, but invalidate defensively in case it did.
+        queryClient.invalidateQueries({
+          queryKey: ["walletCollection", addressBech32, collectionPolicyId],
+        });
         setToast(`couldn't list: ${message.slice(0, 100)}`);
       } finally {
         setListing(false);
