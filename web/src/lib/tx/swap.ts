@@ -50,8 +50,14 @@ import { adaptUtxo, adaptUtxos, type UTxO } from "./utxo";
 void KeyHash;
 void TransactionHash;
 
-/** Conservative min-UTxO floor for the treasury output (small inline datum). */
-const TREASURY_MIN_UTXO_LOVELACE = 1_200_000n;
+// Treasury min-UTxO is computed by Evolution's auto-min-UTxO calculator
+// at build time (per the output's actual serialized byte size — typically
+// ~1.03 ADA for our 32-byte inline datum). The validator's S9 only
+// requires `treasury.lovelace >= cfg.protocol_fee`, so overpaying is
+// safe but wasteful. Passing `autoMinUtxo: true` on the payToAddress
+// lets Evolution bump only when protocol_fee falls below the chain min,
+// instead of our previous hardcoded 1.2 ADA floor that overpaid by
+// ~170k lovelace per swap.
 
 /**
  * Local Network discriminator. Stays as a string so callers don't have
@@ -333,14 +339,12 @@ export async function submitSwap(
   const treasuryDatum: Data.Data = Data.bytearray(outputTagHex);
   const swapRedeemer = buildSwapRedeemer(depositAssetName, 0n, 1n);
 
-  // S6: successor lovelace = consumed + listerFee. Treasury lovelace
-  // = max(protocolFee, MIN_UTXO).
+  // S6: successor lovelace = consumed + listerFee.
+  // Treasury lovelace = protocolFee (Evolution auto-bumps to chain min
+  // via autoMinUtxo on the payToAddress call below).
   const consumedLovelace = input.consumed.assets.lovelace ?? 0n;
   const successorLovelace = consumedLovelace + input.listerFeeLovelace;
-  const treasuryLovelace =
-    input.protocolFeeLovelace > TREASURY_MIN_UTXO_LOVELACE
-      ? input.protocolFeeLovelace
-      : TREASURY_MIN_UTXO_LOVELACE;
+  const treasuryLovelace = input.protocolFeeLovelace;
 
   const built = await client
     .newTx()
@@ -359,11 +363,14 @@ export async function submitSwap(
       assets: toAssets({ lovelace: successorLovelace, [nbUnit]: 1n }),
       datum: inlineDatum(successorDatum),
     })
-    // S7 + S8 + S9: treasury at index 1.
+    // S7 + S8 + S9: treasury at index 1. autoMinUtxo bumps lovelace
+    // to the chain-computed min if cfg.protocol_fee falls below it
+    // (S9 is `>=`, so overpaying is safe).
     .payToAddress({
       address: toAddress(input.treasuryAddrBech32),
       assets: toAssets({ lovelace: treasuryLovelace }),
       datum: inlineDatum(treasuryDatum),
+      autoMinUtxo: true,
     })
     .attachScript({ script: applied.validator })
     .build();
