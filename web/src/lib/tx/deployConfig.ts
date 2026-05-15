@@ -104,24 +104,34 @@ function decomposeAddress(bech32: string): {
   stakeCredentialType: "verification_key" | "script" | null;
 } {
   const addr = Address.fromBech32(bech32);
-  // Address shape (from our runtime probe):
-  //   { networkId, paymentCredential: { _tag: 'KeyHash'|'ScriptHash', hash },
-  //     stakingCredential?: { _tag, hash } }
+  // Address shape in @evolution-sdk/evolution@0.5.8:
+  //   { networkId, paymentCredential: { _tag: 'KeyHash'|'ScriptHash', hash: Uint8Array(28) },
+  //     stakingCredential?: { _tag, hash: Uint8Array(28) } }
+  // The hash is Uint8Array — the JSON form via .toJSON() converts to hex
+  // string, but the live runtime value is bytes. Hex-encode here.
   const a = addr as unknown as {
-    paymentCredential: { _tag: "KeyHash" | "ScriptHash"; hash: string };
-    stakingCredential?: { _tag: "KeyHash" | "ScriptHash"; hash: string };
+    paymentCredential: { _tag: "KeyHash" | "ScriptHash"; hash: Uint8Array };
+    stakingCredential?: { _tag: "KeyHash" | "ScriptHash"; hash: Uint8Array };
   };
   return {
-    paymentKeyHashHex: a.paymentCredential.hash,
+    paymentKeyHashHex: bytesToHex(a.paymentCredential.hash),
     paymentCredentialType:
       a.paymentCredential._tag === "KeyHash" ? "verification_key" : "script",
-    stakeCredentialHashHex: a.stakingCredential?.hash ?? null,
+    stakeCredentialHashHex: a.stakingCredential
+      ? bytesToHex(a.stakingCredential.hash)
+      : null,
     stakeCredentialType: a.stakingCredential
       ? a.stakingCredential._tag === "KeyHash"
         ? "verification_key"
         : "script"
       : null,
   };
+}
+
+function bytesToHex(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, "0");
+  return s;
 }
 
 function buildConfigDatum(args: {
