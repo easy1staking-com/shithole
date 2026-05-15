@@ -1,0 +1,202 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+const STORAGE_KEY = "shithole:terms-v1";
+const TERMS_VERSION = 1;
+
+type AcceptedRecord = {
+  version: number;
+  acceptedAt: string;
+};
+
+/**
+ * First-visit T&C consent gate.
+ *
+ * Renders a hard-block modal over the app until the user acknowledges
+ * the terms. Versioned localStorage key (`shithole:terms-v{N}`) lets us
+ * force re-acknowledgement on a material T&C change by bumping the
+ * version constant — older records won't match and the gate re-shows.
+ *
+ * The T&C link opens in a new tab so users can read the full terms
+ * before agreeing without fighting the modal.
+ */
+export function TermsGate() {
+  // null = not yet hydrated; true = show modal; false = already accepted.
+  // Starts null to avoid a flash on SSR hydration.
+  const [needsConsent, setNeedsConsent] = useState<boolean | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const acceptButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        setNeedsConsent(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as AcceptedRecord;
+      setNeedsConsent(parsed?.version !== TERMS_VERSION);
+    } catch {
+      // Bad JSON or storage unavailable → re-prompt to be safe.
+      setNeedsConsent(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (needsConsent !== true) return;
+
+    // Scroll-lock the body while the gate is up so users can't fiddle
+    // with the app behind it.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    // Drop focus on the agree button for keyboard users.
+    acceptButtonRef.current?.focus();
+
+    // Focus trap: cycle Tab within the dialog so focus can't escape
+    // back into the (inert) app.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = dialog.querySelectorAll<HTMLElement>(
+        'a, button, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [needsConsent]);
+
+  const accept = () => {
+    const record: AcceptedRecord = {
+      version: TERMS_VERSION,
+      acceptedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+    } catch {
+      // If storage is unavailable (private mode, blocked, etc.) we
+      // still let the user proceed for this session.
+    }
+    setNeedsConsent(false);
+  };
+
+  if (needsConsent !== true) return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="terms-gate-title"
+      aria-describedby="terms-gate-body"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
+    >
+      <div
+        className="absolute inset-0 bg-zinc-950/85 backdrop-blur-sm"
+        aria-hidden
+      />
+      <div
+        ref={dialogRef}
+        className="relative z-10 w-full max-w-lg rounded-lg border border-zinc-800 bg-zinc-950 p-6 shadow-2xl sm:p-8"
+      >
+        <div className="flex items-center gap-3 pb-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/logo-v8-pixel-poop.svg"
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8"
+            aria-hidden
+          />
+          <h2
+            id="terms-gate-title"
+            className="font-mono text-xl font-semibold text-zinc-100"
+          >
+            Read this first
+          </h2>
+        </div>
+
+        <p id="terms-gate-body" className="text-sm text-zinc-300">
+          By using Shithole, you agree to the following. Shithole moves
+          real assets on the Cardano mainnet:
+        </p>
+
+        <ul className="mt-4 space-y-2 text-sm text-zinc-300">
+          <li className="flex gap-2">
+            <span aria-hidden className="text-zinc-500">
+              ·
+            </span>
+            <span>Use at your own risk. You may lose funds.</span>
+          </li>
+          <li className="flex gap-2">
+            <span aria-hidden className="text-zinc-500">
+              ·
+            </span>
+            <span>
+              Listing an NFT authorises anyone to swap it. You may never
+              get your original NFT back.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span aria-hidden className="text-zinc-500">
+              ·
+            </span>
+            <span>
+              Smart contracts can have bugs. Funds may be permanently
+              locked with no recovery.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span aria-hidden className="text-zinc-500">
+              ·
+            </span>
+            <span>
+              We don&apos;t track you, but every swap lives on-chain
+              forever.
+            </span>
+          </li>
+        </ul>
+
+        <p className="mt-4 text-xs text-zinc-400">
+          The full version lives in the{" "}
+          <a
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-zinc-100"
+          >
+            terms &amp; conditions ↗
+          </a>
+          .
+        </p>
+
+        <div className="mt-6">
+          <button
+            ref={acceptButtonRef}
+            type="button"
+            onClick={accept}
+            className="w-full rounded-md bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 focus:ring-offset-zinc-950"
+          >
+            I understand and agree
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
