@@ -1,21 +1,20 @@
 /**
- * Wait for a tx hash to be confirmed.
+ * Wait for a tx hash to be confirmed via Evolution SDK's
+ * {@code client.awaitTx}.
  *
- * Uses `lucid.awaitTx(txHash, checkInterval)` from Evolution SDK — it
- * polls the configured provider's tx-status endpoint internally.
- *
- * The hard timeout is ~3 minutes (per the brief). If Blockfrost is slow
- * or down, we surface a clear error so the user can retry the POST
- * separately once chain state catches up.
+ * <p>The hard timeout is ~3 minutes. If the provider is slow or down,
+ * we surface a clear error so the caller can retry separately once
+ * chain state catches up.
  */
 
-import type { LucidEvolution } from "@lucid-evolution/lucid";
+import type { EvolutionClient } from "./evolutionClient";
+import { toTxHash } from "./txAdapters";
 
 const POLL_INTERVAL_MS = 5_000;
 const DEFAULT_TIMEOUT_MS = 180_000; // 3 minutes
 
 export async function awaitTxConfirmation(
-  lucid: LucidEvolution,
+  client: EvolutionClient,
   txHash: string,
   options?: { timeoutMs?: number; pollIntervalMs?: number },
 ): Promise<void> {
@@ -29,14 +28,18 @@ export async function awaitTxConfirmation(
           new Error(
             `tx ${txHash} not confirmed within ${Math.round(
               timeoutMs / 1000,
-            )}s — try again once Blockfrost indexes it`,
+            )}s — try again once the provider indexes it`,
           ),
         ),
       timeoutMs,
     );
   });
 
-  const ok = await Promise.race([lucid.awaitTx(txHash, pollMs), racer]);
+  // Evolution's awaitTx returns boolean; race against our timeout.
+  const ok = await Promise.race([
+    client.awaitTx(toTxHash(txHash), pollMs),
+    racer,
+  ]);
   if (!ok) {
     throw new Error(`tx ${txHash} polling returned false`);
   }

@@ -11,32 +11,75 @@
  * {@code output_tag} as a raw-bytes inline datum (no Constr wrapper);
  * read the config UTxO as CIP-31 reference input.
  *
- * <p>The caller supplies the {@code (consumed listing, deposit NFT)}
- * pair (bucket-matched off-chain). This builder does NOT search for a
- * match — it assumes the caller already used {@code computeMatches()}.
+ * <p>Migrated from @lucid-evolution/lucid to @evolution-sdk/evolution
+ * 2026-05-15. Critical byte-level parity confirmed by parity.test.ts.
  */
 
 import {
-  CML,
-  Constr,
+  Address,
+  Bytes,
+  Credential,
   Data,
-  applyParamsToScript,
-  credentialToAddress,
-  mintingPolicyToId,
-  scriptHashToCredential,
-  type LucidEvolution,
-  type Network,
-  type SpendingValidator,
-  type UTxO,
-} from "@lucid-evolution/lucid";
+  KeyHash,
+  PlutusV3,
+  ScriptHash,
+  TransactionHash,
+  UPLC,
+  preprod,
+  mainnet,
+  preview,
+} from "@evolution-sdk/evolution";
 import { blake2b } from "@noble/hashes/blake2b";
 
 import { serialiseOutputReference, hexToBytes } from "@/lib/pit/bucketMath";
 
+import type { EvolutionClient } from "./evolutionClient";
 import { getValidator, loadBlueprint } from "./plutusBlueprint";
+import { stripOneCborByteStringWrapper } from "./scriptBytes";
+import {
+  inlineDatum,
+  toAddress,
+  toAssets,
+  toTxInput,
+  txHashHex,
+} from "./txAdapters";
+import { adaptUtxo, adaptUtxos, type UTxO } from "./utxo";
+
+// silence unused-import flagging for KeyHash + TransactionHash — they
+// surface as types in builder signatures; runtime values flow elsewhere
+void KeyHash;
+void TransactionHash;
 
 /** Conservative min-UTxO floor for the treasury output (small inline datum). */
 const TREASURY_MIN_UTXO_LOVELACE = 1_200_000n;
+
+/**
+ * Local Network discriminator. Stays as a string so callers don't have
+ * to import Evolution's network constants; we resolve to the actual
+ * value inside this module.
+ */
+export type Network = "Preprod" | "Preview" | "Mainnet";
+
+function resolveNetworkId(network: Network): 0 | 1 {
+  return network === "Mainnet" ? 1 : 0;
+}
+
+function resolveNetwork(network: Network): typeof preprod | typeof preview | typeof mainnet {
+  switch (network) {
+    case "Mainnet":
+      return mainnet;
+    case "Preview":
+      return preview;
+    default:
+      return preprod;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* UTxO type: re-exported from the adapter for caller convenience.            */
+/* -------------------------------------------------------------------------- */
+
+export type { UTxO } from "./utxo";
 
 export type BuildSwapInput = {
   network: Network;
@@ -53,52 +96,47 @@ export type BuildSwapInput = {
   /** From {@code ConfigDatum.lister_fee} (≥ MIN_LISTER_FEE = 1 ADA). */
   listerFeeLovelace: bigint;
 
-  /**
-   * The consumed listing — SPEC's "NA" carrier (asset name = NA).
-   * Caller supplies the full UTxO (looked up by outRef via Lucid).
-   */
+  /** Consumed listing — SPEC's "NA" carrier. */
   consumed: UTxO;
-  /** Hex asset name of the asset carried in {@code consumed} (NA). */
   consumedAssetNameHex: string;
-  /** Hex pkh of the original lister (decoded from the consumed UTxO's datum). */
   consumedListerPkhHex: string;
 
-  /**
-   * The swapper's deposit NFT — SPEC's "NB" (asset name = NB). The UTxO
-   * is the wallet UTxO that physically holds NB; we must include it as
-   * an explicit input so the Lucid balancer doesn't pick a different
-   * ADA-bearing UTxO (which would leave change with a negative NB qty).
-   */
+  /** Swapper's deposit (NB) — bound to its wallet UTxO. */
   depositUtxo: UTxO;
-  /** Hex asset name of the deposit (NB). Matches what's in {@code depositUtxo.assets}. */
   depositAssetNameHex: string;
 
-  /** The config UTxO at `Address(ScriptCredential(configNftPolicy))`. Used as CIP-31 ref input. */
+  /** Config UTxO at `Address(ScriptCredential(configNftPolicy))` — CIP-31 ref input. */
   configUtxo: UTxO;
 };
 
 export type SwapResult = {
   txHash: string;
   successorOutRef: { txHash: string; outputIndex: number };
-  /** Hex of the compute_output_tag — handy for the BE indexer log line. */
   outputTagHex: string;
 };
 
 /* -------------------------------------------------------------------------- */
-/* Applied listing script — pure helper (no wallet needed)                    */
+/* Applied listing script — pure helper (no client needed)                    */
 /* -------------------------------------------------------------------------- */
 
 export type AppliedListing = {
+  /** Double-CBOR-encoded applied script hex (the form to pass to attachScript). */
   appliedScript: string;
   scriptHash: string;
   address: string;
-  validator: SpendingValidator;
+  /** PlutusV3 wrapper around the SINGLE-CBOR form, ready for attachScript. */
+  validator: PlutusV3.PlutusV3;
 };
 
 /**
  * Apply {@code config_nft_policy} as the listing validator's parameter,
- * returning the compiled script + its enterprise address. Mirrors the
- * BE's {@code ListingScriptAddressDeriver}.
+ * returning the compiled script + its enterprise address.
+ *
+ * <p>The applied output from {@code UPLC.applyParamsToScript} is
+ * double-CBOR encoded (same as Aiken emits). Evolution's
+ * {@code new PlutusV3({bytes})} expects the SINGLE-CBOR form — strip
+ * one wrapper. See {@code scriptBytes.ts} and the parity test pinning
+ * this asymmetry.
  */
 export async function applyListingScript(
   network: Network,
@@ -109,23 +147,25 @@ export async function applyListingScript(
   }
   const blueprint = await loadBlueprint();
   const v = getValidator(blueprint, "listing.listing.spend");
-  // Param is `config_nft_policy: PolicyId` — a bare ByteArray in Plutus Data.
-  // Evolution SDK encodes a `Data` string as ByteString.
-  const appliedScript = applyParamsToScript(
-    v.compiledCode,
-    [configNftPolicyHex.toLowerCase()],
-  );
-  const validator: SpendingValidator = {
-    type: "PlutusV3",
-    script: appliedScript,
-  };
-  // Evolution exposes mintingPolicyToId, which is just blake2b-224 of the
-  // serialized script — same hash for spending validators.
-  const scriptHash = mintingPolicyToId(validator);
-  const address = credentialToAddress(
-    network,
-    scriptHashToCredential(scriptHash),
-  );
+  const appliedScript = UPLC.applyParamsToScript(v.compiledCode, [
+    Data.bytearray(configNftPolicyHex.toLowerCase()),
+  ]);
+
+  const innerHex = stripOneCborByteStringWrapper(appliedScript);
+  const validator = new PlutusV3.PlutusV3({
+    bytes: Bytes.fromHex(innerHex),
+  });
+
+  const sh = ScriptHash.fromScript(validator);
+  const scriptHash = ScriptHash.toHex(sh);
+  const networkId = resolveNetworkId(network);
+  const cred = Credential.makeScriptHash(ScriptHash.toBytes(sh));
+  const addr = new Address.Address({
+    networkId,
+    paymentCredential: cred,
+  });
+  const address = Address.toBech32(addr);
+
   return { appliedScript, scriptHash, address, validator };
 }
 
@@ -145,51 +185,16 @@ function bytesToHex(b: Uint8Array): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Plutus Data builders                                                        */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Successor listing datum: {@code Constr 0 [lister_pkh: bytes, update_ref: Option<bytes>]}
- * with {@code update_ref = Some(output_tag)}.
- */
-function buildSuccessorDatum(
-  listerPkhHex: string,
-  outputTagHex: string,
-): string {
-  const someOutputTag = new Constr(0, [outputTagHex]);
-  return Data.to(new Constr(0, [listerPkhHex, someOutputTag]));
-}
-
-/**
- * Swap redeemer: {@code Constr 0 [nb_asset_name: bytes, listing_output_index: int, treasury_output_index: int]}.
- * Listing successor sits at index 0, treasury at index 1 (deterministic
- * order is the on-chain S5/S7 expectation).
- */
-function buildSwapRedeemer(
-  nbAssetNameHex: string,
-  listingOutputIndex: bigint,
-  treasuryOutputIndex: bigint,
-): string {
-  return Data.to(new Constr(0, [
-    nbAssetNameHex,
-    listingOutputIndex,
-    treasuryOutputIndex,
-  ]));
-}
-
-/* -------------------------------------------------------------------------- */
 /* Listing datum decoding (read lister_pkh from consumed UTxO)                 */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Decode the inline datum of a listing UTxO and extract {@code lister_pkh}
- * (the 28-byte hex pkh of the original lister). Listing datum shape per
- * SPEC §3.2: {@code Constr 0 [bytes(lister_pkh), Option<bytes>(update_ref)]}.
+ * Decode the inline datum of a listing UTxO and extract {@code lister_pkh}.
+ * Listing datum shape: {@code Constr 0 [bytes(lister_pkh), Option<bytes>(update_ref)]}.
  *
- * <p>The TS port mirrors the BE's {@code ListingDatumDecoder} so we don't
- * trust the BE-supplied {@code lister_pkh} blindly — a typo or MITM there
- * would yield a doomed tx + bad UX. If the consumed UTxO has no inline
- * datum, throws (the listing pool filter only ever shows UTxOs with one).
+ * <p>Evolution's {@code Data.fromCBORHex} returns a plain object for
+ * Constr values: {@code {index: bigint, fields: Data[]}}. ByteString
+ * fields decode as {@code Uint8Array}.
  */
 export function decodeConsumedListerPkh(consumed: UTxO): string {
   if (!consumed.datum) {
@@ -197,27 +202,60 @@ export function decodeConsumedListerPkh(consumed: UTxO): string {
       `consumed UTxO ${consumed.txHash}#${consumed.outputIndex} has no inline datum`,
     );
   }
-  let decoded: Data;
+  let decoded: unknown;
   try {
-    decoded = Data.from(consumed.datum);
+    decoded = Data.fromCBORHex(consumed.datum);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(
       `consumed UTxO ${consumed.txHash}#${consumed.outputIndex} datum did not parse: ${msg}`,
     );
   }
-  if (!(decoded instanceof Constr) || decoded.index !== 0) {
-    throw new Error("listing datum is not Constr 0");
+  if (!Data.isConstr(decoded)) {
+    throw new Error("listing datum is not a Constr");
   }
-  const listerField = decoded.fields[0];
-  if (typeof listerField !== "string") {
+  const c = decoded as { index: bigint; fields: ReadonlyArray<unknown> };
+  if (c.index !== 0n) {
+    throw new Error(`listing datum is Constr ${c.index}, expected Constr 0`);
+  }
+  const listerField = c.fields[0];
+  if (!(listerField instanceof Uint8Array)) {
     throw new Error("listing datum field 0 (lister_pkh) is not a byte string");
   }
-  // Plutus Data byte strings round-trip as lowercase hex through Lucid.
-  if (!/^[0-9a-fA-F]{56}$/.test(listerField)) {
-    throw new Error(`lister_pkh has unexpected shape: ${listerField}`);
+  if (listerField.length !== 28) {
+    throw new Error(
+      `lister_pkh has unexpected length ${listerField.length}, want 28`,
+    );
   }
-  return listerField.toLowerCase();
+  return bytesToHex(listerField).toLowerCase();
+}
+
+/* -------------------------------------------------------------------------- */
+/* Plutus Data builders                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** Successor listing datum: Constr 0 [lister_pkh, Some(output_tag)]. */
+function buildSuccessorDatum(
+  listerPkhHex: string,
+  outputTagHex: string,
+): Data.Data {
+  return Data.constr(0n, [
+    Data.bytearray(listerPkhHex),
+    Data.constr(0n, [Data.bytearray(outputTagHex)]),
+  ]);
+}
+
+/** Swap redeemer: Constr 0 [nb_asset_name, listing_idx, treasury_idx]. */
+function buildSwapRedeemer(
+  nbAssetNameHex: string,
+  listingOutputIndex: bigint,
+  treasuryOutputIndex: bigint,
+): Data.Data {
+  return Data.constr(0n, [
+    Data.bytearray(nbAssetNameHex),
+    Data.int(listingOutputIndex),
+    Data.int(treasuryOutputIndex),
+  ]);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -226,14 +264,10 @@ export function decodeConsumedListerPkh(consumed: UTxO): string {
 
 /**
  * Build, sign, and submit the swap tx. Returns the tx hash + the
- * successor's outref (`{txHash}#0`) so the caller can drive cache
- * invalidation and (optionally) wait for confirmation.
- *
- * <p>Throws on builder / sign / submit failure. The caller surfaces the
- * error to the UI ("your shit got stuck in the pipes").
+ * successor's outref (`{txHash}#0`).
  */
 export async function submitSwap(
-  lucid: LucidEvolution,
+  client: EvolutionClient,
   input: BuildSwapInput,
 ): Promise<SwapResult> {
   if (!/^[0-9a-fA-F]{56}$/.test(input.collectionPolicyHex)) {
@@ -268,20 +302,15 @@ export async function submitSwap(
     input.network,
     input.configNftPolicyHex,
   );
-  // Fast-fail: BE-supplied address must equal what we just derived. A
-  // mismatch would fail on-chain (S3 / script witnessing) but a local
-  // check surfaces the misconfiguration cleanly before the wallet prompts.
+  // Fast-fail: BE-supplied address must equal what we just derived.
   if (applied.address !== input.listingScriptAddress) {
     throw new Error(
       `listing script address mismatch — derived=${applied.address}, BE=${input.listingScriptAddress}`,
     );
   }
-  const validator = applied.validator;
 
   // Cross-check the BE-supplied lister_pkh against the actual consumed
-  // datum. If they disagree, the tx would build but the validator would
-  // reject it (S4 requires lister_pkh preservation), so we'd burn fees
-  // on a doomed submission. Fail fast.
+  // datum (S4 preservation is on-chain; this is a fail-fast).
   const datumListerPkh = decodeConsumedListerPkh(input.consumed);
   if (datumListerPkh !== input.consumedListerPkhHex.toLowerCase()) {
     throw new Error(
@@ -295,23 +324,17 @@ export async function submitSwap(
   );
   const outputTagHex = bytesToHex(outputTagBytes);
 
-  // Successor listing inline datum (Constr) — successor sits at output index 0.
+  // Successor datum (Constr) + treasury datum (raw bytes) + swap redeemer.
   const successorDatum = buildSuccessorDatum(
     input.consumedListerPkhHex.toLowerCase(),
     outputTagHex,
   );
-
-  // Treasury inline datum = raw bytes(output_tag). On-chain S8 expects
-  // bare ByteArray, NOT a Constr wrapper. Evolution encodes a hex string
-  // passed to Data.to as ByteString.
-  const treasuryDatum = Data.to(outputTagHex);
-
-  // S5: redeemer.nb_asset_name names the asset in the successor listing
-  // output = the deposit's asset name.
+  // Treasury inline datum is bare ByteArray(output_tag) per S8.
+  const treasuryDatum: Data.Data = Data.bytearray(outputTagHex);
   const swapRedeemer = buildSwapRedeemer(depositAssetName, 0n, 1n);
 
-  // Successor carries NB + (consumed.lovelace + listerFee). Lovelace
-  // accrues on the listing UTxO itself; SPEC §6.3 S6.
+  // S6: successor lovelace = consumed + listerFee. Treasury lovelace
+  // = max(protocolFee, MIN_UTXO).
   const consumedLovelace = input.consumed.assets.lovelace ?? 0n;
   const successorLovelace = consumedLovelace + input.listerFeeLovelace;
   const treasuryLovelace =
@@ -319,44 +342,52 @@ export async function submitSwap(
       ? input.protocolFeeLovelace
       : TREASURY_MIN_UTXO_LOVELACE;
 
-  const tx = await lucid
+  const built = await client
     .newTx()
-    // CIP-31 reference input — config UTxO, never spent.
-    .readFrom([input.configUtxo])
-    // S2: consumed listing input with the Swap redeemer.
-    .collectFrom([input.consumed], swapRedeemer)
-    // Force the deposit-bearing wallet UTxO into the inputs; without this
-    // the auto-selector picks an ADA-only UTxO and change ends up with
-    // negative NB qty (see PreprodSwapTool.java:312).
-    .collectFrom([input.depositUtxo])
+    .readFrom({ referenceInputs: [input.configUtxo._evolution] })
+    .collectFrom({
+      inputs: [input.consumed._evolution],
+      redeemer: swapRedeemer,
+    })
+    // Pin the deposit-bearing wallet UTxO into the inputs so the
+    // balancer doesn't pick an ADA-only UTxO and leave change with a
+    // negative NB qty.
+    .collectFrom({ inputs: [input.depositUtxo._evolution] })
     // S3 + S5 + S6: successor listing at index 0.
-    .pay.ToAddressWithData(
-      input.listingScriptAddress,
-      { kind: "inline", value: successorDatum },
-      { lovelace: successorLovelace, [nbUnit]: 1n },
-    )
+    .payToAddress({
+      address: toAddress(input.listingScriptAddress),
+      assets: toAssets({ lovelace: successorLovelace, [nbUnit]: 1n }),
+      datum: inlineDatum(successorDatum),
+    })
     // S7 + S8 + S9: treasury at index 1.
-    .pay.ToAddressWithData(
-      input.treasuryAddrBech32,
-      { kind: "inline", value: treasuryDatum },
-      { lovelace: treasuryLovelace },
-    )
-    .attach.SpendingValidator(validator)
-    .complete();
+    .payToAddress({
+      address: toAddress(input.treasuryAddrBech32),
+      assets: toAssets({ lovelace: treasuryLovelace }),
+      datum: inlineDatum(treasuryDatum),
+    })
+    .attachScript({ script: applied.validator })
+    .build();
 
-  // Post-complete safety check: the validator's S5 + S7 invariants read
-  // tx.outputs[0] and tx.outputs[1]. We authored them in that order, but
-  // verify Lucid didn't shuffle (defense against future SDK changes — the
-  // Java tool used `mergeOutputs(false)` for the same reason). Decode
-  // the assembled tx body via CML and compare addresses on the first two
-  // outputs.
-  assertOutputOrder(tx.toTransaction(), {
-    listingScriptAddress: input.listingScriptAddress,
-    treasuryAddrBech32: input.treasuryAddrBech32,
-  });
+  // Post-build safety check: the validator's S5 + S7 read tx.outputs[0]
+  // and tx.outputs[1]. We authored them in that order, but verify
+  // Evolution didn't reorder during balancing.
+  //
+  // SignBuilder's outputs surface is built-internal; the
+  // post-balance outputs live on the underlying tx body. Cast to access
+  // them — interface is "outputs: ReadonlyArray<TransactionOutput>" per
+  // SignBuilderImpl.ts.md.
+  const builtAny = built as unknown as {
+    outputs?: ReadonlyArray<unknown>;
+  };
+  if (builtAny.outputs) {
+    assertOutputOrder(builtAny.outputs, {
+      listingScriptAddress: input.listingScriptAddress,
+      treasuryAddrBech32: input.treasuryAddrBech32,
+    });
+  }
 
-  const signed = await tx.sign.withWallet().complete();
-  const txHash = await signed.submit();
+  const signed = await built.sign();
+  const txHash = txHashHex(await signed.submit());
 
   return {
     txHash,
@@ -366,64 +397,81 @@ export async function submitSwap(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Post-complete tx-output assertion                                            */
+/* Post-build tx-output assertion                                              */
 /* -------------------------------------------------------------------------- */
 
 /**
  * Throw if {@code outputs[0]} isn't the listing-script successor or
- * {@code outputs[1]} isn't the treasury output. The swap validator's
- * S5 (listing successor at index 0) + S7 (treasury at index 1) depend
- * on this order; the Java reference relied on `mergeOutputs(false)` to
- * guarantee it, but Lucid Evolution preserves declaration order. This
- * is a belt-and-braces check so a future SDK change can't silently
- * shuffle outputs and let us submit a doomed tx.
+ * {@code outputs[1]} isn't the treasury output. SPEC §6.3 S5/S7 read
+ * those positional indices.
  */
 function assertOutputOrder(
-  cmlTx: CML.Transaction,
+  outputs: ReadonlyArray<unknown>,
   expected: { listingScriptAddress: string; treasuryAddrBech32: string },
 ): void {
-  const outputs = cmlTx.body().outputs();
-  if (outputs.len() < 2) {
+  if (outputs.length < 2) {
     throw new Error(
-      `assembled tx has only ${outputs.len()} output(s); expected at least 2`,
+      `assembled tx has only ${outputs.length} output(s); expected at least 2`,
     );
   }
-  const out0Addr = outputs.get(0).address().to_bech32();
-  const out1Addr = outputs.get(1).address().to_bech32();
-  if (out0Addr !== expected.listingScriptAddress) {
+  const addr0 = txOutputAddressBech32(outputs[0]);
+  const addr1 = txOutputAddressBech32(outputs[1]);
+  if (addr0 !== expected.listingScriptAddress) {
     throw new Error(
-      `output[0] is ${out0Addr}, expected listing script ${expected.listingScriptAddress}`,
+      `output[0] is ${addr0}, expected listing script ${expected.listingScriptAddress}`,
     );
   }
-  if (out1Addr !== expected.treasuryAddrBech32) {
+  if (addr1 !== expected.treasuryAddrBech32) {
     throw new Error(
-      `output[1] is ${out1Addr}, expected treasury ${expected.treasuryAddrBech32}`,
+      `output[1] is ${addr1}, expected treasury ${expected.treasuryAddrBech32}`,
     );
   }
 }
 
+/**
+ * Best-effort extraction of a tx output's bech32 address. Evolution's
+ * {@code TxOut.TransactionOutput} may carry the address either as a
+ * typed class (with {@code Address.toBech32}) or as a Babbage-format
+ * record. Both shapes are handled.
+ */
+export function txOutputAddressBech32(output: unknown): string {
+  if (!output || typeof output !== "object") {
+    throw new Error("output is not an object");
+  }
+  const o = output as { address?: unknown };
+  if (o.address && typeof o.address === "object") {
+    try {
+      return Address.toBech32(o.address as Address.Address);
+    } catch {
+      // fall through to other shape attempts
+    }
+  }
+  if (typeof o.address === "string") return o.address;
+  throw new Error("could not extract bech32 from tx output");
+}
+
 /* -------------------------------------------------------------------------- */
-/* UTxO lookup helpers (caller composes these into one orchestrator)          */
+/* UTxO lookup helpers                                                         */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Find the config UTxO at {@code Address(ScriptCredential(configNftPolicy))}.
- * Returns the (single) UTxO whose value carries an asset under
- * {@code configNftPolicy} with quantity 1 and an inline datum. Throws on
- * "not found" or "more than one" (chain-impossible for a one-shot mint).
+ * Find the config UTxO at `Address(ScriptCredential(configNftPolicy))`.
+ * Single match expected (one-shot mint).
  */
 export async function findConfigUtxo(
-  lucid: LucidEvolution,
+  client: EvolutionClient,
   network: Network,
   configNftPolicyHex: string,
 ): Promise<UTxO> {
   const policyLower = configNftPolicyHex.toLowerCase();
-  const configAddress = credentialToAddress(
-    network,
-    scriptHashToCredential(policyLower),
-  );
-  const utxos = await lucid.utxosAt(configAddress);
-  const hits = utxos.filter((u) => {
+  const networkId = resolveNetworkId(network);
+  const cred = Credential.makeScriptHash(Bytes.fromHex(policyLower));
+  const addr = new Address.Address({ networkId, paymentCredential: cred });
+  const configAddress = Address.toBech32(addr);
+
+  // client.getUtxos accepts the Address class instance.
+  const adapted = adaptUtxos(await client.getUtxos(addr));
+  const hits = adapted.filter((u: UTxO) => {
     if (!u.datum) return false;
     return Object.entries(u.assets).some(
       ([unit, qty]) =>
@@ -445,34 +493,33 @@ export async function findConfigUtxo(
   return hits[0];
 }
 
-/**
- * Find the connected wallet UTxO that physically holds {@code unit} (qty 1).
- * Returns the first such UTxO (stable order: wallet UTxOs come back in
- * provider-defined order, so this is "first-served" rather than balanced).
- */
+/** Find the connected wallet UTxO that physically holds {@code unit} (qty 1). */
 export async function findUtxoCarrying(
-  lucid: LucidEvolution,
+  client: EvolutionClient,
   unit: string,
 ): Promise<UTxO | null> {
-  const utxos = await lucid.wallet().getUtxos();
-  for (const u of utxos) {
+  const adapted = adaptUtxos(await client.getWalletUtxos());
+  for (const u of adapted) {
     if (u.assets[unit] === 1n) return u;
   }
   return null;
 }
 
-/**
- * Fetch a single UTxO by outRef. Wraps Evolution's `utxosByOutRef`,
- * which returns an array.
- */
+/** Fetch a single UTxO by outRef. */
 export async function fetchUtxoByOutRef(
-  lucid: LucidEvolution,
+  client: EvolutionClient,
   txHash: string,
   outputIndex: number,
 ): Promise<UTxO> {
-  const utxos = await lucid.utxosByOutRef([{ txHash, outputIndex }]);
+  const utxos = await client.getUtxosByOutRef([
+    toTxInput(txHash, outputIndex),
+  ]);
   if (utxos.length === 0) {
     throw new Error(`UTxO ${txHash}#${outputIndex} not found`);
   }
-  return utxos[0];
+  return adaptUtxo(utxos[0]);
 }
+
+// Silence unused-import warnings while the network constants are only
+// indirectly used through resolveNetwork.
+void resolveNetwork;

@@ -231,8 +231,12 @@ describe("Plutus Data decode parity", () => {
     // Evolution decodes to a plain object — check shape.
     expect(Evolution.Data.isConstr(newDecoded)).toBe(true);
     // The Constr from Data.fromCBORHex has .index (bigint) + .fields.
-    // Casting via unknown to keep TS happy; runtime check above confirms.
-    const newConstr = newDecoded as { index: bigint; fields: unknown[] };
+    // Cast via `unknown` because Data is a discriminated union; the
+    // isConstr predicate above confirmed the branch at runtime.
+    const newConstr = newDecoded as unknown as {
+      index: bigint;
+      fields: unknown[];
+    };
     expect(newConstr.index).toBe(0n);
     const newLister = newConstr.fields[0] as Uint8Array | string;
     const newListerHex =

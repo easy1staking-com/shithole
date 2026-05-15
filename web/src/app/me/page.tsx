@@ -1,5 +1,13 @@
 "use client";
 
+// The page transitively imports @lucid-evolution/lucid (via lib/tx/cancel
+// + lib/tx/lucidClient), which loads a WASM module at evaluation time.
+// Next 16's prerender pass tries to evaluate that on the SSR build host
+// and fails to resolve the WASM file. force-dynamic skips static
+// prerender entirely; the page still SSRs at request time on Vercel
+// (and client-hydrates afterwards), where the bundling is intact.
+export const dynamic = "force-dynamic";
+
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useState } from "react";
@@ -9,7 +17,7 @@ import { useMyListings, type MyListingRow } from "@/lib/me/useMyListings";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { submitCancel, submitCancelAndRelist } from "@/lib/tx/cancel";
 import { DEFAULT_LISTING_LOVELACE } from "@/lib/tx/list";
-import { makeLucid } from "@/lib/tx/lucidClient";
+import { makeClient } from "@/lib/tx/evolutionClient";
 import { fetchUtxoByOutRef } from "@/lib/tx/swap";
 import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
@@ -142,15 +150,15 @@ function MyListingCard({ row }: { row: MyListingRow }) {
   }, [queryClient, collection.slug]);
 
   const runWithLucid = useCallback(
-    async (label: string, fn: (lucid: Awaited<ReturnType<typeof makeLucid>>) => Promise<void>) => {
+    async (label: string, fn: (client: Awaited<ReturnType<typeof makeClient>>) => Promise<void>) => {
       if (!api) {
         setState({ kind: "error", message: "connect a wallet first" });
         return;
       }
       setState({ kind: "running", label });
       try {
-        const lucid = await makeLucid(api);
-        await fn(lucid);
+        const client = await makeClient(api);
+        await fn(client);
         invalidate();
         setState({ kind: "idle" });
       } catch (err) {

@@ -26,6 +26,10 @@
 import { ImageResponse } from "next/og";
 
 export const contentType = "image/png";
+// Force dynamic — the response depends on query params + a runtime
+// fetch to the BE. Without this, Next 16 may try to evaluate the
+// handler at build time and fail when the BE is unreachable.
+export const dynamic = "force-dynamic";
 // Cache for an hour on the CDN — the inputs are fully encoded in the
 // URL so a fresh swap gets a fresh card without invalidation.
 export const revalidate = 3600;

@@ -2,55 +2,41 @@
  * Build + submit the config-deploy tx (SPEC §5.1).
  *
  * Steps:
- *   1. Pick a seed UTxO from the connected wallet (input: caller-chosen
- *      or first ≥ 5 ADA UTxO).
- *   2. Apply the seed UTxO as `OutputReference` parameter to the
- *      multi-handler `config.config.mint` compiled code.
- *   3. Compute the resulting policy id = blake2b-224 of the applied
- *      script bytes (Evolution SDK does this for us).
- *   4. Build a `ConfigDatum` Plutus Data value matching SPEC §3.1.
- *   5. Build a tx that:
- *      - consumes the seed UTxO,
- *      - mints 1× (policyId, collection_policy_id_28_bytes),
- *      - attaches the applied script as a minting policy,
- *      - outputs to the script enterprise address with inline `ConfigDatum`
- *        + the minted NFT.
- *   6. Sign + submit via the wallet.
+ *   1. Apply the seed UTxO as OutputReference param to config.config.mint.
+ *   2. Derive policy id (= script hash of the applied code).
+ *   3. Build ConfigDatum (Constr 0 [m, protocol_fee, lister_fee,
+ *      treasury_addr, admin_pkh]).
+ *   4. Tx: spend seed UTxO, mint 1×(policyId, collection_policy_id_28b),
+ *      attach minting policy, pay-to-script with inline datum + the NFT.
  *
- * Returns `{ txHash, configNftPolicy, scriptAddress }`.
+ * Migrated from @lucid-evolution/lucid to @evolution-sdk/evolution.
  */
 
 import {
-  Constr,
+  Address,
+  Bytes,
+  Credential,
   Data,
-  applyParamsToScript,
-  credentialToAddress,
-  mintingPolicyToId,
-  scriptHashToCredential,
-  type LucidEvolution,
-  type MintingPolicy,
-  type Network,
-  type UTxO,
-} from "@lucid-evolution/lucid";
+  PlutusV3,
+  ScriptHash,
+  UPLC,
+} from "@evolution-sdk/evolution";
 
+import type { EvolutionClient } from "./evolutionClient";
 import { getValidator, loadBlueprint } from "./plutusBlueprint";
+import { stripOneCborByteStringWrapper } from "./scriptBytes";
+import type { Network } from "./swap";
+import { inlineDatum, toAddress, toAssets, txHashHex } from "./txAdapters";
+import type { UTxO } from "./utxo";
 
 export type DeployConfigInput = {
-  /** 28-byte policy id of the dead collection — becomes the config NFT's asset name. */
   collectionPolicyId: string;
-  /** Integer ≥ 1. */
   m: number;
-  /** Lovelace ≥ 0. */
   protocolFeeLovelace: bigint;
-  /** Lovelace ≥ MIN_LISTER_FEE = 1_000_000. */
   listerFeeLovelace: bigint;
-  /** Bech32 treasury address (mainnet or testnet aware). */
   treasuryAddrBech32: string;
-  /** 28-byte hex Ed25519 verification-key hash. */
   adminPkhHex: string;
-  /** Seed UTxO to spend (provides the one-shot anchor). */
   seedUtxo: UTxO;
-  /** Network — must match the wallet. */
   network: Network;
 };
 
@@ -58,90 +44,82 @@ export type DeployConfigResult = {
   txHash: string;
   configNftPolicy: string;
   scriptAddress: string;
-  /** The 28-byte hex asset name of the config NFT. */
   collectionPolicyId: string;
-  /** The applied (parameterized) compiled script — useful for indexers. */
   appliedCompiledCode: string;
 };
 
 const MIN_LISTER_FEE_LOVELACE = 1_000_000n;
 
-/**
- * Build the Plutus `OutputReference` Constr from a UTxO.
- * Matches Aiken's `cardano/transaction/OutputReference` shape — Constr 0
- * with `[tx_id: ByteArray, output_index: Int]`.
- */
-function outputReferenceData(utxo: UTxO): Constr<Data> {
-  return new Constr(0, [utxo.txHash, BigInt(utxo.outputIndex)]);
+function networkId(network: Network): 0 | 1 {
+  return network === "Mainnet" ? 1 : 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Plutus Data builders                                                       */
+/* -------------------------------------------------------------------------- */
+
+/** OutputReference = Constr 0 [bytes(tx_id), int(output_index)]. */
+function outputReferenceData(utxo: UTxO) {
+  return Data.constr(0n, [
+    Data.bytearray(utxo.txHash),
+    Data.int(BigInt(utxo.outputIndex)),
+  ]);
 }
 
 /**
- * Build the Plutus `Address` Constr from a bech32 string.
- *
- * Aiken `cardano/address/Address`:
+ * Aiken Address Plutus Data:
  *   Constr 0 [payment_credential, stake_credential]
- *
- * `payment_credential` / `Credential`:
- *   Constr 0 (VerificationKey [keyHash])
- *   Constr 1 (Script [scriptHash])
- *
- * `stake_credential` / `Option<StakeCredential>`:
- *   Constr 0 (Some [StakeCredential])  — StakeCredential is Inline(Credential) | Pointer(...)
- *   Constr 1 (None [])
- *
- * Pointer addresses are rejected — they're unsupported by the BE too.
+ * payment_credential: Constr 0 [bytes] (VerificationKey) | Constr 1 [bytes] (Script)
+ * stake_credential: Constr 0 [Constr 0 [credential]] (Some(Inline(...))) | Constr 1 [] (None)
  */
 function addressData(details: {
   paymentKeyHashHex: string;
   paymentCredentialType: "verification_key" | "script";
   stakeCredentialHashHex: string | null;
   stakeCredentialType: "verification_key" | "script" | null;
-}): Constr<Data> {
-  const paymentCred = new Constr(
-    details.paymentCredentialType === "verification_key" ? 0 : 1,
-    [details.paymentKeyHashHex],
+}) {
+  const paymentCred = Data.constr(
+    details.paymentCredentialType === "verification_key" ? 0n : 1n,
+    [Data.bytearray(details.paymentKeyHashHex)],
   );
-
-  let stakeCredOption: Constr<Data>;
+  let stakeCredOption;
   if (details.stakeCredentialHashHex && details.stakeCredentialType) {
-    // StakeCredential::Inline(Credential)
-    const stakeInner = new Constr(
-      details.stakeCredentialType === "verification_key" ? 0 : 1,
-      [details.stakeCredentialHashHex],
+    const stakeInner = Data.constr(
+      details.stakeCredentialType === "verification_key" ? 0n : 1n,
+      [Data.bytearray(details.stakeCredentialHashHex)],
     );
-    const inline = new Constr(0, [stakeInner]); // Inline
-    stakeCredOption = new Constr(0, [inline]); // Some
+    const inline = Data.constr(0n, [stakeInner]); // Inline
+    stakeCredOption = Data.constr(0n, [inline]); // Some
   } else {
-    stakeCredOption = new Constr(1, []); // None
+    stakeCredOption = Data.constr(1n, []); // None
   }
-  return new Constr(0, [paymentCred, stakeCredOption]);
+  return Data.constr(0n, [paymentCred, stakeCredOption]);
 }
 
-/**
- * Decode a bech32 address into the pieces we need for the Plutus Address Constr.
- * Importing `getAddressDetails` again here (rather than reusing the wallet
- * decoder) so we can grab the stake credential too.
- */
-async function fullAddressDetails(bech32: string) {
-  const { getAddressDetails } = await import("@lucid-evolution/lucid");
-  const d = getAddressDetails(bech32);
-  const pc = d.paymentCredential;
-  if (!pc) {
-    throw new Error(`address ${bech32} has no payment credential`);
-  }
-  if (d.type === "Pointer") {
-    throw new Error("pointer addresses are not supported");
-  }
+/** Decompose a bech32 address into the parts we need for addressData(). */
+function decomposeAddress(bech32: string): {
+  paymentKeyHashHex: string;
+  paymentCredentialType: "verification_key" | "script";
+  stakeCredentialHashHex: string | null;
+  stakeCredentialType: "verification_key" | "script" | null;
+} {
+  const addr = Address.fromBech32(bech32);
+  // Address shape (from our runtime probe):
+  //   { networkId, paymentCredential: { _tag: 'KeyHash'|'ScriptHash', hash },
+  //     stakingCredential?: { _tag, hash } }
+  const a = addr as unknown as {
+    paymentCredential: { _tag: "KeyHash" | "ScriptHash"; hash: string };
+    stakingCredential?: { _tag: "KeyHash" | "ScriptHash"; hash: string };
+  };
   return {
-    bech32: d.address.bech32,
-    paymentKeyHashHex: pc.hash,
+    paymentKeyHashHex: a.paymentCredential.hash,
     paymentCredentialType:
-      pc.type === "Key" ? ("verification_key" as const) : ("script" as const),
-    stakeCredentialHashHex: d.stakeCredential?.hash ?? null,
-    stakeCredentialType: d.stakeCredential
-      ? d.stakeCredential.type === "Key"
-        ? ("verification_key" as const)
-        : ("script" as const)
+      a.paymentCredential._tag === "KeyHash" ? "verification_key" : "script",
+    stakeCredentialHashHex: a.stakingCredential?.hash ?? null,
+    stakeCredentialType: a.stakingCredential
+      ? a.stakingCredential._tag === "KeyHash"
+        ? "verification_key"
+        : "script"
       : null,
   };
 }
@@ -150,92 +128,80 @@ function buildConfigDatum(args: {
   m: bigint;
   protocolFee: bigint;
   listerFee: bigint;
-  treasuryAddrConstr: Constr<Data>;
+  treasuryAddrConstr: ReturnType<typeof addressData>;
   adminPkhHex: string;
-}): string {
+}): Data.Data {
   // ConfigDatum: Constr 0 [m, protocol_fee, lister_fee, treasury_addr, admin_pkh]
-  const constr = new Constr(0, [
-    args.m,
-    args.protocolFee,
-    args.listerFee,
+  return Data.constr(0n, [
+    Data.int(args.m),
+    Data.int(args.protocolFee),
+    Data.int(args.listerFee),
     args.treasuryAddrConstr,
-    args.adminPkhHex,
+    Data.bytearray(args.adminPkhHex),
   ]);
-  return Data.to(constr);
 }
 
-/** Apply the seed_utxo parameter to the config validator's compiled code. */
-export async function applyConfigSeed(
-  seedUtxo: UTxO,
-): Promise<{ appliedScript: string; policyId: string }> {
+/* -------------------------------------------------------------------------- */
+/* Apply seed_utxo to config validator                                         */
+/* -------------------------------------------------------------------------- */
+
+export type AppliedConfig = {
+  /** Double-CBOR-encoded applied script hex. */
+  appliedScript: string;
+  /** Hex script hash = policy id. */
+  policyId: string;
+  /** Evolution PlutusV3 wrapper for attachScript / minting. */
+  policy: PlutusV3.PlutusV3;
+};
+
+export async function applyConfigSeed(seedUtxo: UTxO): Promise<AppliedConfig> {
   const blueprint = await loadBlueprint();
   const mintHandler = getValidator(blueprint, "config.config.mint");
-  // Param is `seed_utxo: OutputReference` — Constr 0 [tx_id, output_index].
-  const applied = applyParamsToScript(
-    mintHandler.compiledCode,
-    [outputReferenceData(seedUtxo)],
-  );
-  const policy: MintingPolicy = {
-    type: "PlutusV3",
-    script: applied,
-  };
-  return {
-    appliedScript: applied,
-    policyId: mintingPolicyToId(policy),
-  };
+  const appliedScript = UPLC.applyParamsToScript(mintHandler.compiledCode, [
+    outputReferenceData(seedUtxo),
+  ]);
+  const innerHex = stripOneCborByteStringWrapper(appliedScript);
+  const policy = new PlutusV3.PlutusV3({ bytes: Bytes.fromHex(innerHex) });
+  const policyId = ScriptHash.toHex(ScriptHash.fromScript(policy));
+  return { appliedScript, policyId, policy };
 }
 
-/**
- * Build + submit the deploy-config tx. The connected Lucid instance must
- * already have a wallet selected (via `selectWallet.fromAPI(cip30Api)`).
- */
+/* -------------------------------------------------------------------------- */
+/* Main builder                                                                */
+/* -------------------------------------------------------------------------- */
+
 export async function deployConfig(
-  lucid: LucidEvolution,
+  client: EvolutionClient,
   input: DeployConfigInput,
 ): Promise<DeployConfigResult> {
-  // Sanity-check the floor before bothering the wallet.
   if (input.listerFeeLovelace < MIN_LISTER_FEE_LOVELACE) {
     throw new Error(
       `lister_fee must be >= ${MIN_LISTER_FEE_LOVELACE} lovelace (MIN_LISTER_FEE floor)`,
     );
   }
-  if (input.m < 1) {
-    throw new Error("m must be >= 1");
-  }
-  if (input.protocolFeeLovelace < 0n) {
+  if (input.m < 1) throw new Error("m must be >= 1");
+  if (input.protocolFeeLovelace < 0n)
     throw new Error("protocol_fee must be >= 0");
-  }
-  if (!/^[0-9a-fA-F]{56}$/.test(input.collectionPolicyId)) {
+  if (!/^[0-9a-fA-F]{56}$/.test(input.collectionPolicyId))
     throw new Error("collection_policy_id must be 56 hex chars (28 bytes)");
-  }
-  if (!/^[0-9a-fA-F]{56}$/.test(input.adminPkhHex)) {
+  if (!/^[0-9a-fA-F]{56}$/.test(input.adminPkhHex))
     throw new Error("admin_pkh must be 56 hex chars (28 bytes)");
-  }
 
-  const { appliedScript, policyId } = await applyConfigSeed(input.seedUtxo);
-  const mintingPolicy: MintingPolicy = {
-    type: "PlutusV3",
-    script: appliedScript,
-  };
+  const applied = await applyConfigSeed(input.seedUtxo);
 
-  // Enterprise script address — `addr(ScriptCredential(policyId))`,
-  // no stake credential. SPEC §3.1: the spend handler's hash and the
-  // mint policy id are the same script hash.
-  const scriptAddress = credentialToAddress(
-    input.network,
-    scriptHashToCredential(policyId),
-  );
-
-  // Treasury Address Plutus data.
-  const treasury = await fullAddressDetails(input.treasuryAddrBech32);
-  const treasuryAddrConstr = addressData({
-    paymentKeyHashHex: treasury.paymentKeyHashHex,
-    paymentCredentialType: treasury.paymentCredentialType,
-    stakeCredentialHashHex: treasury.stakeCredentialHashHex,
-    stakeCredentialType: treasury.stakeCredentialType,
+  // Enterprise script address — addr(ScriptCredential(policyId)), no stake.
+  const cred = Credential.makeScriptHash(Bytes.fromHex(applied.policyId));
+  const scriptAddrObj = new Address.Address({
+    networkId: networkId(input.network),
+    paymentCredential: cred,
   });
+  const scriptAddress = Address.toBech32(scriptAddrObj);
 
-  const configDatumHex = buildConfigDatum({
+  // Treasury Plutus Data.
+  const treasury = decomposeAddress(input.treasuryAddrBech32);
+  const treasuryAddrConstr = addressData(treasury);
+
+  const configDatum = buildConfigDatum({
     m: BigInt(input.m),
     protocolFee: input.protocolFeeLovelace,
     listerFee: input.listerFeeLovelace,
@@ -243,33 +209,33 @@ export async function deployConfig(
     adminPkhHex: input.adminPkhHex.toLowerCase(),
   });
 
-  const unit = policyId + input.collectionPolicyId.toLowerCase();
-  const mintAssets = { [unit]: 1n };
+  const unit = applied.policyId + input.collectionPolicyId.toLowerCase();
+  const mintFlatAssets = { [unit]: 1n };
+  const outputFlatAssets = { lovelace: 2_000_000n, ...mintFlatAssets };
 
-  // Redeemer for the mint handler is `Void`. Aiken encodes Void as
-  // `Constr 0 []` — Data.void() returns the same.
-  const redeemer = Data.void();
+  // Mint redeemer is Void — Aiken encodes Void as Constr 0 [].
+  const redeemer: Data.Data = Data.constr(0n, []);
 
-  const tx = await lucid
+  const built = await client
     .newTx()
-    .collectFrom([input.seedUtxo])
-    .mintAssets(mintAssets, redeemer)
-    .attach.MintingPolicy(mintingPolicy)
-    .pay.ToAddressWithData(
-      scriptAddress,
-      { kind: "inline", value: configDatumHex },
-      { lovelace: 2_000_000n, ...mintAssets },
-    )
-    .complete();
+    .collectFrom({ inputs: [input.seedUtxo._evolution] })
+    .mintAssets({ assets: toAssets(mintFlatAssets), redeemer })
+    .attachScript({ script: applied.policy })
+    .payToAddress({
+      address: toAddress(scriptAddress),
+      assets: toAssets(outputFlatAssets),
+      datum: inlineDatum(configDatum),
+    })
+    .build();
 
-  const signed = await tx.sign.withWallet().complete();
-  const txHash = await signed.submit();
+  const signed = await built.sign();
+  const txHash = txHashHex(await signed.submit());
 
   return {
     txHash,
-    configNftPolicy: policyId,
+    configNftPolicy: applied.policyId,
     scriptAddress,
     collectionPolicyId: input.collectionPolicyId.toLowerCase(),
-    appliedCompiledCode: appliedScript,
+    appliedCompiledCode: applied.appliedScript,
   };
 }

@@ -12,6 +12,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+// The page is entirely driven by query params (slug/na/nb/...). Forcing
+// `dynamic = "force-dynamic"` keeps Vercel from trying to pre-render
+// it at build time with empty searchParams — which would generate a
+// broken OG image URL + a meaningless landing page.
+export const dynamic = "force-dynamic";
+
 type SearchParams = {
   slug?: string;
   na?: string;

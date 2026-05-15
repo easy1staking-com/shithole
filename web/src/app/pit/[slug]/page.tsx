@@ -18,7 +18,7 @@ import { useMatchability } from "@/lib/pit/useMatchability";
 import type { Match } from "@/lib/pit/bucketMath";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { submitList } from "@/lib/tx/list";
-import { makeLucid } from "@/lib/tx/lucidClient";
+import { makeClient } from "@/lib/tx/evolutionClient";
 import {
   fetchUtxoByOutRef,
   findConfigUtxo,
@@ -172,13 +172,13 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
 
     try {
       const network = toEvolutionNetwork(getNetworkName());
-      const lucid = await makeLucid(api);
+      const client = await makeClient(api);
 
       const [configUtxo, depositUtxo, consumedUtxo] = await Promise.all([
-        findConfigUtxo(lucid, network, collection.data.config_nft_policy),
-        findUtxoCarrying(lucid, deposit.unit),
+        findConfigUtxo(client, network, collection.data.config_nft_policy),
+        findUtxoCarrying(client, deposit.unit),
         fetchUtxoByOutRef(
-          lucid,
+          client,
           match.consumed.txHex,
           match.consumed.outputIndex,
         ),
@@ -192,7 +192,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
         network,
       );
 
-      const result = await submitSwap(lucid, {
+      const result = await submitSwap(client, {
         network,
         collectionPolicyHex: collectionPolicyId,
         configNftPolicyHex: collection.data.config_nft_policy,
@@ -219,7 +219,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
       setRevealStatus("success");
       setConfirmation("confirming");
 
-      awaitTxConfirmation(lucid, result.txHash)
+      awaitTxConfirmation(client, result.txHash)
         .then(() => {
           setConfirmation("confirmed");
           // The BE indexer reads on confirmation, so invalidate now —
@@ -312,8 +312,8 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           : `dumping ${picked.length} pieces of s#!t into the pit…`,
       );
       try {
-        const lucid = await makeLucid(api);
-        const result = await submitList(lucid, {
+        const client = await makeClient(api);
+        const result = await submitList(client, {
           listingScriptAddress: collection.data.listing_script_address,
           listerPkhHex: paymentKeyHashHex,
           nfts: picked.map((n) => ({ unit: n.unit })),
@@ -324,7 +324,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
             : `submitted ${picked.length} listings. settling on chain…`,
         );
         try {
-          await awaitTxConfirmation(lucid, result.txHash);
+          await awaitTxConfirmation(client, result.txHash);
           setToast(
             picked.length === 1
               ? "your s#!t is in the pit"
