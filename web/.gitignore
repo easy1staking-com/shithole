@@ -33,6 +33,12 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+# Network-specific template files ARE tracked; the populated `.env.preprod`
+# / `.env.mainnet` are not (matched by the `.env*` glob above).
+!.env.preprod.example
+!.env.mainnet.example
+!.env.preview.example
+!.env.devnet.example
 
 # vercel
 .vercel

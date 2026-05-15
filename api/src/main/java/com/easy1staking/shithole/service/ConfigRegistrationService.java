@@ -27,8 +27,8 @@ import com.easy1staking.shithole.model.ThemeDto;
 import com.easy1staking.shithole.repository.ConfigRepository;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import com.easy1staking.shithole.service.exception.ConfigRegistrationException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -38,9 +38,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigInteger;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Trustless config registration. The flow:
@@ -62,7 +65,6 @@ import java.util.Optional;
  * transaction so a slow backend can't pin a DB connection.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ConfigRegistrationService {
 
@@ -88,6 +90,48 @@ public class ConfigRegistrationService {
     private final Cip8SignatureVerifier signatureVerifier;
     private final ListingScriptAddressDeriver listingScriptAddressDeriver;
     private final ApplicationEventPublisher eventPublisher;
+
+    /**
+     * Lowercase-hex pkhs that are auto-promoted into {@code curated_collections}
+     * on registration. Anything outside this list lands in {@code configs} only
+     * — the indexer still watches the listing-script address, but the public
+     * FE doesn't surface the collection. Empty list = no submissions are
+     * auto-curated (closed v1; useful for staging where you only want the
+     * indexer to track).
+     */
+    private final Set<String> operatorPkhs;
+
+    public ConfigRegistrationService(
+            ConfigRepository configRepository,
+            CuratedCollectionRepository curatedCollectionRepository,
+            BackendService backendService,
+            Network appNetwork,
+            Cip8SignatureVerifier signatureVerifier,
+            ListingScriptAddressDeriver listingScriptAddressDeriver,
+            ApplicationEventPublisher eventPublisher,
+            @Value("${shithole.curation.operator-pkhs:}") List<String> operatorPkhs) {
+        this.configRepository = configRepository;
+        this.curatedCollectionRepository = curatedCollectionRepository;
+        this.backendService = backendService;
+        this.appNetwork = appNetwork;
+        this.signatureVerifier = signatureVerifier;
+        this.listingScriptAddressDeriver = listingScriptAddressDeriver;
+        this.eventPublisher = eventPublisher;
+        // Normalise once at construction so the per-request check is a cheap
+        // hash lookup. Tolerates whitespace + mixed case from env vars.
+        Set<String> normalised = new LinkedHashSet<>();
+        if (operatorPkhs != null) {
+            for (String p : operatorPkhs) {
+                if (p == null) continue;
+                String trimmed = p.trim().toLowerCase(Locale.ROOT);
+                if (!trimmed.isEmpty()) {
+                    normalised.add(trimmed);
+                }
+            }
+        }
+        this.operatorPkhs = Collections.unmodifiableSet(normalised);
+        log.info("ConfigRegistrationService: operator-pkhs configured count={}", this.operatorPkhs.size());
+    }
 
     /**
      * Validate the on-chain config UTxO, persist the {@code configs} +
@@ -268,24 +312,40 @@ public class ConfigRegistrationService {
     public ConfigRegistrationResponseDto persist(RegistrationDecision decision) {
         ConfigEntity configEntity = decision.config();
         CuratedCollectionEntity curatedEntity = decision.curated();
+        boolean curated = isOperatorPkh(configEntity.getAdminPkh());
+
         // Inside the tx: a final pre-check + save. The unique constraints on
         // configs.config_nft_policy and curated_collections.slug guarantee
         // a concurrent insert won't sneak through; we surface that as a
         // DataIntegrityViolationException (handled in the controller as 409).
-        if (curatedCollectionRepository.existsById(curatedEntity.getSlug())) {
-            throw ConfigRegistrationException.duplicateSlug(curatedEntity.getSlug());
-        }
-        if (configRepository.existsById(configEntity.getConfigNftPolicy())
-                || curatedCollectionRepository.existsByConfigNftPolicy(configEntity.getConfigNftPolicy())) {
+        if (configRepository.existsById(configEntity.getConfigNftPolicy())) {
             throw ConfigRegistrationException.duplicateConfig(configEntity.getConfigNftPolicy());
         }
-        configRepository.saveAndFlush(configEntity);
-        curatedCollectionRepository.saveAndFlush(curatedEntity);
+        if (curated) {
+            // Only check slug uniqueness if we're actually going to write the
+            // curated row. Non-curated submissions don't claim a slug.
+            if (curatedCollectionRepository.existsById(curatedEntity.getSlug())) {
+                throw ConfigRegistrationException.duplicateSlug(curatedEntity.getSlug());
+            }
+            if (curatedCollectionRepository.existsByConfigNftPolicy(configEntity.getConfigNftPolicy())) {
+                throw ConfigRegistrationException.duplicateConfig(configEntity.getConfigNftPolicy());
+            }
+        }
 
-        // Notify the indexer's watch-set so the just-registered listing
-        // address is picked up without waiting for the 60s reconcile backstop.
-        // The event publisher is no-op-safe if no listener is registered
-        // (e.g. the indexer is disabled via shithole.indexer.enabled=false).
+        configRepository.saveAndFlush(configEntity);
+        if (curated) {
+            curatedCollectionRepository.saveAndFlush(curatedEntity);
+            log.info("config registered + auto-curated policy={} slug={} (admin_pkh matches operator allowlist)",
+                    configEntity.getConfigNftPolicy(), curatedEntity.getSlug());
+        } else {
+            log.info("config registered (not curated) policy={} admin_pkh={} (not in operator allowlist, size={})",
+                    configEntity.getConfigNftPolicy(), configEntity.getAdminPkh(), operatorPkhs.size());
+        }
+
+        // Notify the indexer's watch-set REGARDLESS of curation status — the
+        // indexer tracks every registered config's listings; curation is just
+        // about FE visibility. The event publisher is no-op-safe if no
+        // listener is registered (e.g. shithole.indexer.enabled=false).
         eventPublisher.publishEvent(new ConfigRegisteredEvent(
                 this,
                 curatedEntity.getSlug(),
@@ -295,7 +355,7 @@ public class ConfigRegistrationService {
 
         return ConfigRegistrationResponseDto.builder()
                 .configNftPolicy(configEntity.getConfigNftPolicy())
-                .slug(curatedEntity.getSlug())
+                .slug(curated ? curatedEntity.getSlug() : null)
                 .collectionPolicyId(curatedEntity.getCollectionPolicyId())
                 .m(configEntity.getM())
                 .protocolFee(configEntity.getProtocolFee())
@@ -304,9 +364,16 @@ public class ConfigRegistrationService {
                 .treasuryAddrBech32(configEntity.getTreasuryAddrBech32())
                 .utxoTxId(configEntity.getUtxoTxId())
                 .utxoOutputIndex(configEntity.getUtxoOutputIndex())
-                .displayName(curatedEntity.getDisplayName())
-                .theme(decision.theme())
+                .displayName(curated ? curatedEntity.getDisplayName() : null)
+                .theme(curated ? decision.theme() : null)
+                .curated(curated)
                 .build();
+    }
+
+    /** Case-insensitive operator pkh match. */
+    private boolean isOperatorPkh(String adminPkh) {
+        if (adminPkh == null || operatorPkhs.isEmpty()) return false;
+        return operatorPkhs.contains(adminPkh.toLowerCase(Locale.ROOT));
     }
 
     /** Value object carrying the prepared (but not yet persisted) entities between phases. */

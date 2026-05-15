@@ -105,10 +105,14 @@ class ConfigRegistrationServiceTest {
         lenient().when(backendService.getUtxoService()).thenReturn(utxoService);
         lenient().when(listingScriptAddressDeriver.deriveAddress(anyString()))
                 .thenReturn("addr1_fake_listing_script_for_unit_tests");
+        // Tests run with the test admin pkh on the operator allowlist so the
+        // happy-path keeps writing both rows. The gate-off case is exercised
+        // separately in `nonOperator_doesNotCurate_butStillRegisters`.
         service = new ConfigRegistrationService(
                 configRepository, curatedCollectionRepository, backendService,
                 Networks.mainnet(), new Cip8SignatureVerifier(), listingScriptAddressDeriver,
-                eventPublisher);
+                eventPublisher,
+                java.util.List.of(com.bloxbean.cardano.client.util.HexUtil.encodeHexString(adminPkh)));
     }
 
     @Test
@@ -141,6 +145,35 @@ class ConfigRegistrationServiceTest {
         assertThat(curatedCap.getValue().getListingScriptAddress())
                 .isEqualTo("addr1_fake_listing_script_for_unit_tests");
         verify(listingScriptAddressDeriver, times(1)).deriveAddress(POLICY);
+        assertThat(resp.isCurated()).isTrue();
+    }
+
+    @Test
+    void nonOperator_doesNotCurate_butStillRegistersAndPublishesEvent() throws ApiException {
+        // Swap in a service instance with an EMPTY operator allowlist so the
+        // test admin pkh is treated as a non-operator.
+        var nonOperatorService = new ConfigRegistrationService(
+                configRepository, curatedCollectionRepository, backendService,
+                Networks.mainnet(), new Cip8SignatureVerifier(), listingScriptAddressDeriver,
+                eventPublisher,
+                java.util.List.of());
+
+        primeDuplicateChecks();
+        primeUtxoLookup(matchingUtxo(makeDatum(BigInteger.TEN, BigInteger.ZERO, BigInteger.valueOf(2_000_000))));
+
+        ConfigRegistrationResponseDto resp = nonOperatorService.register(validRequest("hosky"));
+
+        assertThat(resp.isCurated()).isFalse();
+        assertThat(resp.getSlug()).isNull();
+        assertThat(resp.getDisplayName()).isNull();
+        assertThat(resp.getTheme()).isNull();
+        assertThat(resp.getConfigNftPolicy()).isEqualTo(POLICY);
+        // configs row IS written so the indexer can later see it; curated row NOT.
+        verify(configRepository, times(1)).saveAndFlush(any(ConfigEntity.class));
+        verify(curatedCollectionRepository, never()).saveAndFlush(any(CuratedCollectionEntity.class));
+        // Event still publishes so the indexer's watch registry adds the
+        // listing-script address regardless of curation status.
+        verify(eventPublisher, times(1)).publishEvent(any());
     }
 
     @Test

@@ -49,7 +49,7 @@ dependencies {
     // we use it for `applyParamsToScript` so the BE can derive each registered
     // config's listing-script address from the unapplied compiled code in
     // plutus.json + the config_nft_policy parameter.
-    implementation("com.bloxbean.cardano:aiken-java-binding:0.1.0")
+    implementation("com.bloxbean.cardano:aiken-java-binding:0.1.1-preview2")
 
     // CCL annotation processor for blueprint-driven model generation from contracts/plutus.json
     compileOnly("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")
@@ -75,4 +75,50 @@ dependencies {
 
 tasks.named<Test>("test") {
     useJUnitPlatform()
+}
+
+// ---------------------------------------------------------------------------
+// Operator tools — `api/src/main/java/com/easy1staking/shithole/tools/preprod/`.
+// Each Java main() class gets a small Gradle JavaExec task. Source the env
+// file (e.g. `set -a; source api/.env.preprod; set +a`) before invoking so
+// the tools can read ADMIN_SEED / BLOCKFROST_PROJECT_ID / etc.
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("preprodDeriveAddress") {
+    group = "preprod tools"
+    description = "Print the preprod payment address derived from ADMIN_SEED."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.DeriveAddressTool")
+    standardInput = System.`in`
+}
+
+tasks.register<JavaExec>("preprodCheckBalance") {
+    group = "preprod tools"
+    description = "Print the preprod UTxO set for the admin wallet via Blockfrost."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.CheckBalanceTool")
+    standardInput = System.`in`
+}
+
+tasks.register<JavaExec>("preprodMintCollection") {
+    group = "preprod tools"
+    description = "Mint a 10-NFT fake-dead-collection under a time-locked native script with CIP-25 metadata."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.MintCollectionTool")
+    standardInput = System.`in`
+}
+
+tasks.register<JavaExec>("preprodListNft") {
+    group = "preprod tools"
+    description = "List one NFT at the registered listing-script address (use --args=\"ShitterNNN\" to pick)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.ListNftTool")
+    standardInput = System.`in`
+}
+
+tasks.register<JavaExec>("preprodSwap") {
+    group = "preprod tools"
+    description = "Execute one on-chain Swap: find an (NA,NB) bucket match across wallet + pool, build/sign/submit the swap tx."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.PreprodSwapTool")
+    standardInput = System.`in`
 }

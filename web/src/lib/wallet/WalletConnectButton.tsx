@@ -8,15 +8,35 @@ import {
 } from "./walletStore";
 import { detectInstalledWallets, type Cip30WalletEntry } from "./cip30";
 
-/** SSR-safe wallet detection via useSyncExternalStore. */
-function useInstalledWallets() {
+/**
+ * SSR-safe wallet detection via useSyncExternalStore.
+ *
+ * Both snapshots are STABLE references (cached at module scope). React calls
+ * the snapshot getter on every render and compares the result via Object.is;
+ * returning a fresh array each call triggers the "Maximum update depth
+ * exceeded" loop. The client snapshot caches by `window.cardano` identity so
+ * we only re-detect when wallet injection actually mutates the global.
+ */
+type WalletList = { name: string; entry: Cip30WalletEntry }[];
+const SERVER_SNAPSHOT: WalletList = [];
+let cachedClientSnapshot: WalletList = SERVER_SNAPSHOT;
+let cachedFromCardano: unknown = undefined;
+
+function getClientSnapshot(): WalletList {
+  const cardano = typeof window !== "undefined" ? window.cardano : undefined;
+  if (cachedFromCardano === cardano) return cachedClientSnapshot;
+  cachedFromCardano = cardano;
+  cachedClientSnapshot = detectInstalledWallets();
+  return cachedClientSnapshot;
+}
+
+function useInstalledWallets(): WalletList {
   return useSyncExternalStore(
-    // No subscription — wallet injection happens at page load. Return a
-    // noop unsubscribe so the hook stays a one-shot.
+    // No subscription — wallet injection happens at page load and isn't
+    // observable via an event. Noop unsubscribe.
     () => () => {},
-    () => detectInstalledWallets(),
-    // Server snapshot: empty.
-    () => [] as { name: string; entry: Cip30WalletEntry }[],
+    getClientSnapshot,
+    () => SERVER_SNAPSHOT,
   );
 }
 

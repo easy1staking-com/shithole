@@ -1,0 +1,49 @@
+# Docker build context excludes — keeps `docker build -f api/Dockerfile .`
+# from shipping ~GB of unrelated files into the daemon.
+
+# FE (built/served separately on Vercel)
+web/
+
+# Aiken contracts — only contracts/plutus.json is needed at build time,
+# explicitly COPYed by the Dockerfile.
+contracts/
+!contracts/plutus.json
+
+# Gradle / Java intermediates
+**/build/
+**/.gradle/
+**/out/
+**/bin/
+
+# Node / Next.js (defensive — web/ above already covers it)
+**/node_modules/
+**/.next/
+**/.pnpm-store/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# VCS
+.git/
+.gitignore
+.gitattributes
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local working state
+.local/
+.tmp/
+.env
+.env.*
+*.log
+*.pid
+
+# Repo-level docs/specs (not needed by the BE build)
+*.md
+docs/
+CODEX_REVIEW*.md
