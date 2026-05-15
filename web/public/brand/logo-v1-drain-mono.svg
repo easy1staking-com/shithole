@@ -13,24 +13,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="s#!thole">
   <style>
     .word { font: 700 48px/1 ui-monospace, "JetBrains Mono", "Geist Mono", monospace; letter-spacing: -0.02em; }
-    .swirl { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: round; }
+    .swirl { fill: none; stroke: currentColor; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
     .accent { fill: var(--accent, #b87333); }
   </style>
   <!-- accent underline behind the swirl -->
   <rect class="accent" x="232" y="58" width="44" height="3" rx="1.5" />
   <!-- text: s#!th + swirl + le -->
   <text class="word" x="0" y="48" fill="currentColor">s#!th</text>
-  <!-- swirl replacing 'o' (cx=254, r=20) -->
+  <!-- swirl replacing 'o' (cx=254, cy=32). Spiral built from 5
+       alternating semi-circle arcs of decreasing radius — each arc
+       starts where the previous ended, forming an unbroken spiral.
+       (Earlier version used `A r r 0 1 1 0,-18` to a near-identical
+       endpoint; ambiguous in SVG, browsers skipped the path.) -->
   <g transform="translate(254 32)">
     <path class="swirl" d="
       M 0 -18
-      A 18 18 0 1 1 -0.01 -18
-      M 0 -12
-      A 12 12 0 1 0 12 0
-      M 12 0
-      A 6 6 0 1 1 0 6
-      M 0 6
-      A 2 2 0 1 0 2 4
+      A 18 18 0 0 1 0 18
+      A 13 13 0 0 1 0 -13
+      A 8 8 0 0 1 0 8
+      A 4 4 0 0 1 0 -4
+      A 2 2 0 0 1 0 2
     "/>
   </g>
   <text class="word" x="276" y="48" fill="currentColor">le</text>

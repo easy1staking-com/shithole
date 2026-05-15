@@ -108,18 +108,61 @@ export function WalletConnectButton({ className }: { className?: string }) {
   }, [name, connect]);
 
   if (name && addressBech32) {
+    // Compact connected-state pill: [wallet icon] [short addr] ▾
+    // Tap toggles a dropdown that exposes the full address + disconnect.
+    // Replaces the previous "name: truncated-addr + disconnect" row
+    // which doubled up with the drawer's address chip on mobile.
+    const icon = typeof window !== "undefined" && window.cardano?.[name]?.icon;
     return (
-      <div className={`flex items-center gap-2 text-xs ${className ?? ""}`}>
-        <span className="rounded-full bg-zinc-800 px-3 py-1 font-mono text-zinc-200">
-          {name}: {truncate(addressBech32)}
-        </span>
+      <div className={`relative inline-block text-xs ${className ?? ""}`}>
         <button
           type="button"
-          onClick={disconnect}
-          className="text-zinc-400 hover:text-zinc-200"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-zinc-100 hover:border-zinc-500"
+          title={addressBech32}
         >
-          disconnect
+          {icon ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={icon} alt="" className="h-4 w-4 rounded-sm" aria-hidden />
+          ) : (
+            <span
+              className="h-2 w-2 rounded-full bg-emerald-500"
+              aria-hidden
+            />
+          )}
+          <span className="font-mono">{truncate(addressBech32)}</span>
+          <span
+            className="ml-0.5 text-zinc-400 transition-transform"
+            style={{ transform: open ? "rotate(180deg)" : undefined }}
+            aria-hidden
+          >
+            ▾
+          </span>
         </button>
+        {open && (
+          <div className="absolute right-0 z-20 mt-1 w-64 rounded-md border border-zinc-800 bg-zinc-950 p-2 shadow-lg">
+            <p className="px-2 pb-1 text-[0.6rem] uppercase tracking-widest text-zinc-500">
+              {name}
+            </p>
+            <p
+              className="px-2 pb-2 font-mono text-[0.65rem] text-zinc-300 break-all"
+              title={addressBech32}
+            >
+              {addressBech32}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                disconnect();
+              }}
+              className="w-full rounded px-2 py-1.5 text-left text-zinc-200 hover:bg-zinc-800"
+            >
+              disconnect
+            </button>
+          </div>
+        )}
       </div>
     );
   }

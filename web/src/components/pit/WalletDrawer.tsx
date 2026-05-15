@@ -166,16 +166,16 @@ export function WalletDrawer({
             </span>
           )}
           {!notConnected && !wrongNetwork && (
+            // Address moved into the wallet pill on the right — keeping
+            // it here as well crowded the row off the mobile viewport
+            // edge. Now we just show the stash count + the accent dot
+            // as the "connected" indicator.
             <>
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: accent }}
                 aria-hidden
               />
-              <span className="font-mono text-xs text-zinc-400">
-                {addressBech32!.slice(0, 12)}…{addressBech32!.slice(-8)}
-              </span>
-              <span className="text-zinc-500">·</span>
               <span className="text-zinc-200">
                 {nfts.isLoading
                   ? "loading your stash…"

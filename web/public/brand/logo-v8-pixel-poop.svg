@@ -1,0 +1,61 @@
+<!--
+  v8 — Pixel poop (16-bit chunky).
+
+  Same pixel-grid language as v4 (Pixel Mascot), but the silhouette is
+  the classic three-tier emoji poop instead of a spiral. Pairs with
+  pixel-art collections (Hosky CashGrab et al.) and matches the
+  "punk / unpolished" angle of the brand.
+
+  - 24x24 grid scaled via shape-rendering: crispEdges (no anti-alias
+    smearing the chunky edges).
+  - Two-tone: dark brown for outline + lit fill via accent.
+  - Two tiny pixel eyes (the playful variant); drop the eye rects to
+    make it serious.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" shape-rendering="crispEdges" role="img" aria-label="s#!thole pixel poop">
+  <rect width="24" height="24" rx="3" fill="#0a0a0a"/>
+
+  <!-- pile, painted pixel by pixel (3 tiers stacked) -->
+  <g fill="#8b4513">
+    <!-- top tier (coil tip) -->
+    <rect x="11" y="4" width="2" height="1"/>
+    <rect x="10" y="5" width="4" height="1"/>
+    <rect x="9"  y="6" width="6" height="1"/>
+    <rect x="9"  y="7" width="6" height="1"/>
+    <!-- middle tier -->
+    <rect x="7"  y="8"  width="10" height="1"/>
+    <rect x="6"  y="9"  width="12" height="1"/>
+    <rect x="6"  y="10" width="12" height="1"/>
+    <rect x="6"  y="11" width="12" height="1"/>
+    <!-- bottom tier -->
+    <rect x="4"  y="12" width="16" height="1"/>
+    <rect x="3"  y="13" width="18" height="1"/>
+    <rect x="3"  y="14" width="18" height="1"/>
+    <rect x="3"  y="15" width="18" height="1"/>
+    <rect x="3"  y="16" width="18" height="1"/>
+    <rect x="3"  y="17" width="18" height="1"/>
+    <rect x="4"  y="18" width="16" height="1"/>
+  </g>
+
+  <!-- darker bottom shadow -->
+  <g fill="#5a2d0c">
+    <rect x="3"  y="17" width="18" height="1"/>
+    <rect x="4"  y="18" width="16" height="1"/>
+  </g>
+
+  <!-- accent highlight on the front -->
+  <g fill="var(--accent, #d9a157)">
+    <rect x="5" y="14" width="1" height="2"/>
+    <rect x="6" y="15" width="1" height="1"/>
+  </g>
+
+  <!-- two googly-eye pixels (drop these for the serious variant) -->
+  <g fill="#fafafa">
+    <rect x="9"  y="14" width="2" height="2"/>
+    <rect x="13" y="14" width="2" height="2"/>
+  </g>
+  <g fill="#0a0a0a">
+    <rect x="10" y="15" width="1" height="1"/>
+    <rect x="14" y="15" width="1" height="1"/>
+  </g>
+</svg>
