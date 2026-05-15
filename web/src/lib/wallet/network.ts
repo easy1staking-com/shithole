@@ -5,7 +5,7 @@
  * Default: preprod. No runtime UI to switch networks.
  */
 
-import type { Network } from "@lucid-evolution/lucid";
+import type { Network } from "@/lib/tx/swap";
 
 export type CardanoNetworkName = "mainnet" | "preprod" | "preview";
 
@@ -17,7 +17,10 @@ export function getNetworkName(): CardanoNetworkName {
   return "preprod";
 }
 
-/** Maps our env-style name to Evolution SDK's `Network` capitalisation. */
+/**
+ * Maps our env-style name to the discriminator the tx-builder code uses
+ * for network branching ('Mainnet' | 'Preprod' | 'Preview').
+ */
 export function toEvolutionNetwork(name: CardanoNetworkName): Network {
   switch (name) {
     case "mainnet":

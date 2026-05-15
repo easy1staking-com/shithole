@@ -3,33 +3,41 @@
  * {@code Cancel} redeemer; the NFT + lovelace flow back to the lister's
  * wallet via the standard change path.
  *
- * <p>The on-chain Cancel handler (listing.ak) requires only one thing:
- * a signature from the {@code lister_pkh} in the consumed datum. No
- * config reference input, no successor output, no bucket math. The
- * simplest of the three listing-validator paths.
+ * <p>Cancel handler (listing.ak:61-72) requires only a signature from
+ * the {@code lister_pkh} in the consumed datum. No config ref input,
+ * no successor, no bucket math. Simplest path through the validator.
  *
- * <p>The Cancel redeemer is the second variant of {@code ListingRedeemer}
- * — {@code Constr 1 []}.
+ * <p>Cancel redeemer = ListingRedeemer's second variant → {@code Constr 1 []}.
+ *
+ * <p>Migrated from @lucid-evolution/lucid to @evolution-sdk/evolution.
  */
 
-import {
-  Constr,
-  Data,
-  type LucidEvolution,
-  type UTxO,
-} from "@lucid-evolution/lucid";
+import { Address, Data } from "@evolution-sdk/evolution";
 
+import type { EvolutionClient } from "./evolutionClient";
 import { DEFAULT_LISTING_LOVELACE, buildGenesisListingDatum } from "./list";
-import { applyListingScript, decodeConsumedListerPkh } from "./swap";
+import {
+  applyListingScript,
+  decodeConsumedListerPkh,
+  type Network,
+} from "./swap";
+import {
+  inlineDatum,
+  toAddress,
+  toAssets,
+  toKeyHash,
+  txHashHex,
+} from "./txAdapters";
+import type { UTxO } from "./utxo";
 
 export type BuildCancelInput = {
-  network: import("@lucid-evolution/lucid").Network;
+  network: Network;
   /** 28-byte hex policy id of the config NFT (parameterizes the listing validator). */
   configNftPolicyHex: string;
   /**
    * Optional bech32 listing-script address. If supplied, cross-checked
-   * against the derived applied-script address (defensive — same pattern
-   * as swap). If omitted, we trust the derivation.
+   * against the derived applied-script address. If omitted, we trust the
+   * derivation.
    */
   listingScriptAddress?: string;
   /** The listing UTxO to cancel. Must carry an inline {@code ListingDatum}. */
@@ -38,28 +46,21 @@ export type BuildCancelInput = {
 
 export type CancelResult = {
   txHash: string;
-  /** Hex pkh of the lister we required a signature from (decoded from the consumed datum). */
+  /** Hex pkh of the lister we required a signature from. */
   listerPkhHex: string;
 };
 
 export type CancelAndRelistResult = CancelResult & {
-  /** OutRef of the freshly-replanted listing (always output index 0). */
   relistedOutRef: { txHash: string; outputIndex: number };
 };
 
 /**
  * Build, sign, and submit the cancel tx. Throws on builder / sign /
  * submit failure (including "wallet refused to sign because the user
- * isn't the lister" — the wallet rejects the sign request when it can't
- * produce the required pkh signature).
- *
- * <p>The caller is responsible for verifying the connected wallet IS
- * the lister before calling — the /me page filters listings by the
- * connected pkh, so this is implicit. If a non-lister tries to cancel,
- * the tx would build but the validator would reject it on-chain.
+ * isn't the lister").
  */
 export async function submitCancel(
-  lucid: LucidEvolution,
+  client: EvolutionClient,
   input: BuildCancelInput,
 ): Promise<CancelResult> {
   const applied = await applyListingScript(
@@ -75,54 +76,40 @@ export async function submitCancel(
     );
   }
 
-  // Decode the consumed datum so we can require the right signature —
-  // and surface "you are not the lister" sooner than the on-chain reject.
+  // Decode the consumed datum so we can require the right signature.
   const listerPkhHex = decodeConsumedListerPkh(input.consumed);
 
-  // Cancel = ListingRedeemer's second variant → Constr 1 [].
-  const cancelRedeemer = Data.to(new Constr(1, []));
+  // Cancel = Constr 1 [].
+  const cancelRedeemer: Data.Data = Data.constr(1n, []);
 
-  const tx = await lucid
+  const built = await client
     .newTx()
-    .collectFrom([input.consumed], cancelRedeemer)
-    .attach.SpendingValidator(applied.validator)
-    // The wallet must sign as the lister; tell the builder so the
-    // required_signers field is set even if the change output goes
-    // to the same key. (CIP-30 wallets typically auto-sign with the
-    // payment key, so this is belt-and-braces.)
-    .addSignerKey(listerPkhHex)
-    .complete();
+    .collectFrom({
+      inputs: [input.consumed._evolution],
+      redeemer: cancelRedeemer,
+    })
+    .attachScript({ script: applied.validator })
+    // The wallet must sign as the lister.
+    .addSigner({ keyHash: toKeyHash(listerPkhHex) })
+    .build();
 
-  const signed = await tx.sign.withWallet().complete();
-  const txHash = await signed.submit();
+  const signed = await built.sign();
+  const txHash = txHashHex(await signed.submit());
 
   return { txHash, listerPkhHex };
 }
 
 /* -------------------------------------------------------------------------- */
-/* Atomic cancel + relist (the "claim accrued ADA" UX)                        */
+/* Atomic cancel + relist                                                     */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Build a SINGLE tx that cancels the listing AND immediately replants
- * the same NFT at the listing-script address with a fresh genesis
- * datum. Accrued lovelace returns to the lister via change; the
- * replanted UTxO carries only min-UTxO ada.
- *
- * <p>Atomic by design — addresses the Codex-flagged failure mode where
- * a two-tx flow (cancel → wait → relist) leaves the NFT in the wallet
- * if the user closes the tab or the relist submit throws. The
- * validator's Cancel handler only requires
- * {@code signed_by(lister_pkh)} (listing.ak:61-72), so nothing on-chain
- * prevents combining the cancel with a same-tx relist.
- *
- * <p>Output[0] is the replanted listing. Other outputs (change carrying
- * the accrued ADA) come after. We don't post-assert output ordering
- * here because the lister is the only one signing — they have no
- * incentive to corrupt their own tx.
+ * SINGLE atomic tx: cancel + replant. Accrued lovelace flows back to
+ * the lister via change; the replanted UTxO carries only min-UTxO ada.
+ * Output[0] is the replanted listing.
  */
 export async function submitCancelAndRelist(
-  lucid: LucidEvolution,
+  client: EvolutionClient,
   input: BuildCancelInput,
 ): Promise<CancelAndRelistResult> {
   const applied = await applyListingScript(
@@ -140,8 +127,7 @@ export async function submitCancelAndRelist(
 
   const listerPkhHex = decodeConsumedListerPkh(input.consumed);
 
-  // Find the NFT unit the consumed listing carries. The strict listing
-  // shape (SPEC §10.2) guarantees exactly one non-lovelace asset.
+  // Find the NFT unit the consumed listing carries.
   const nftUnit = Object.keys(input.consumed.assets).find(
     (u) => u !== "lovelace",
   );
@@ -151,30 +137,50 @@ export async function submitCancelAndRelist(
     );
   }
 
-  const cancelRedeemer = Data.to(new Constr(1, []));
-  const datumHex = buildGenesisListingDatum(listerPkhHex);
+  const cancelRedeemer: Data.Data = Data.constr(1n, []);
+  const datum = buildGenesisListingDatum(listerPkhHex);
 
-  const tx = await lucid
+  const built = await client
     .newTx()
-    .collectFrom([input.consumed], cancelRedeemer)
-    .attach.SpendingValidator(applied.validator)
-    .addSignerKey(listerPkhHex)
-    // Replant: same NFT, fresh genesis datum, min-UTxO ada. Lucid's
-    // balancer routes the remaining lovelace (accrued + the original
-    // min-UTxO) to the wallet as change.
-    .pay.ToAddressWithData(
-      applied.address,
-      { kind: "inline", value: datumHex },
-      { lovelace: DEFAULT_LISTING_LOVELACE, [nftUnit]: 1n },
-    )
-    .complete();
+    .collectFrom({
+      inputs: [input.consumed._evolution],
+      redeemer: cancelRedeemer,
+    })
+    .attachScript({ script: applied.validator })
+    .addSigner({ keyHash: toKeyHash(listerPkhHex) })
+    // Replant at the same listing-script address, fresh genesis datum.
+    .payToAddress({
+      address: toAddress(applied.address),
+      assets: toAssets({ lovelace: DEFAULT_LISTING_LOVELACE, [nftUnit]: 1n }),
+      datum: inlineDatum(datum),
+    })
+    .build();
 
-  const signed = await tx.sign.withWallet().complete();
-  const txHash = await signed.submit();
+  // Resolve the relisted listing's index from the assembled tx body
+  // rather than assuming it's 0. Codex flagged that Evolution may move
+  // change outputs around in future point releases; pinning the actual
+  // index keeps the BE indexer's lineage stitching correct.
+  const txBody = (await built.toTransaction()).body;
+  let relistedIdx = -1;
+  for (let i = 0; i < txBody.outputs.length; i++) {
+    const o = txBody.outputs[i];
+    if (Address.toBech32(o.address) === applied.address) {
+      relistedIdx = i;
+      break;
+    }
+  }
+  if (relistedIdx < 0) {
+    throw new Error(
+      "assembled cancel-and-relist tx is missing the replanted listing output",
+    );
+  }
+
+  const signed = await built.sign();
+  const txHash = txHashHex(await signed.submit());
 
   return {
     txHash,
     listerPkhHex,
-    relistedOutRef: { txHash, outputIndex: 0 },
+    relistedOutRef: { txHash, outputIndex: relistedIdx },
   };
 }

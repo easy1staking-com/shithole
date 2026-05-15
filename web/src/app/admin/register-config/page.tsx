@@ -200,15 +200,16 @@ export default function RegisterConfigPage() {
       return;
     }
 
-    // Lazy-load the lucid-backed helpers — keeps WASM out of SSR.
-    let makeLucid: typeof import("@/lib/tx/lucidClient").makeLucid;
+    // Lazy-load the SDK-backed helpers — keeps Evolution SDK out of the
+    // initial bundle so non-admin pages don't ship it.
+    let makeClient: typeof import("@/lib/tx/evolutionClient").makeClient;
     let deployConfig: typeof import("@/lib/tx/deployConfig").deployConfig;
     let awaitTxConfirmation: typeof import("@/lib/tx/awaitConfirmation").awaitTxConfirmation;
     try {
-      const lucidMod = await import("@/lib/tx/lucidClient");
+      const clientMod = await import("@/lib/tx/evolutionClient");
       const deployMod = await import("@/lib/tx/deployConfig");
       const awaitMod = await import("@/lib/tx/awaitConfirmation");
-      makeLucid = lucidMod.makeLucid;
+      makeClient = clientMod.makeClient;
       deployConfig = deployMod.deployConfig;
       awaitTxConfirmation = awaitMod.awaitTxConfirmation;
     } catch (err) {
@@ -220,9 +221,9 @@ export default function RegisterConfigPage() {
       return;
     }
 
-    let lucid;
+    let client;
     try {
-      lucid = await makeLucid(api);
+      client = await makeClient(api);
     } catch (err) {
       setStep({
         kind: "error",
@@ -236,7 +237,8 @@ export default function RegisterConfigPage() {
     // keep the form simple; surface what we chose in case it matters.
     let seedUtxo;
     try {
-      const utxos = await lucid.wallet().getUtxos();
+      const { adaptUtxos } = await import("@/lib/tx/utxo");
+      const utxos = adaptUtxos(await client.getWalletUtxos());
       seedUtxo = utxos.find((u) => (u.assets.lovelace ?? 0n) >= 5_000_000n);
       if (!seedUtxo) {
         throw new Error(
@@ -257,7 +259,7 @@ export default function RegisterConfigPage() {
     let deployResult;
     try {
       const networkEv = toEvolutionNetwork(network);
-      deployResult = await deployConfig(lucid, {
+      deployResult = await deployConfig(client, {
         collectionPolicyId: parsed.collectionPolicyId,
         m: parsed.m,
         protocolFeeLovelace: BigInt(Math.round(parsed.protocolFeeAda * 1_000_000)),
@@ -279,7 +281,7 @@ export default function RegisterConfigPage() {
     // 2) Await confirmation.
     setStep({ kind: "awaiting", txHash: deployResult.txHash });
     try {
-      await awaitTxConfirmation(lucid, deployResult.txHash);
+      await awaitTxConfirmation(client, deployResult.txHash);
     } catch (err) {
       setStep({
         kind: "error",

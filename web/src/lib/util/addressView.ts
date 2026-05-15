@@ -3,33 +3,39 @@
  * decoded on-chain Address values) into a bech32 string usable as a
  * tx output target.
  *
- * <p>The BE serves {@code AddressView} as
- * {@code { payment_credential: { type, hash }, stake_credential: {…} | null }}.
- * Evolution SDK's {@code credentialToAddress(network, paymentCred, stakeCred?)}
- * does the bech32 encoding.
+ * <p>Migrated from @lucid-evolution/lucid to @evolution-sdk/evolution.
+ * Uses Evolution's {@code Credential.makeKeyHash}/{@code makeScriptHash}
+ * + the {@code Address.Address} constructor + {@code Address.toBech32}.
  */
 
-import {
-  credentialToAddress,
-  keyHashToCredential,
-  scriptHashToCredential,
-  type Network,
-} from "@lucid-evolution/lucid";
+import { Address, Bytes, Credential } from "@evolution-sdk/evolution";
 
 import type { AddressView } from "@/types/api";
+import type { Network } from "@/lib/tx/swap";
+
+function networkId(network: Network): 0 | 1 {
+  return network === "Mainnet" ? 1 : 0;
+}
+
+function credFromView(c: AddressView["payment_credential"]): Credential.Credential {
+  const bytes = Bytes.fromHex(c.hash);
+  return c.type === "verification_key"
+    ? Credential.makeKeyHash(bytes)
+    : Credential.makeScriptHash(bytes);
+}
 
 export function addressViewToBech32(
   av: AddressView,
   network: Network,
 ): string {
-  const paymentCred =
-    av.payment_credential.type === "verification_key"
-      ? keyHashToCredential(av.payment_credential.hash)
-      : scriptHashToCredential(av.payment_credential.hash);
-  const stakeCred = av.stake_credential
-    ? av.stake_credential.type === "verification_key"
-      ? keyHashToCredential(av.stake_credential.hash)
-      : scriptHashToCredential(av.stake_credential.hash)
+  const paymentCredential = credFromView(av.payment_credential);
+  const stakingCredential = av.stake_credential
+    ? credFromView(av.stake_credential)
     : undefined;
-  return credentialToAddress(network, paymentCred, stakeCred);
+  const addr = new Address.Address({
+    networkId: networkId(network),
+    paymentCredential,
+    stakingCredential,
+  });
+  return Address.toBech32(addr);
 }
