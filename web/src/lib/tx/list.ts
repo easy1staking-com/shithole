@@ -173,10 +173,15 @@ export async function submitList(
  * accessor pattern as utxo.ts's flattenAssets.
  */
 function outputCarriesUnit(output: unknown, unit: string): boolean {
+  // Evolution's BabbageTransactionOutput exposes the value via .assets
+  // (not .amount — the CDDL index is 1, but the JS field name follows
+  // the UTxO class convention). Field shape per TxOut.d.ts:
+  //   { _tag, address, assets: { lovelace, multiAsset?: { map } },
+  //     datumOption?, scriptRef? }
   const o = output as {
-    amount?: { multiAsset?: { map: Map<unknown, Map<unknown, bigint>> } };
+    assets?: { multiAsset?: { map: Map<unknown, Map<unknown, bigint>> } };
   };
-  const ma = o.amount?.multiAsset;
+  const ma = o.assets?.multiAsset;
   if (!ma || !ma.map) return false;
   if (unit.length < 56) return false;
   const policyHex = unit.slice(0, 56).toLowerCase();
