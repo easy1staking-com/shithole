@@ -8,6 +8,18 @@
  * Everything else is left as `unknown` so calls light up at compile time.
  */
 
+/**
+ * Augment Window with the CIP-30 wallet-discovery hook. Each installed
+ * wallet injects itself at {@code window.cardano[name]} per CIP-30 §2.
+ * Used to live in lucid-evolution's ambient types; declared here now
+ * that lucid is gone.
+ */
+declare global {
+  interface Window {
+    cardano?: Record<string, Cip30WalletEntry | undefined>;
+  }
+}
+
 /** Hex string. Not branded — too noisy for this little surface. */
 export type Hex = string;
 
@@ -18,20 +30,32 @@ export type Cip30DataSignature = {
 };
 
 /**
- * The post-`enable()` API object — the actual dApp connector.
+ * The post-`enable()` API object — the actual dApp connector per
+ * CIP-30. Inlined (rather than re-exporting an SDK type) so the wallet
+ * detection module has zero SDK dependency. The CIP-30 surface is
+ * spec-stable; if Evolution adds optional fields we accept them via
+ * structural typing.
  *
- * We re-use the Evolution SDK's `WalletApi` type (declared on
- * `window.cardano[name]`) for compatibility — `import type` so the
- * heavy lucid module doesn't enter the SSR bundle just from a type.
- *
- * Evolution types `getUtxos` as `Promise<string[] | undefined>` rather
- * than `null`; we normalise that at the call site.
- *
- * Addresses come back as hex-encoded Shelley address bytes (NOT bech32).
- * Use Evolution SDK's `getAddressDetails` to round-trip to bech32.
+ * <p>Addresses come back as hex-encoded Shelley address bytes (NOT
+ * bech32). Use Evolution's `Address.fromBech32`/`getAddressDetails` to
+ * round-trip if needed.
  */
-import type { WalletApi } from "@lucid-evolution/lucid";
-export type Cip30Api = WalletApi;
+export interface Cip30Api {
+  getNetworkId(): Promise<number>;
+  getUtxos(): Promise<ReadonlyArray<string> | null | undefined>;
+  getBalance(): Promise<string>;
+  getUsedAddresses(): Promise<ReadonlyArray<string>>;
+  getUnusedAddresses(): Promise<ReadonlyArray<string>>;
+  getChangeAddress(): Promise<string>;
+  getRewardAddresses(): Promise<ReadonlyArray<string>>;
+  signTx(txCborHex: string, partialSign: boolean): Promise<string>;
+  signData(
+    addressHex: string,
+    payload: string,
+  ): Promise<{ signature: string; key: string }>;
+  submitTx(txCborHex: string): Promise<string>;
+  experimental?: Record<string, unknown>;
+}
 
 /** The pre-`enable()` wallet entry on `window.cardano[name]`. */
 export type Cip30WalletEntry = {

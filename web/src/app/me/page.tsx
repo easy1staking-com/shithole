@@ -1,13 +1,5 @@
 "use client";
 
-// The page transitively imports @lucid-evolution/lucid (via lib/tx/cancel
-// + lib/tx/lucidClient), which loads a WASM module at evaluation time.
-// Next 16's prerender pass tries to evaluate that on the SSR build host
-// and fails to resolve the WASM file. force-dynamic skips static
-// prerender entirely; the page still SSRs at request time on Vercel
-// (and client-hydrates afterwards), where the bundling is intact.
-export const dynamic = "force-dynamic";
-
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useState } from "react";

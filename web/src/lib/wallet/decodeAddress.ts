@@ -1,13 +1,14 @@
 /**
- * Bridge between CIP-30 hex addresses and Evolution SDK / bech32 strings.
+ * Bridge between CIP-30 hex addresses and bech32 strings.
  *
- * CIP-30 returns Shelley address bytes as hex; we need bech32 for the BE
- * + Tx builder and the 28-byte payment-key hash for the on-chain admin_pkh.
+ * <p>CIP-30 returns Shelley address bytes as hex; we need bech32 for
+ * the BE + tx builder + the 28-byte payment-key hash for the on-chain
+ * {@code admin_pkh}.
  *
- * Evolution SDK's `getAddressDetails` accepts either form, so we just feed
- * it the hex. The import is dynamic so the heavy CML/WASM dep only loads
- * when the user actually clicks "connect wallet" — keeps the Next 16
- * prerender step from trying to resolve `.wasm` files at build time.
+ * <p>Migrated from lucid-evolution's {@code getAddressDetails} to
+ * Evolution SDK's {@code Address.fromHex} + {@code Address.toBech32}
+ * + the typed credential accessors. The import is dynamic so SDK
+ * bundling stays out of the wallet-detection module.
  */
 
 export type DecodedAddress = {
@@ -18,18 +19,26 @@ export type DecodedAddress = {
 };
 
 export async function decodeCip30Address(hex: string): Promise<DecodedAddress> {
-  const { getAddressDetails } = await import("@lucid-evolution/lucid");
-  const details = getAddressDetails(hex);
-  const bech32 = details.address.bech32;
-  const pc = details.paymentCredential;
-  if (!pc) {
+  const E = await import("@evolution-sdk/evolution");
+  const addr = E.Address.fromHex(hex);
+  const bech32 = E.Address.toBech32(addr);
+  const a = addr as unknown as {
+    paymentCredential?: { _tag: "KeyHash" | "ScriptHash"; hash: Uint8Array };
+  };
+  if (!a.paymentCredential) {
     throw new Error("address has no payment credential (reward address?)");
   }
-  const paymentCredentialType =
-    pc.type === "Key" ? "verification_key" : "script";
+  const pc = a.paymentCredential;
   return {
     bech32,
-    paymentKeyHashHex: pc.hash,
-    paymentCredentialType,
+    paymentKeyHashHex: bytesToHex(pc.hash),
+    paymentCredentialType:
+      pc._tag === "KeyHash" ? "verification_key" : "script",
   };
+}
+
+function bytesToHex(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, "0");
+  return s;
 }
