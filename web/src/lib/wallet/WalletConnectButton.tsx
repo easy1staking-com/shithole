@@ -45,6 +45,12 @@ function truncate(addr: string): string {
   return `${addr.slice(0, 8)}…${addr.slice(-6)}`;
 }
 
+function truncateMobile(addr: string): string {
+  const idx = addr.indexOf("1");
+  if (idx < 0) return addr.slice(0, 5) + "…";
+  return `${addr.slice(0, idx + 1)}…`;
+}
+
 /**
  * Small wallet-connect control. If no wallet is connected, shows an
  * "install/connect" dropdown listing the installed wallets in priority
@@ -131,7 +137,8 @@ export function WalletConnectButton({ className }: { className?: string }) {
               aria-hidden
             />
           )}
-          <span className="font-mono">{truncate(addressBech32)}</span>
+          <span className="font-mono sm:hidden">{truncateMobile(addressBech32)}</span>
+          <span className="hidden font-mono sm:inline">{truncate(addressBech32)}</span>
           <span
             className="ml-0.5 text-zinc-400 transition-transform"
             style={{ transform: open ? "rotate(180deg)" : undefined }}

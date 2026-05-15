@@ -180,7 +180,7 @@ export function WalletDrawer({
                 {nfts.isLoading
                   ? "loading your stash…"
                   : nfts.data
-                    ? `${nfts.data.length} ${nfts.data.length === 1 ? "NFT" : "NFTs"} of this collection`
+                    ? `${nfts.data.length} ${nfts.data.length === 1 ? "NFT" : "NFTs"}`
                     : "—"}
               </span>
             </>

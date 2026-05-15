@@ -10,8 +10,19 @@ export default function HomePage() {
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-6 py-16">
       <header className="space-y-2">
-        <div className="flex items-baseline justify-between gap-3">
-          <h1 className="font-mono text-4xl font-semibold tracking-tight">s#!thole</h1>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/logo-v8-pixel-poop.svg"
+              alt=""
+              width={48}
+              height={48}
+              className="h-12 w-12"
+              aria-hidden
+            />
+            <h1 className="font-mono text-4xl font-semibold tracking-tight">s#!thole</h1>
+          </div>
           <Link
             href="/me"
             className="text-xs uppercase tracking-widest text-zinc-500 hover:text-zinc-300"

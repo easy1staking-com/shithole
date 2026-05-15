@@ -142,6 +142,14 @@ export async function GET(req: Request): Promise<Response> {
             zIndex: 1,
           }}
         >
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text */}
+            <img
+              src={`${url.origin}/brand/logo-v8-pixel-poop.svg`}
+              width={56}
+              height={56}
+              style={{ width: 56, height: 56 }}
+            />
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div
               style={{
@@ -165,6 +173,7 @@ export async function GET(req: Request): Promise<Response> {
             >
               /pit/{slug}
             </div>
+          </div>
           </div>
           <div
             style={{
