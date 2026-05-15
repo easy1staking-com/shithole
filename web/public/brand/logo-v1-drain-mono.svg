@@ -1,0 +1,37 @@
+<!--
+  v1 — Drain Swirl wordmark.
+
+  Joke beat: the "o" is replaced by a tightening swirl — same visual
+  language as the in-app swap reveal. Monospaced typography to keep the
+  "polished irony" angle (treating shit like fine art).
+
+  - currentColor everywhere so it adapts to dark/light context.
+  - Accent stripe under the swirl picks up theme.accent_color when
+    overridden via the `--accent` CSS var; falls back to mud-brown.
+  - Viewbox is the wordmark's bounding box at 16px x-height.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="s#!thole">
+  <style>
+    .word { font: 700 48px/1 ui-monospace, "JetBrains Mono", "Geist Mono", monospace; letter-spacing: -0.02em; }
+    .swirl { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: round; }
+    .accent { fill: var(--accent, #b87333); }
+  </style>
+  <!-- accent underline behind the swirl -->
+  <rect class="accent" x="232" y="58" width="44" height="3" rx="1.5" />
+  <!-- text: s#!th + swirl + le -->
+  <text class="word" x="0" y="48" fill="currentColor">s#!th</text>
+  <!-- swirl replacing 'o' (cx=254, r=20) -->
+  <g transform="translate(254 32)">
+    <path class="swirl" d="
+      M 0 -18
+      A 18 18 0 1 1 -0.01 -18
+      M 0 -12
+      A 12 12 0 1 0 12 0
+      M 12 0
+      A 6 6 0 1 1 0 6
+      M 0 6
+      A 2 2 0 1 0 2 4
+    "/>
+  </g>
+  <text class="word" x="276" y="48" fill="currentColor">le</text>
+</svg>

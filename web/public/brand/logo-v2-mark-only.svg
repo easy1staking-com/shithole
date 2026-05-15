@@ -1,0 +1,36 @@
+<!--
+  v2 — Mark only (favicon / app icon).
+
+  Just the swirl, no wordmark. Designed for 16px / 32px / 192px square
+  use cases: favicon, PWA icon, Twitter avatar, og:image fallback.
+
+  - Square viewBox, centered geometry.
+  - Concentric tightening spiral evokes the swap reveal animation +
+    a literal drain.
+  - Accent color via CSS var; defaults to mud-brown.
+  - Filled black (or theme bg) circle background so it works as a
+    rounded badge on any surface.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="s#!thole mark">
+  <defs>
+    <radialGradient id="dish" cx="50%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#27272a"/>
+      <stop offset="100%" stop-color="#0a0a0a"/>
+    </radialGradient>
+  </defs>
+  <circle cx="32" cy="32" r="32" fill="url(#dish)" />
+  <g transform="translate(32 32)" fill="none" stroke="var(--accent, #b87333)" stroke-width="3" stroke-linecap="round">
+    <path d="
+      M 0 -22
+      A 22 22 0 1 1 -0.01 -22
+      M 0 -15
+      A 15 15 0 1 0 15 0
+      M 15 0
+      A 8 8 0 1 1 0 8
+      M 0 8
+      A 3 3 0 1 0 3 5
+    "/>
+  </g>
+  <!-- center dot (the hole) -->
+  <circle cx="32" cy="32" r="1.5" fill="var(--accent, #b87333)" />
+</svg>
