@@ -51,6 +51,27 @@ const VARIANTS: Variant[] = [
     src: "/brand/logo-v5-stencil-tag.svg",
     ratio: 320 / 80,
   },
+  {
+    slug: "v6-emoji-poop",
+    name: "Classic Poop",
+    vibe: "The 💩 silhouette redrawn as a clean vector — three coiled tiers. Direct, on-brand, and the coil tip rhymes with v1/v2's drain swirl so the brand stays unified.",
+    src: "/brand/logo-v6-emoji-poop.svg",
+    ratio: 1,
+  },
+  {
+    slug: "v7-crowned-poop",
+    name: "Crowned Poop",
+    vibe: "Same poop body as v6 but wearing a tiny gem-encrusted crown. The 'king of trash' joke. Pairs naturally with the v3 serif wordmark — pure ironic luxury.",
+    src: "/brand/logo-v7-crowned-poop.svg",
+    ratio: 1,
+  },
+  {
+    slug: "v8-pixel-poop",
+    name: "Pixel Poop",
+    vibe: "16-bit chunky poop with two googly-eye pixels. Same pixel-grid as v4 mascot. Punk angle, plays well with pixel-art collections (Hosky CashGrab etc.).",
+    src: "/brand/logo-v8-pixel-poop.svg",
+    ratio: 1,
+  },
 ];
 
 const SIZES = [
