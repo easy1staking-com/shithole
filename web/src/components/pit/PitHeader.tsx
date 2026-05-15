@@ -46,9 +46,8 @@ export function PitHeader({ collection }: { collection: CollectionState }) {
         </h1>
       </div>
 
-      <dl className="grid grid-cols-2 gap-3 text-xs text-zinc-400 sm:grid-cols-4">
+      <dl className="grid grid-cols-3 gap-3 text-xs text-zinc-400">
         <Stat label="in the pit" value={collection.stats.n_valid_listings} />
-        <Stat label="buckets (M)" value={collection.config.m} />
         <Stat
           label="protocol fee"
           value={`${ada(collection.config.protocol_fee)} ₳`}

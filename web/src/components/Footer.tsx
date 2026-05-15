@@ -94,7 +94,7 @@ export function Footer() {
             <ul className="space-y-1.5 text-xs">
               <li>
                 <a
-                  href={`https://cardanoscan.io/transaction?filter=script_hash&value=${LISTING_SCRIPT_HASH}`}
+                  href={`https://cexplorer.io/script/${LISTING_SCRIPT_HASH}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-mono hover:text-zinc-100"
@@ -105,7 +105,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href={`https://cardanoscan.io/transaction?filter=script_hash&value=${CONFIG_SCRIPT_HASH}`}
+                  href={`https://cexplorer.io/script/${CONFIG_SCRIPT_HASH}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-mono hover:text-zinc-100"
