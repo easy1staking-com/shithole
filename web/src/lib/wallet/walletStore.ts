@@ -48,6 +48,17 @@ export type WalletActions = {
   disconnect: () => void;
   /** Set the bech32 / pkh fields after the lucid bridge has decoded them. */
   setDecodedAddress: (bech32: string, paymentKeyHashHex: string) => void;
+  /**
+   * Re-poll the connected wallet's state (used + change address, network).
+   * If the address changed (user switched account in the wallet UI), update
+   * locally and return true. If the wallet was revoked, disconnect and
+   * return true. Returns false if nothing changed (no-op).
+   *
+   * <p>CIP-30 has no native event hooks for account/wallet changes; we
+   * trigger this on window focus + visibilitychange so the UI catches up
+   * when the user comes back to the tab after switching wallets in Eternl.
+   */
+  refresh: () => Promise<boolean>;
 };
 
 export const useWalletStore = create<WalletState & WalletActions>(
@@ -131,8 +142,78 @@ export const useWalletStore = create<WalletState & WalletActions>(
 
     setDecodedAddress: (bech32, paymentKeyHashHex) =>
       set({ addressBech32: bech32, paymentKeyHashHex }),
+
+    refresh: async () => {
+      const { api, addressHex, name } = get();
+      if (!api) return false;
+      try {
+        // First confirm the wallet still has us authorized.
+        if (typeof window !== "undefined" && window.cardano && name) {
+          const entry = window.cardano[name];
+          if (entry && typeof entry.isEnabled === "function") {
+            const stillEnabled = await entry.isEnabled();
+            if (!stillEnabled) {
+              get().disconnect();
+              return true;
+            }
+          }
+        }
+        const usedAddresses = await api.getUsedAddresses();
+        const newAddressHex =
+          usedAddresses[0] ?? (await api.getChangeAddress());
+        if (!newAddressHex) {
+          get().disconnect();
+          return true;
+        }
+        if (newAddressHex === addressHex) return false;
+        // Address changed (user switched account). Re-decode lazily;
+        // for now clear bech32+pkh so WalletConnectButton's effect
+        // recomputes via decodeCip30Address.
+        set({
+          addressHex: newAddressHex,
+          addressBech32: null,
+          paymentKeyHashHex: null,
+        });
+        return true;
+      } catch {
+        // Wallet API throwing during isEnabled / getUsedAddresses
+        // typically means the user revoked us; treat as disconnect.
+        get().disconnect();
+        return true;
+      }
+    },
   }),
 );
+
+/**
+ * Mount once at the app root. Re-polls the wallet whenever the tab
+ * becomes visible or the window regains focus — catches wallet
+ * switches the user made in another tab.
+ *
+ * <p>Idempotent: safe to import from React effects (the listener
+ * registration is tracked at module scope).
+ */
+let listenersInstalled = false;
+export function installWalletFocusListeners(): () => void {
+  if (typeof window === "undefined") return () => {};
+  if (listenersInstalled) return () => {};
+  listenersInstalled = true;
+  const trigger = () => {
+    // Inline use to avoid React-hook constraints — this runs from
+    // a DOM event handler outside the React tree.
+    void useWalletStore.getState().refresh();
+  };
+  const onVisibility = () => {
+    if (document.visibilityState === "visible") trigger();
+  };
+  window.addEventListener("focus", trigger);
+  document.addEventListener("visibilitychange", onVisibility);
+  return () => {
+    window.removeEventListener("focus", trigger);
+    document.removeEventListener("visibilitychange", onVisibility);
+    listenersInstalled = false;
+  };
+}
 
 export function lastUsedWalletName(): string | null {
   if (typeof window === "undefined") return null;

@@ -1,7 +1,9 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+
+import { installWalletFocusListeners } from "@/lib/wallet/walletStore";
 
 import { MswGate } from "./MswBootstrap";
 
@@ -20,12 +22,21 @@ export function Providers({ children }: { children: ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 30_000,
+            // React Query has its own refetch-on-window-focus knob; we
+            // leave it off and use the wallet-focus listener below to
+            // drive selective revalidation (wallet state) rather than
+            // refetching every query.
             refetchOnWindowFocus: false,
             retry: 1,
           },
         },
       }),
   );
+
+  // Re-poll connected wallet on tab focus / visibility change. CIP-30
+  // exposes no native account-change event; this catches the case where
+  // the user switched wallets or accounts while the tab was backgrounded.
+  useEffect(() => installWalletFocusListeners(), []);
 
   return (
     <QueryClientProvider client={client}>

@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "S#!thole",
   description: "Give your dead NFTs a second life. Sort of.",
+  // Mobile browser chrome (address bar, splash) picks up theme-color.
+  // Matches our dark zinc-950 background so mobile dApp browsers don't
+  // flash a white system bar against our dark UI.
+  themeColor: "#09090b",
 };
 
 export default function RootLayout({
@@ -26,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full bg-zinc-950 antialiased`}
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
         <Providers>{children}</Providers>

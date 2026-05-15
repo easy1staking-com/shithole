@@ -1,8 +1,16 @@
 @import "tailwindcss";
 
+/*
+ * The app is always dark — no light-mode variant. Setting color-scheme
+ * tells the browser to use dark form controls, scrollbars, and (on iOS
+ * Safari + dApp browsers) the mobile chrome bar. Without this we get
+ * a white flash on first paint inside the Eternl dApp browser before
+ * React mounts.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --background: #09090b; /* matches Tailwind zinc-950 */
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -12,13 +20,9 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Background on html + body so even a sub-second pre-React paint shows
+ * our dark surface, not the user-agent default white. */
+html,
 body {
   background: var(--background);
   color: var(--foreground);
