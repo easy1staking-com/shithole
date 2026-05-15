@@ -19,7 +19,7 @@
  * <p>Migrated from @lucid-evolution/lucid to @evolution-sdk/evolution.
  */
 
-import { Data } from "@evolution-sdk/evolution";
+import { Address, Data } from "@evolution-sdk/evolution";
 
 import type { EvolutionClient } from "./evolutionClient";
 import {
@@ -84,12 +84,16 @@ export function buildGenesisListingDatum(listerPkhHex: string): Data.Data {
 /**
  * Build, sign, and submit the batch listing tx.
  *
- * <p>Output indices are assigned 0..N-1 in declaration order. Evolution
- * preserves the order across its builder; if you suspect a future SDK
- * change might reorder, add a post-build matcher that pairs each unit
- * with the first matching listing-script output. Previous lucid-based
- * implementation did that via CML; with Evolution-only inputs it's
- * deferred until needed.
+ * <p>Created outRefs are derived from the assembled tx body — we match
+ * each selected unit to the first listing-script output that carries
+ * the unit with qty 1. Robust to any future SDK change that might
+ * reorder outputs or insert change before user-authored outputs.
+ *
+ * <p>Note: Evolution's autoMinUtxo defaults to false; our 2 ADA floor
+ * is comfortably above the protocol minimum for single-NFT + small
+ * inline datum outputs. If we ever shrink the floor, pass
+ * {@code autoMinUtxo: true} per payToAddress call or accept that
+ * outputs may fail the ledger min-UTxO check at submit time.
  */
 export async function submitList(
   client: EvolutionClient,
@@ -122,15 +126,80 @@ export async function submitList(
   }
 
   const built = await txBuilder.build();
+
+  // Resolve the actual output indices from the built tx body — pair
+  // each unit with the first listing-script output that carries it.
+  // Robust to balancer reordering / change-output insertion.
+  const txBody = (await built.toTransaction()).body;
+  const claimed = new Set<number>();
+  const indexByUnit = new Map<string, number>();
+  for (const nft of input.nfts) {
+    const unit = nft.unit.toLowerCase();
+    let foundIdx = -1;
+    for (let i = 0; i < txBody.outputs.length; i++) {
+      if (claimed.has(i)) continue;
+      const o = txBody.outputs[i];
+      if (Address.toBech32(o.address) !== input.listingScriptAddress) continue;
+      if (!outputCarriesUnit(o, unit)) continue;
+      foundIdx = i;
+      break;
+    }
+    if (foundIdx < 0) {
+      throw new Error(
+        `assembled tx does not include a listing output for ${unit}`,
+      );
+    }
+    claimed.add(foundIdx);
+    indexByUnit.set(unit, foundIdx);
+  }
+
   const signed = await built.sign();
   const txHash = txHashHex(await signed.submit());
 
-  // Declaration-order outputs: i-th payToAddress → output index i.
-  const createdOutRefs = input.nfts.map((nft, i) => ({
-    txHash,
-    outputIndex: i,
-    unit: nft.unit.toLowerCase(),
-  }));
+  const createdOutRefs = input.nfts.map((nft) => {
+    const unit = nft.unit.toLowerCase();
+    return { txHash, outputIndex: indexByUnit.get(unit)!, unit };
+  });
 
   return { txHash, createdOutRefs };
+}
+
+/**
+ * Check whether a {@code TransactionOutput} carries {@code unit}
+ * (policy_id_hex + asset_name_hex) with quantity 1.
+ *
+ * <p>Defensive against Evolution's MultiAsset map keys being typed
+ * PolicyId / AssetName values rather than raw strings — use the same
+ * accessor pattern as utxo.ts's flattenAssets.
+ */
+function outputCarriesUnit(output: unknown, unit: string): boolean {
+  const o = output as {
+    amount?: { multiAsset?: { map: Map<unknown, Map<unknown, bigint>> } };
+  };
+  const ma = o.amount?.multiAsset;
+  if (!ma || !ma.map) return false;
+  if (unit.length < 56) return false;
+  const policyHex = unit.slice(0, 56).toLowerCase();
+  const assetNameHex = unit.slice(56).toLowerCase();
+  for (const [policy, byAsset] of ma.map.entries()) {
+    if (toHex(policy) !== policyHex) continue;
+    for (const [asset, qty] of byAsset.entries()) {
+      if (toHex(asset) === assetNameHex && qty === 1n) return true;
+    }
+  }
+  return false;
+}
+
+function toHex(v: unknown): string {
+  if (typeof v === "string") return v.toLowerCase();
+  const x = v as { bytes?: Uint8Array; hash?: string };
+  if (x.bytes instanceof Uint8Array) {
+    let s = "";
+    for (let i = 0; i < x.bytes.length; i++) {
+      s += x.bytes[i].toString(16).padStart(2, "0");
+    }
+    return s;
+  }
+  if (typeof x.hash === "string") return x.hash.toLowerCase();
+  return "";
 }

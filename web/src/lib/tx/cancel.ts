@@ -12,7 +12,7 @@
  * <p>Migrated from @lucid-evolution/lucid to @evolution-sdk/evolution.
  */
 
-import { Data } from "@evolution-sdk/evolution";
+import { Address, Data } from "@evolution-sdk/evolution";
 
 import type { EvolutionClient } from "./evolutionClient";
 import { DEFAULT_LISTING_LOVELACE, buildGenesisListingDatum } from "./list";
@@ -156,12 +156,31 @@ export async function submitCancelAndRelist(
     })
     .build();
 
+  // Resolve the relisted listing's index from the assembled tx body
+  // rather than assuming it's 0. Codex flagged that Evolution may move
+  // change outputs around in future point releases; pinning the actual
+  // index keeps the BE indexer's lineage stitching correct.
+  const txBody = (await built.toTransaction()).body;
+  let relistedIdx = -1;
+  for (let i = 0; i < txBody.outputs.length; i++) {
+    const o = txBody.outputs[i];
+    if (Address.toBech32(o.address) === applied.address) {
+      relistedIdx = i;
+      break;
+    }
+  }
+  if (relistedIdx < 0) {
+    throw new Error(
+      "assembled cancel-and-relist tx is missing the replanted listing output",
+    );
+  }
+
   const signed = await built.sign();
   const txHash = txHashHex(await signed.submit());
 
   return {
     txHash,
     listerPkhHex,
-    relistedOutRef: { txHash, outputIndex: 0 },
+    relistedOutRef: { txHash, outputIndex: relistedIdx },
   };
 }

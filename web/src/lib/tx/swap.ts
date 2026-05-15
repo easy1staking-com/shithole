@@ -370,21 +370,14 @@ export async function submitSwap(
 
   // Post-build safety check: the validator's S5 + S7 read tx.outputs[0]
   // and tx.outputs[1]. We authored them in that order, but verify
-  // Evolution didn't reorder during balancing.
-  //
-  // SignBuilder's outputs surface is built-internal; the
-  // post-balance outputs live on the underlying tx body. Cast to access
-  // them — interface is "outputs: ReadonlyArray<TransactionOutput>" per
-  // SignBuilderImpl.ts.md.
-  const builtAny = built as unknown as {
-    outputs?: ReadonlyArray<unknown>;
-  };
-  if (builtAny.outputs) {
-    assertOutputOrder(builtAny.outputs, {
-      listingScriptAddress: input.listingScriptAddress,
-      treasuryAddrBech32: input.treasuryAddrBech32,
-    });
-  }
+  // Evolution didn't reorder during balancing. Goes through
+  // built.toTransaction() to inspect the assembled tx body — the
+  // earlier built.outputs cast was inert (no such surface in 0.5.8).
+  const tx = await built.toTransaction();
+  assertOutputOrder(tx.body.outputs, {
+    listingScriptAddress: input.listingScriptAddress,
+    treasuryAddrBech32: input.treasuryAddrBech32,
+  });
 
   const signed = await built.sign();
   const txHash = txHashHex(await signed.submit());
