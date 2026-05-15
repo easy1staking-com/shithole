@@ -100,9 +100,12 @@ function flattenAssets(assets: EvAssets.Assets): Record<string, bigint> {
 }
 
 /**
- * Best-effort hex extraction from Evolution's PolicyId / AssetName
- * branded types. They commonly carry a `.bytes` Uint8Array or a `.hash`
- * string field; some carry `.toString()` returning hex. Try in order.
+ * Hex extraction from Evolution's PolicyId / AssetName branded types.
+ * Runtime shapes observed in @evolution-sdk/evolution@0.5.8:
+ *   PolicyId  → { _tag: "PolicyId",  hash:  Uint8Array }   (28 bytes)
+ *   AssetName → { _tag: "AssetName", bytes: Uint8Array }   (≤ 32 bytes)
+ * String + .toHex() variants are kept as fallbacks in case a future
+ * SDK rev changes the shape.
  */
 function policyToHex(p: unknown): string {
   return typedHex(p, "policy");
@@ -111,10 +114,16 @@ function assetNameToHex(a: unknown): string {
   return typedHex(a, "asset name");
 }
 function typedHex(v: unknown, label: string): string {
-  if (typeof v === "string") return v;
-  const x = v as { bytes?: Uint8Array; hash?: string };
+  if (typeof v === "string") return v.toLowerCase();
+  const x = v as {
+    bytes?: Uint8Array;
+    hash?: Uint8Array | string;
+    toHex?: () => string;
+  };
   if (x.bytes instanceof Uint8Array) return bytesToHex(x.bytes);
-  if (typeof x.hash === "string") return x.hash;
+  if (x.hash instanceof Uint8Array) return bytesToHex(x.hash);
+  if (typeof x.hash === "string") return x.hash.toLowerCase();
+  if (typeof x.toHex === "function") return x.toHex().toLowerCase();
   throw new Error(`could not extract hex from ${label}`);
 }
 

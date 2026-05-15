@@ -192,14 +192,20 @@ function outputCarriesUnit(output: unknown, unit: string): boolean {
 
 function toHex(v: unknown): string {
   if (typeof v === "string") return v.toLowerCase();
-  const x = v as { bytes?: Uint8Array; hash?: string };
-  if (x.bytes instanceof Uint8Array) {
-    let s = "";
-    for (let i = 0; i < x.bytes.length; i++) {
-      s += x.bytes[i].toString(16).padStart(2, "0");
-    }
-    return s;
-  }
+  const x = v as {
+    bytes?: Uint8Array;
+    hash?: Uint8Array | string;
+    toHex?: () => string;
+  };
+  if (x.bytes instanceof Uint8Array) return bytesToHexLocal(x.bytes);
+  if (x.hash instanceof Uint8Array) return bytesToHexLocal(x.hash);
   if (typeof x.hash === "string") return x.hash.toLowerCase();
+  if (typeof x.toHex === "function") return x.toHex().toLowerCase();
   return "";
+}
+
+function bytesToHexLocal(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, "0");
+  return s;
 }
