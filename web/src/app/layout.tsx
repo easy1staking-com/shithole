@@ -4,6 +4,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Footer } from "@/components/Footer";
 import { TermsGate } from "@/components/TermsGate";
+import MaintenancePage from "./maintenance/page";
+import { isMaintenanceMode } from "@/lib/maintenance";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,6 +58,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const maintenance = isMaintenanceMode();
   return (
     <html
       lang="en"
@@ -63,9 +66,18 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100">
         <Providers>
-          <div className="flex-1">{children}</div>
-          <Footer />
-          <TermsGate />
+          {maintenance ? (
+            // Full lockdown: render only the WIP page; skip wallet,
+            // footer, T&C gate. /maintenance route stays directly
+            // reachable for designers/QA via its own page module.
+            <MaintenancePage />
+          ) : (
+            <>
+              <div className="flex-1">{children}</div>
+              <Footer />
+              <TermsGate />
+            </>
+          )}
         </Providers>
       </body>
     </html>
