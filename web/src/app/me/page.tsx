@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { useNftMetadata } from "@/lib/api/hooks";
 import { useMyListings, type MyListingRow } from "@/lib/me/useMyListings";
+import type { ListingsResponse } from "@/types/api";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import {
   submitCancel,
@@ -128,9 +129,41 @@ export default function MePage() {
           consumed: utxos,
         });
         await awaitTxConfirmation(client, result.txHash);
+
+        // Optimistically strip the cancelled listings from the cached
+        // ["listings", slug, ...] entries for THIS collection. The BE
+        // indexer needs a few seconds to see the spend; refetching too
+        // soon just returns the same stale rows. Stripping here makes
+        // the rows disappear instantly from /me and the pit page.
+        const cancelledKeys = new Set(
+          groupRows.map(
+            (r) =>
+              `${r.listing.utxo_ref.tx_id}#${r.listing.utxo_ref.output_index}`,
+          ),
+        );
+        const slug = groupRows[0].collection.slug;
+        queryClient.setQueriesData<ListingsResponse>(
+          { queryKey: ["listings", slug] },
+          (prev) => {
+            if (!prev) return prev;
+            const next = prev.data.filter(
+              (l) =>
+                !cancelledKeys.has(
+                  `${l.utxo_ref.tx_id}#${l.utxo_ref.output_index}`,
+                ),
+            );
+            const removed = prev.data.length - next.length;
+            return {
+              ...prev,
+              data: next,
+              total: Math.max(0, prev.total - removed),
+            };
+          },
+        );
       }
-      // Drop all caches that depend on listings — listings, collection
-      // counts, wallet stash.
+      // Background refresh — by the time the user does anything else
+      // the BE indexer should have caught up and the refetch confirms
+      // the optimistic state.
       queryClient.invalidateQueries({ queryKey: ["listings"] });
       queryClient.invalidateQueries({ queryKey: ["collection"] });
       queryClient.invalidateQueries({ queryKey: ["walletCollection"] });
