@@ -2,12 +2,16 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useNftMetadata } from "@/lib/api/hooks";
 import { useMyListings, type MyListingRow } from "@/lib/me/useMyListings";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
-import { submitCancel, submitCancelAndRelist } from "@/lib/tx/cancel";
+import {
+  submitCancel,
+  submitCancelAllForCollection,
+  submitCancelAndRelist,
+} from "@/lib/tx/cancel";
 import { DEFAULT_LISTING_LOVELACE } from "@/lib/tx/list";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { fetchUtxoByOutRef } from "@/lib/tx/swap";
@@ -33,10 +37,114 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
  * the output destination — change flows back to the wallet via the
  * standard tx-balance path.
  */
+type BulkState =
+  | { kind: "idle" }
+  | { kind: "running"; current: number; total: number; label: string }
+  | { kind: "error"; message: string };
+
 export default function MePage() {
-  const { addressBech32, paymentKeyHashHex } = useWalletStore();
+  const { addressBech32, paymentKeyHashHex, api } = useWalletStore();
   const pkhLower = paymentKeyHashHex?.toLowerCase() ?? null;
   const { rows, isLoading, error, anyCapped } = useMyListings(pkhLower);
+  const queryClient = useQueryClient();
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkState, setBulkState] = useState<BulkState>({ kind: "idle" });
+
+  // Drop any keys no longer in the result set (refresh, cancel etc.)
+  const liveKeys = useMemo(() => new Set(rows.map(listingKey)), [rows]);
+  const effectiveSelected = useMemo(
+    () => new Set([...selected].filter((k) => liveKeys.has(k))),
+    [selected, liveKeys],
+  );
+
+  const allSelected = rows.length > 0 && effectiveSelected.size === rows.length;
+  const someSelected = effectiveSelected.size > 0 && !allSelected;
+
+  const toggle = useCallback((key: string) => {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelected((s) => {
+      if (s.size === rows.length) return new Set();
+      return new Set(rows.map(listingKey));
+    });
+  }, [rows]);
+
+  const handleBulkWithdraw = useCallback(async () => {
+    if (!api) {
+      setBulkState({ kind: "error", message: "connect a wallet first" });
+      return;
+    }
+    // Group selected rows by config_nft_policy → one tx per collection.
+    const byCollection = new Map<
+      string,
+      { displayName: string; rows: MyListingRow[] }
+    >();
+    for (const row of rows) {
+      const k = listingKey(row);
+      if (!effectiveSelected.has(k)) continue;
+      const policy = row.collection.config_nft_policy;
+      const entry = byCollection.get(policy) ?? {
+        displayName: row.collection.display_name,
+        rows: [],
+      };
+      entry.rows.push(row);
+      byCollection.set(policy, entry);
+    }
+    const groups = Array.from(byCollection.entries());
+    if (groups.length === 0) return;
+
+    const total = groups.length;
+    try {
+      const client = await makeClient(api);
+      const network = toEvolutionNetwork(getNetworkName());
+      for (let i = 0; i < groups.length; i++) {
+        const [policy, { displayName, rows: groupRows }] = groups[i];
+        setBulkState({
+          kind: "running",
+          current: i + 1,
+          total,
+          label: `withdrawing ${groupRows.length} from ${displayName}`,
+        });
+        const utxos = await Promise.all(
+          groupRows.map((r) =>
+            fetchUtxoByOutRef(
+              client,
+              r.listing.utxo_ref.tx_id,
+              r.listing.utxo_ref.output_index,
+            ),
+          ),
+        );
+        const result = await submitCancelAllForCollection(client, {
+          network,
+          configNftPolicyHex: policy,
+          consumed: utxos,
+        });
+        await awaitTxConfirmation(client, result.txHash);
+      }
+      // Drop all caches that depend on listings — listings, collection
+      // counts, wallet stash.
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
+      queryClient.invalidateQueries({ queryKey: ["collection"] });
+      queryClient.invalidateQueries({ queryKey: ["walletCollection"] });
+      queryClient.invalidateQueries({ queryKey: ["my-listings"] });
+      setSelected(new Set());
+      setBulkState({ kind: "idle" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("bulk withdraw failed:", message);
+      setBulkState({ kind: "error", message: message.slice(0, 300) });
+    }
+  }, [api, rows, effectiveSelected, queryClient]);
+
+  const isBulkRunning = bulkState.kind === "running";
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 pt-8 pb-24">
@@ -80,10 +188,46 @@ export default function MePage() {
       )}
 
       {rows.length > 0 && (
+        <SelectionToolbar
+          totalCount={rows.length}
+          selectedCount={effectiveSelected.size}
+          allSelected={allSelected}
+          someSelected={someSelected}
+          isBulkRunning={isBulkRunning}
+          onToggleAll={toggleAll}
+          onBulkWithdraw={handleBulkWithdraw}
+        />
+      )}
+
+      {bulkState.kind === "running" && (
+        <p className="rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300">
+          {bulkState.label}… ({bulkState.current}/{bulkState.total})
+        </p>
+      )}
+
+      {bulkState.kind === "error" && (
+        <p
+          className="rounded-lg border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm text-red-300"
+          role="alert"
+        >
+          bulk withdraw failed: {bulkState.message}
+        </p>
+      )}
+
+      {rows.length > 0 && (
         <ul className="flex flex-col gap-3">
-          {rows.map((row) => (
-            <MyListingCard key={listingKey(row)} row={row} />
-          ))}
+          {rows.map((row) => {
+            const k = listingKey(row);
+            return (
+              <MyListingCard
+                key={k}
+                row={row}
+                selected={effectiveSelected.has(k)}
+                onToggleSelect={() => toggle(k)}
+                disabled={isBulkRunning}
+              />
+            );
+          })}
         </ul>
       )}
 
@@ -93,6 +237,60 @@ export default function MePage() {
           appear here once we add a paged endpoint.
         </p>
       )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Selection toolbar                                                          */
+/* -------------------------------------------------------------------------- */
+
+function SelectionToolbar({
+  totalCount,
+  selectedCount,
+  allSelected,
+  someSelected,
+  isBulkRunning,
+  onToggleAll,
+  onBulkWithdraw,
+}: {
+  totalCount: number;
+  selectedCount: number;
+  allSelected: boolean;
+  someSelected: boolean;
+  isBulkRunning: boolean;
+  onToggleAll: () => void;
+  onBulkWithdraw: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-3">
+      <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+        <input
+          type="checkbox"
+          checked={allSelected}
+          ref={(el) => {
+            if (el) el.indeterminate = someSelected;
+          }}
+          onChange={onToggleAll}
+          disabled={isBulkRunning}
+          className="h-4 w-4 cursor-pointer rounded border-zinc-700 bg-zinc-900 accent-zinc-100"
+          aria-label={allSelected ? "deselect all" : "select all"}
+        />
+        <span className="uppercase tracking-wide text-zinc-400">
+          {selectedCount === 0
+            ? `select all (${totalCount})`
+            : `${selectedCount} selected`}
+        </span>
+      </label>
+      <button
+        type="button"
+        onClick={onBulkWithdraw}
+        disabled={selectedCount === 0 || isBulkRunning}
+        className="rounded-md border border-zinc-700 px-4 py-1.5 text-xs uppercase tracking-wide text-zinc-100 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
+        title="cancel every selected listing — one tx per collection"
+      >
+        withdraw {selectedCount > 0 ? `${selectedCount} selected` : "selected"}
+      </button>
     </div>
   );
 }
@@ -110,7 +308,17 @@ type ActionState =
   | { kind: "running"; label: string }
   | { kind: "error"; message: string };
 
-function MyListingCard({ row }: { row: MyListingRow }) {
+function MyListingCard({
+  row,
+  selected,
+  onToggleSelect,
+  disabled,
+}: {
+  row: MyListingRow;
+  selected: boolean;
+  onToggleSelect: () => void;
+  disabled: boolean;
+}) {
   const { collection, listing } = row;
   const meta = useNftMetadata(listing.current_nft_unit);
   const queryClient = useQueryClient();
@@ -206,6 +414,14 @@ function MyListingCard({ row }: { row: MyListingRow }) {
     >
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
         <div className="flex flex-1 items-center gap-4">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            disabled={disabled}
+            className="h-4 w-4 flex-none cursor-pointer rounded border-zinc-700 bg-zinc-900 accent-zinc-100 disabled:cursor-not-allowed"
+            aria-label={selected ? "deselect listing" : "select listing"}
+          />
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -245,7 +461,7 @@ function MyListingCard({ row }: { row: MyListingRow }) {
           <button
             type="button"
             onClick={handleClaim}
-            disabled={state.kind === "running" || accruedAda === 0}
+            disabled={state.kind === "running" || disabled || accruedAda === 0}
             title={
               accruedAda === 0
                 ? "no ADA has accrued yet — nothing to claim"
@@ -262,7 +478,7 @@ function MyListingCard({ row }: { row: MyListingRow }) {
           <button
             type="button"
             onClick={handleWithdraw}
-            disabled={state.kind === "running"}
+            disabled={state.kind === "running" || disabled}
             className="rounded-md border border-zinc-700 px-4 py-1.5 text-xs uppercase tracking-wide text-zinc-300 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
             title="pull the NFT and ADA out of the pit; it'll no longer participate in swaps"
           >

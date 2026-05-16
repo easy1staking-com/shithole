@@ -54,6 +54,22 @@ export type CancelAndRelistResult = CancelResult & {
   relistedOutRef: { txHash: string; outputIndex: number };
 };
 
+export type BulkCancelInput = {
+  network: Network;
+  /** 28-byte hex policy id of the config NFT — every UTxO in `consumed`
+   *  must live at the listing script parameterised by this policy. */
+  configNftPolicyHex: string;
+  listingScriptAddress?: string;
+  /** Every listing UTxO the user wants to cancel under this collection.
+   *  All must share the same lister_pkh (the connected wallet's). */
+  consumed: UTxO[];
+};
+
+export type BulkCancelResult = CancelResult & {
+  /** Number of listings the tx canceled in one shot. */
+  count: number;
+};
+
 /**
  * Build, sign, and submit the cancel tx. Throws on builder / sign /
  * submit failure (including "wallet refused to sign because the user
@@ -97,6 +113,67 @@ export async function submitCancel(
   const txHash = txHashHex(await signed.submit());
 
   return { txHash, listerPkhHex };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Bulk cancel — all of a wallet's listings in one collection, one tx         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Spend N listings in a single tx with the Cancel redeemer applied to
+ * each. All listings must share the same lister_pkh (the connected
+ * wallet). NFTs + accrued ADA flow back via change.
+ *
+ * Single signer; single attached script (one collection = one
+ * parameterised listing validator). Tx grows linearly with N — Cardano's
+ * 16 KB body cap will be the practical ceiling, but ~20-30 listings per
+ * collection fit comfortably.
+ */
+export async function submitCancelAllForCollection(
+  client: EvolutionClient,
+  input: BulkCancelInput,
+): Promise<BulkCancelResult> {
+  if (input.consumed.length === 0) {
+    throw new Error("submitCancelAllForCollection: no listings supplied");
+  }
+
+  const applied = await applyListingScript(
+    input.network,
+    input.configNftPolicyHex,
+  );
+  if (
+    input.listingScriptAddress &&
+    applied.address !== input.listingScriptAddress
+  ) {
+    throw new Error(
+      `listing script address mismatch — derived=${applied.address}, BE=${input.listingScriptAddress}`,
+    );
+  }
+
+  // Decode the first listing's lister_pkh as the signer. Every listing
+  // in `consumed` should match (the page filters by the wallet's pkh).
+  // If a stale row slipped through, the wallet's signature won't satisfy
+  // its datum's lister_pkh and the tx will fail at build time.
+  const listerPkhHex = decodeConsumedListerPkh(input.consumed[0]);
+
+  const cancelRedeemer: Data.Data = Data.constr(1n, []);
+
+  const built = await client
+    .newTx()
+    .collectFrom({
+      // Same Cancel redeemer for every input — Evolution attaches one
+      // redeemer slot per script input automatically.
+      inputs: input.consumed.map((u) => u._evolution),
+      redeemer: cancelRedeemer,
+    })
+    .attachScript({ script: applied.validator })
+    .addSigner({ keyHash: toKeyHash(listerPkhHex) })
+    .build();
+
+  const signed = await built.sign();
+  const txHash = txHashHex(await signed.submit());
+
+  return { txHash, listerPkhHex, count: input.consumed.length };
 }
 
 /* -------------------------------------------------------------------------- */
