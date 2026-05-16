@@ -161,13 +161,15 @@ export default function MePage() {
           },
         );
       }
-      // Background refresh — by the time the user does anything else
-      // the BE indexer should have caught up and the refetch confirms
-      // the optimistic state.
-      queryClient.invalidateQueries({ queryKey: ["listings"] });
+      // Do NOT invalidate ["listings"] here. The BE indexer lags the
+      // chain by seconds to (apparently) minutes; invalidating would
+      // force an immediate refetch that comes back with the stale rows
+      // we just stripped, clobbering the optimistic state. Let the 30s
+      // staleTime + natural refetch triggers (focus, route change)
+      // handle re-sync once the BE has caught up. The manual refresh
+      // button below is the escape hatch.
       queryClient.invalidateQueries({ queryKey: ["collection"] });
       queryClient.invalidateQueries({ queryKey: ["walletCollection"] });
-      queryClient.invalidateQueries({ queryKey: ["my-listings"] });
       setSelected(new Set());
       setBulkState({ kind: "idle" });
     } catch (err) {
@@ -191,7 +193,30 @@ export default function MePage() {
           </Link>
           <WalletConnectButton />
         </div>
-        <h1 className="mt-3 text-3xl font-semibold text-zinc-100">your s#!t in the pits</h1>
+        <div className="mt-3 flex items-center gap-2">
+          <h1 className="text-3xl font-semibold text-zinc-100">
+            your s#!t in the pits
+          </h1>
+          <button
+            type="button"
+            onClick={() => {
+              // Hard refresh — re-query every listings-related cache.
+              // Use when you want to verify the BE has caught up after
+              // a bulk withdraw; if rows reappear, the BE still hasn't
+              // indexed the spend yet.
+              queryClient.invalidateQueries({ queryKey: ["listings"] });
+              queryClient.invalidateQueries({ queryKey: ["curated"] });
+              queryClient.invalidateQueries({ queryKey: ["collection"] });
+              queryClient.invalidateQueries({ queryKey: ["walletCollection"] });
+            }}
+            disabled={isBulkRunning}
+            title="re-query the backend (use after a bulk withdraw to see if the indexer has caught up)"
+            aria-label="refresh listings"
+            className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-300 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span aria-hidden>↻</span>
+          </button>
+        </div>
         <p className="mt-1 text-sm text-zinc-400">
           everything you&apos;ve dumped, with what&apos;s accrued from passing swappers.
         </p>
