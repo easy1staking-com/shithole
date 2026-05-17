@@ -285,7 +285,11 @@ public final class PreprodSwapTool {
         var swap = new com.easy1staking.shithole.blueprint.generated.shithole.types.model.listingredeemer.impl.SwapData();
         swap.setNbAssetName(HexUtil.decodeHexString(match.na.assetNameHex));
         swap.setListingOutputIndex(BigInteger.ZERO);
-        swap.setTreasuryOutputIndex(BigInteger.ONE);
+        // v2: treasury_output_index is Option<Int>. This preprod tool always
+        // pays the protocol fee (Some(1)). The validator's S9' kicks in only
+        // when None is supplied, which a zero-fee FE-built swap does — not
+        // this tool, which targets the existing preprod config with fee > 0.
+        swap.setTreasuryOutputIndex(java.util.Optional.of(BigInteger.ONE));
         PlutusData swapRedeemer =
                 new com.easy1staking.shithole.blueprint.generated.shithole.types.model.listingredeemer.converter.SwapConverter()
                         .toPlutusData(swap);

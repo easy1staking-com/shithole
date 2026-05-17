@@ -1,5 +1,10 @@
 package com.easy1staking.shithole.indexer;
 
+import com.bloxbean.cardano.client.address.Address;
+import com.bloxbean.cardano.client.address.AddressProvider;
+import com.bloxbean.cardano.client.address.Credential;
+import com.bloxbean.cardano.client.common.model.Network;
+import com.bloxbean.cardano.client.util.HexUtil;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import jakarta.annotation.PostConstruct;
@@ -12,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,6 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WatchAddressRegistry {
 
     private final CuratedCollectionRepository curatedCollectionRepository;
+    private final Network appNetwork;
 
     /**
      * Atomic snapshot of {@code listing_script_address → curated row}. Readers
@@ -52,6 +59,15 @@ public class WatchAddressRegistry {
      * + putAll()} pair would expose to concurrent readers.
      */
     private final java.util.concurrent.atomic.AtomicReference<Map<String, WatchedCollection>> watched =
+            new java.util.concurrent.atomic.AtomicReference<>(Map.of());
+
+    /**
+     * Parallel snapshot keyed by config script address (derived from
+     * {@code config_nft_policy} via {@link AddressProvider}). Same
+     * {@link WatchedCollection} values as {@link #watched}. Drives the
+     * {@code ConfigEventsIndexer}'s per-output check.
+     */
+    private final java.util.concurrent.atomic.AtomicReference<Map<String, WatchedCollection>> watchedByConfigAddress =
             new java.util.concurrent.atomic.AtomicReference<>(Map.of());
 
     @PostConstruct
@@ -80,21 +96,47 @@ public class WatchAddressRegistry {
             return;
         }
         Map<String, WatchedCollection> next = new HashMap<>(watched.get());
+        Map<String, WatchedCollection> nextByConfig = new HashMap<>(watchedByConfigAddress.get());
         for (CuratedCollectionEntity row : rows) {
             String addr = row.getListingScriptAddress();
             if (addr == null || addr.isBlank()) {
                 continue;
             }
+            String configAddr = deriveConfigScriptAddress(row.getConfigNftPolicy());
             WatchedCollection wc = new WatchedCollection(
                     row.getSlug(),
                     row.getConfigNftPolicy(),
                     row.getCollectionPolicyId(),
-                    addr);
+                    addr,
+                    configAddr);
             next.put(addr, wc);
+            if (configAddr != null) nextByConfig.put(configAddr, wc);
         }
         Map<String, WatchedCollection> snapshot = Map.copyOf(next);
+        Map<String, WatchedCollection> configSnapshot = Map.copyOf(nextByConfig);
         watched.set(snapshot);
-        log.debug("WatchAddressRegistry reconciled: {} watched address(es)", snapshot.size());
+        watchedByConfigAddress.set(configSnapshot);
+        log.debug("WatchAddressRegistry reconciled: {} listing + {} config watched address(es)",
+                snapshot.size(), configSnapshot.size());
+    }
+
+    /**
+     * Derive the bech32 config-script address from the {@code config_nft_policy}
+     * hex (= the multi-handler validator's script hash). Returns {@code null}
+     * if the hex is missing or malformed — caller falls through.
+     */
+    private String deriveConfigScriptAddress(String configNftPolicyHex) {
+        if (configNftPolicyHex == null || configNftPolicyHex.isBlank()) return null;
+        try {
+            byte[] hash = HexUtil.decodeHexString(configNftPolicyHex);
+            Credential cred = Credential.fromScript(hash);
+            Address addr = AddressProvider.getEntAddress(cred, appNetwork);
+            return addr.toBech32();
+        } catch (RuntimeException e) {
+            log.warn("Failed to derive config script address for policy {}: {}",
+                    configNftPolicyHex, e.getMessage());
+            return null;
+        }
     }
 
     @EventListener
@@ -104,18 +146,27 @@ public class WatchAddressRegistry {
                     event.getSlug());
             return;
         }
+        String configAddr = deriveConfigScriptAddress(event.getConfigNftPolicy());
         WatchedCollection wc = new WatchedCollection(
                 event.getSlug(),
                 event.getConfigNftPolicy(),
                 event.getCollectionPolicyId(),
-                event.getListingScriptAddress());
+                event.getListingScriptAddress(),
+                configAddr);
         watched.updateAndGet(prev -> {
             Map<String, WatchedCollection> next = new HashMap<>(prev);
             next.put(event.getListingScriptAddress(), wc);
             return Map.copyOf(next);
         });
-        log.info("WatchAddressRegistry +slug={} address={}",
-                event.getSlug(), event.getListingScriptAddress());
+        if (configAddr != null) {
+            watchedByConfigAddress.updateAndGet(prev -> {
+                Map<String, WatchedCollection> next = new HashMap<>(prev);
+                next.put(configAddr, wc);
+                return Map.copyOf(next);
+            });
+        }
+        log.info("WatchAddressRegistry +slug={} listing={} config={}",
+                event.getSlug(), event.getListingScriptAddress(), configAddr);
     }
 
     public boolean isWatched(String address) {
@@ -126,19 +177,31 @@ public class WatchAddressRegistry {
         return address == null ? null : watched.get().get(address);
     }
 
+    /** Lookup by the config script address (not the listing address). */
+    public WatchedCollection getByConfigAddress(String address) {
+        return address == null ? null : watchedByConfigAddress.get().get(address);
+    }
+
     public Set<String> all() {
         return watched.get().keySet();
+    }
+
+    public Set<String> allConfigAddresses() {
+        return watchedByConfigAddress.get().keySet();
     }
 
     public int size() {
         return watched.get().size();
     }
 
-    /** Snapshot of the curated row needed for indexing. Immutable. */
+    /** Snapshot of the curated row needed for indexing. Immutable.
+     *  {@code configScriptAddress} may be null if derivation failed at
+     *  reconcile time. */
     public record WatchedCollection(
             String slug,
             String configNftPolicy,
             String collectionPolicyId,
-            String listingScriptAddress) {
+            String listingScriptAddress,
+            String configScriptAddress) {
     }
 }
