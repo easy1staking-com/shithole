@@ -29,7 +29,7 @@ import {
   type CardanoNetworkName,
 } from "../wallet/network";
 import type { Network } from "./swap";
-import { adaptUtxos } from "./utxo";
+import { fetchUtxoByOutRef } from "./swap";
 import { inlineDatum, toAddress, toAssets, toKeyHash, txHashHex } from "./txAdapters";
 
 export type UpdateConfigInput = {
@@ -181,6 +181,44 @@ async function fetchScriptCborByHash(
   return j.cbor;
 }
 
+/**
+ * Find the (tx_hash, output_index) of the UTxO at `addr` carrying `unit`.
+ * Uses Blockfrost's address/{addr}/utxos/{asset} endpoint — one chain-wide
+ * by construction for the config NFT (one-shot mint).
+ */
+async function fetchUtxoOutRefHoldingUnit(
+  networkName: CardanoNetworkName,
+  addrBech32: string,
+  unit: string,
+): Promise<{ txHash: string; outputIndex: number }> {
+  const { url, projectId } = bf(networkName);
+  const resp = await fetch(
+    `${url}/addresses/${addrBech32}/utxos/${unit}`,
+    { headers: { project_id: projectId } },
+  );
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(
+      `blockfrost /addresses/${addrBech32}/utxos/${unit} returned ${resp.status}: ${body.slice(0, 200)}`,
+    );
+  }
+  const rows = (await resp.json()) as Array<{
+    tx_hash: string;
+    output_index: number;
+  }>;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error(
+      `no UTxO at ${addrBech32} holding ${unit} (Blockfrost returned empty)`,
+    );
+  }
+  if (rows.length > 1) {
+    throw new Error(
+      `expected exactly 1 UTxO at ${addrBech32} holding ${unit}, found ${rows.length}`,
+    );
+  }
+  return { txHash: rows[0].tx_hash, outputIndex: rows[0].output_index };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Main builder                                                                */
 /* -------------------------------------------------------------------------- */
@@ -233,36 +271,21 @@ export async function submitConfigUpdate(
   const scriptAddress = Address.toBech32(scriptAddrObj);
 
   // -------- fetch the config UTxO --------
-  // Evolution's client exposes provider.getUtxosWithUnit — use that to
-  // find the UTxO holding the config NFT (there is exactly one chain-wide).
-  const provider = (client as unknown as {
-    provider: {
-      getUtxosWithUnit: (addr: string, unit: string) => Promise<unknown[]>;
-    };
-  }).provider;
-  if (!provider || typeof provider.getUtxosWithUnit !== "function") {
-    throw new Error(
-      "Evolution client lacks a Blockfrost provider with getUtxosWithUnit",
-    );
-  }
-  const candidates = await provider.getUtxosWithUnit(scriptAddress, configNftUnit);
-  if (!candidates || candidates.length === 0) {
-    throw new Error(
-      `no config UTxO found at ${scriptAddress} holding unit ${configNftUnit}`,
-    );
-  }
-  if (candidates.length > 1) {
-    // One-shot mint should guarantee uniqueness chain-wide; if the
-    // indexer somehow returns multiples, we'd rather fail loudly than
-    // silently pick one.
-    throw new Error(
-      `expected exactly 1 config UTxO at ${scriptAddress}, found ${candidates.length}`,
-    );
-  }
-  const consumedEvo = candidates[0] as { _evolution?: unknown };
-  // Adapt via the existing adaptUtxos helper so we can introspect ada
-  // safely. adaptUtxos accepts the Evolution shape directly.
-  const [consumed] = adaptUtxos([consumedEvo as never]);
+  // Direct Blockfrost — find the outRef of the UTxO at the config script
+  // address that holds the config NFT (exactly one chain-wide by the
+  // one-shot mint), then hydrate via the existing fetchUtxoByOutRef
+  // helper (which returns the full Evolution UTxO shape we need to
+  // .collectFrom).
+  const outRef = await fetchUtxoOutRefHoldingUnit(
+    networkName,
+    scriptAddress,
+    configNftUnit,
+  );
+  const consumed = await fetchUtxoByOutRef(
+    client,
+    outRef.txHash,
+    outRef.outputIndex,
+  );
 
   // -------- fetch the applied script CBOR + wrap as PlutusV3 --------
   const cbor = await fetchScriptCborByHash(networkName, policy);
