@@ -203,7 +203,11 @@ public class ConfigEventsIndexer {
      * exactly 1, and no other non-ADA assets.
      */
     private boolean carriesExpectedConfigNft(AddressUtxo out, String policyHex, String collectionPolicyIdHex) {
-        if (out.getAmounts() == null || policyHex == null) return false;
+        if (out.getAmounts() == null || policyHex == null) {
+            log.warn("carriesExpectedConfigNft: amounts/policyHex null (amounts={}, policyHex={})",
+                    out.getAmounts(), policyHex);
+            return false;
+        }
         String wantPolicy = policyHex.toLowerCase(Locale.ROOT);
         String wantAssetName = collectionPolicyIdHex == null
                 ? null
@@ -211,24 +215,52 @@ public class ConfigEventsIndexer {
         Amt match = null;
         for (Amt a : out.getAmounts()) {
             if (a == null) continue;
-            if (a.getPolicyId() == null) continue;
+            if (a.getPolicyId() == null) {
+                log.warn("carriesExpectedConfigNft: amt policyId=null unit={} name={} qty={}",
+                        a.getUnit(), a.getAssetName(), a.getQuantity());
+                continue;
+            }
             if (a.getPolicyId().isEmpty()
                     || "lovelace".equalsIgnoreCase(a.getUnit())) continue;
             if (wantPolicy.equalsIgnoreCase(a.getPolicyId())) {
                 if (a.getQuantity() == null || a.getQuantity().compareTo(BigInteger.ONE) != 0) {
+                    log.warn("carriesExpectedConfigNft: qty != 1 (qty={}) for policy={}",
+                            a.getQuantity(), a.getPolicyId());
                     return false;
                 }
-                String name = a.getAssetName();
-                if (name == null || name.isEmpty()) return false;
-                if (wantAssetName != null && !wantAssetName.equalsIgnoreCase(name)) {
+                // Yaci-store's Amt.assetName is the CIP-14 bech32 fingerprint
+                // (asset1…), NOT the hex asset name. Extract the hex name
+                // from `unit`, which is always (policyId hex || assetName hex)
+                // and matches the on-chain bytes 1:1.
+                String unit = a.getUnit();
+                if (unit == null || unit.length() <= wantPolicy.length()) {
+                    log.warn("carriesExpectedConfigNft: unit malformed (unit={} policy={})", unit, a.getPolicyId());
                     return false;
                 }
-                if (match != null) return false;
+                String assetNameHex = unit.substring(wantPolicy.length()).toLowerCase(Locale.ROOT);
+                if (assetNameHex.isEmpty()) {
+                    log.warn("carriesExpectedConfigNft: asset name empty for policy={}", a.getPolicyId());
+                    return false;
+                }
+                if (wantAssetName != null && !wantAssetName.equalsIgnoreCase(assetNameHex)) {
+                    log.warn("carriesExpectedConfigNft: asset name mismatch — got=[{}] want=[{}] unit={}",
+                            assetNameHex, wantAssetName, unit);
+                    return false;
+                }
+                if (match != null) {
+                    log.warn("carriesExpectedConfigNft: more than one NFT under same policy={}", a.getPolicyId());
+                    return false;
+                }
                 match = a;
             } else {
                 // Co-tenant under a different policy not allowed for a legit config UTxO.
+                log.warn("carriesExpectedConfigNft: co-tenant token rejects — unit={} policyId={} name={} qty={}",
+                        a.getUnit(), a.getPolicyId(), a.getAssetName(), a.getQuantity());
                 return false;
             }
+        }
+        if (match == null) {
+            log.warn("carriesExpectedConfigNft: no matching NFT found under policy={}", wantPolicy);
         }
         return match != null;
     }
