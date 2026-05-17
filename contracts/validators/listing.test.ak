@@ -200,8 +200,33 @@ fn happy_swap_redeemer() {
   Swap {
     nb_asset_name: test_nb_name,
     listing_output_index: 0,
-    treasury_output_index: 1,
+    treasury_output_index: Some(1),
   }
+}
+
+/// Variant used by the zero-protocol-fee path — caller declines to
+/// supply a treasury output. The validator's S9' check requires
+/// cfg.protocol_fee == 0 for this to be valid.
+fn no_treasury_swap_redeemer() {
+  Swap {
+    nb_asset_name: test_nb_name,
+    listing_output_index: 0,
+    treasury_output_index: None,
+  }
+}
+
+/// Build a fresh ConfigDatum patched with protocol_fee = 0, keeping all
+/// other fields from valid_config_datum.
+fn zero_fee_config_datum() -> ConfigDatum {
+  ConfigDatum { ..valid_config_datum(), protocol_fee: 0 }
+}
+
+/// Reference input for the zero-fee config — drops the protocol_fee to 0
+/// but keeps the same config_nft_policy + collection_policy mapping so
+/// the rest of the swap logic resolves unchanged.
+fn zero_fee_config_ref_input() -> Input {
+  let i = config_ref_input()
+  Input { ..i, output: Output { ..i.output, datum: InlineDatum(zero_fee_config_datum()) } }
 }
 
 /// Invoke the listing spend validator for the canonical listing UTxO with a
@@ -632,7 +657,7 @@ test multi_swap_blocked_by_treasury_tag_binding() fail {
     Swap {
       nb_asset_name: test_nb_name,
       listing_output_index: 1,
-      treasury_output_index: 2,
+      treasury_output_index: Some(2),
     }
   let listing_datum: Data =
     ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
@@ -888,6 +913,160 @@ test recover_fails_without_config_ref_input() fail {
     None,
     Recover,
     listing_outref(),
+    tx,
+  )
+}
+
+// ============================================================================
+// Zero-protocol-fee path: treasury_output_index: Option<Int>
+//
+// Asserts the new v2 semantics:
+//   Some(idx) — S7/S8/S9 fire on outputs[idx] (existing happy-path tests
+//               above cover this); S9 trivially passes when protocol_fee == 0.
+//   None      — only valid when cfg.protocol_fee == 0 (S9'). Otherwise it'd
+//               be a free-fee bypass.
+// ============================================================================
+
+/// Tx mirroring happy_swap_tx() but with the treasury output omitted and the
+/// zero-fee config swapped in as the ref input.
+fn zero_fee_swap_tx_no_treasury() -> Transaction {
+  let own_tag = utils.compute_output_tag(listing_outref())
+  let cfg = zero_fee_config_datum()
+  Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      listing_input_holding(test_na_name, listing_outref()),
+      ua_input_holding(test_nb_name),
+    ],
+    reference_inputs: [zero_fee_config_ref_input()],
+    outputs: [
+      // Only output: the successor listing. No treasury.
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(own_tag),
+        2_000_000 + cfg.lister_fee,
+      ),
+    ],
+  }
+}
+
+/// Tx with the zero-fee config but the caller STILL supplies a tagged
+/// treasury output (just carrying min-utxo, no fee). Some(1) variant.
+fn zero_fee_swap_tx_with_treasury() -> Transaction {
+  let own_tag = utils.compute_output_tag(listing_outref())
+  let cfg = zero_fee_config_datum()
+  Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      listing_input_holding(test_na_name, listing_outref()),
+      ua_input_holding(test_nb_name),
+    ],
+    reference_inputs: [zero_fee_config_ref_input()],
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(own_tag),
+        2_000_000 + cfg.lister_fee,
+      ),
+      // Treasury with the correct tag + zero protocol fee (S9 trivially true).
+      // The output still needs *some* lovelace because the validator calls
+      // `assets.expect_lovelace_of` which fails on an empty value — use
+      // min-utxo (~2 ADA) to reflect what a real tx would carry.
+      out_treasury_with(own_tag, 2_000_000, cfg.treasury_addr),
+    ],
+  }
+}
+
+test swap_succeeds_with_zero_fee_and_no_treasury() {
+  invoke_swap(zero_fee_swap_tx_no_treasury(), no_treasury_swap_redeemer())
+}
+
+test swap_fails_with_none_treasury_when_fee_positive() fail {
+  // Happy tx (cfg.protocol_fee = 1 ADA, treasury output PRESENT in outputs),
+  // but the redeemer claims None. Validator must reject via S9'.
+  invoke_swap(happy_swap_tx(), no_treasury_swap_redeemer())
+}
+
+test swap_succeeds_with_some_treasury_when_fee_zero() {
+  // Zero-fee config, BUT caller still supplied a correctly-tagged treasury
+  // output at index 1. Should succeed: S9 trivially true; S7/S8 satisfied.
+  invoke_swap(zero_fee_swap_tx_with_treasury(), happy_swap_redeemer())
+}
+
+test swap_fails_with_some_treasury_missing_tag_when_fee_zero() fail {
+  // Zero-fee config + Some(1) redeemer, but the treasury output's datum
+  // carries the WRONG tag. S8 must still fire even when fee == 0.
+  let cfg = zero_fee_config_datum()
+  let own_tag = utils.compute_output_tag(listing_outref())
+  let wrong_tag = utils.compute_output_tag(other_listing_outref())
+  let tx =
+    Transaction {
+      ..zero_fee_swap_tx_with_treasury(),
+      outputs: [
+        out_listing_holding(
+          test_nb_name,
+          test_lister_pkh,
+          Some(own_tag),
+          2_000_000 + cfg.lister_fee,
+        ),
+        // wrong tag — S8 should reject (lovelace 2 ADA to keep the value
+        // shape realistic and avoid expect_lovelace_of side-effects)
+        out_treasury_with(wrong_tag, 2_000_000, cfg.treasury_addr),
+      ],
+    }
+  invoke_swap(tx, happy_swap_redeemer())
+}
+
+// Parallel of multi_swap_blocked_by_treasury_tag_binding for the None branch:
+// two consumed listings against the zero-fee config, BOTH with None. Each
+// input independently passes S9' (cfg.protocol_fee == 0). No regression from
+// the v1 double-satisfaction defense, because there's no treasury output to
+// share.
+test multi_swap_zero_fee_no_treasury_both_pass() {
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let tag_b = utils.compute_output_tag(other_listing_outref())
+  let cfg = zero_fee_config_datum()
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        listing_input_holding(test_na_name, listing_outref()),
+        listing_input_holding(test_na_name, other_listing_outref()),
+        ua_input_holding(test_nb_name),
+      ],
+      reference_inputs: [zero_fee_config_ref_input()],
+      outputs: [
+        out_listing_holding(
+          test_nb_name,
+          test_lister_pkh,
+          Some(tag_a),
+          2_000_000 + cfg.lister_fee,
+        ),
+        out_listing_holding(
+          test_nb_name,
+          test_lister_pkh,
+          Some(tag_b),
+          2_000_000 + cfg.lister_fee,
+        ),
+        // no treasury output — validator should still pass for input B with
+        // listing_output_index: 1, treasury_output_index: None.
+      ],
+    }
+  let r =
+    Swap {
+      nb_asset_name: test_nb_name,
+      listing_output_index: 1,
+      treasury_output_index: None,
+    }
+  let listing_datum: Data =
+    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
+  listing.listing.spend(
+    test_config_nft_policy,
+    Some(listing_datum),
+    r,
+    other_listing_outref(),
     tx,
   )
 }

@@ -251,16 +251,27 @@ function buildSuccessorDatum(
   ]);
 }
 
-/** Swap redeemer: Constr 0 [nb_asset_name, listing_idx, treasury_idx]. */
+/**
+ * Swap redeemer: Constr 0 [nb_asset_name, listing_idx, treasury_idx].
+ *
+ * `treasuryOutputIndex` is an Aiken `Option<Int>`:
+ *   - non-null  → `Some(idx)` = Constr 0 [Int(idx)] — fee-bearing swap.
+ *   - null      → `None`      = Constr 1 [] — zero-fee swap, validator
+ *                  also asserts cfg.protocol_fee == 0 on chain.
+ */
 function buildSwapRedeemer(
   nbAssetNameHex: string,
   listingOutputIndex: bigint,
-  treasuryOutputIndex: bigint,
+  treasuryOutputIndex: bigint | null,
 ): Data.Data {
+  const treasury: Data.Data =
+    treasuryOutputIndex === null
+      ? Data.constr(1n, [])
+      : Data.constr(0n, [Data.int(treasuryOutputIndex)]);
   return Data.constr(0n, [
     Data.bytearray(nbAssetNameHex),
     Data.int(listingOutputIndex),
-    Data.int(treasuryOutputIndex),
+    treasury,
   ]);
 }
 
@@ -337,16 +348,26 @@ export async function submitSwap(
   );
   // Treasury inline datum is bare ByteArray(output_tag) per S8.
   const treasuryDatum: Data.Data = Data.bytearray(outputTagHex);
-  const swapRedeemer = buildSwapRedeemer(depositAssetName, 0n, 1n);
+
+  // v2: treasury output is OPTIONAL. When cfg.protocol_fee == 0 we skip
+  // it entirely (the validator's S9' check requires no treasury output
+  // and protocol_fee == 0 together — supplying a treasury output anyway
+  // would still pass but waste ~min-utxo on every swap). Otherwise we
+  // emit the treasury at index 1 as in v1, and the redeemer points to it.
+  const hasTreasury = input.protocolFeeLovelace > 0n;
+  const swapRedeemer = buildSwapRedeemer(
+    depositAssetName,
+    0n,
+    hasTreasury ? 1n : null,
+  );
 
   // S6: successor lovelace = consumed + listerFee.
   // Treasury lovelace = protocolFee (Evolution auto-bumps to chain min
   // via autoMinUtxo on the payToAddress call below).
   const consumedLovelace = input.consumed.assets.lovelace ?? 0n;
   const successorLovelace = consumedLovelace + input.listerFeeLovelace;
-  const treasuryLovelace = input.protocolFeeLovelace;
 
-  const built = await client
+  let builder = client
     .newTx()
     .readFrom({ referenceInputs: [input.configUtxo._evolution] })
     .collectFrom({
@@ -362,28 +383,29 @@ export async function submitSwap(
       address: toAddress(input.listingScriptAddress),
       assets: toAssets({ lovelace: successorLovelace, [nbUnit]: 1n }),
       datum: inlineDatum(successorDatum),
-    })
+    });
+
+  if (hasTreasury) {
     // S7 + S8 + S9: treasury at index 1. autoMinUtxo bumps lovelace
     // to the chain-computed min if cfg.protocol_fee falls below it
     // (S9 is `>=`, so overpaying is safe).
-    .payToAddress({
+    builder = builder.payToAddress({
       address: toAddress(input.treasuryAddrBech32),
-      assets: toAssets({ lovelace: treasuryLovelace }),
+      assets: toAssets({ lovelace: input.protocolFeeLovelace }),
       datum: inlineDatum(treasuryDatum),
       autoMinUtxo: true,
-    })
-    .attachScript({ script: applied.validator })
-    .build();
+    });
+  }
 
-  // Post-build safety check: the validator's S5 + S7 read tx.outputs[0]
-  // and tx.outputs[1]. We authored them in that order, but verify
-  // Evolution didn't reorder during balancing. Goes through
-  // built.toTransaction() to inspect the assembled tx body — the
-  // earlier built.outputs cast was inert (no such surface in 0.5.8).
+  const built = await builder.attachScript({ script: applied.validator }).build();
+
+  // Post-build safety check: the validator reads tx.outputs[0] for the
+  // listing successor (always) and tx.outputs[1] for the treasury (only
+  // when hasTreasury). Verify Evolution didn't reorder during balancing.
   const tx = await built.toTransaction();
   assertOutputOrder(tx.body.outputs, {
     listingScriptAddress: input.listingScriptAddress,
-    treasuryAddrBech32: input.treasuryAddrBech32,
+    treasuryAddrBech32: hasTreasury ? input.treasuryAddrBech32 : null,
   });
 
   const signed = await built.sign();
@@ -401,30 +423,40 @@ export async function submitSwap(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Throw if {@code outputs[0]} isn't the listing-script successor or
- * {@code outputs[1]} isn't the treasury output. SPEC §6.3 S5/S7 read
- * those positional indices.
+ * Throw if {@code outputs[0]} isn't the listing-script successor, or (when
+ * a treasury output is expected) if {@code outputs[1]} isn't the treasury
+ * output. SPEC §6.3 S3/S5 always read index 0; S7-S9 read index 1 only
+ * when the redeemer's `treasury_output_index` is `Some(1)`. Pass
+ * `treasuryAddrBech32: null` to skip the treasury assertion entirely
+ * (zero-fee path).
  */
 function assertOutputOrder(
   outputs: ReadonlyArray<unknown>,
-  expected: { listingScriptAddress: string; treasuryAddrBech32: string },
+  expected: { listingScriptAddress: string; treasuryAddrBech32: string | null },
 ): void {
-  if (outputs.length < 2) {
+  if (outputs.length < 1) {
     throw new Error(
-      `assembled tx has only ${outputs.length} output(s); expected at least 2`,
+      `assembled tx has 0 outputs; expected at least 1 (the listing successor)`,
     );
   }
   const addr0 = txOutputAddressBech32(outputs[0]);
-  const addr1 = txOutputAddressBech32(outputs[1]);
   if (addr0 !== expected.listingScriptAddress) {
     throw new Error(
       `output[0] is ${addr0}, expected listing script ${expected.listingScriptAddress}`,
     );
   }
-  if (addr1 !== expected.treasuryAddrBech32) {
-    throw new Error(
-      `output[1] is ${addr1}, expected treasury ${expected.treasuryAddrBech32}`,
-    );
+  if (expected.treasuryAddrBech32 !== null) {
+    if (outputs.length < 2) {
+      throw new Error(
+        `assembled tx has only ${outputs.length} output(s); expected ≥ 2 (listing + treasury)`,
+      );
+    }
+    const addr1 = txOutputAddressBech32(outputs[1]);
+    if (addr1 !== expected.treasuryAddrBech32) {
+      throw new Error(
+        `output[1] is ${addr1}, expected treasury ${expected.treasuryAddrBech32}`,
+      );
+    }
   }
 }
 

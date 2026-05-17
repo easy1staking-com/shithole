@@ -111,9 +111,13 @@ validator listing(config_nft_policy: PolicyId) {
 //       the old shape — single struct equality covers both fields)
 //   S5  out_listing.value strictly carries (collection_policy, nb_asset_name) × 1
 //   S6  out_listing.value.lovelace >= input.lovelace + cfg.lister_fee
-//   S7  out_treasury.address == cfg.treasury_addr
-//   S8  out_treasury.datum == InlineDatum(compute_output_tag(own_ref))
-//   S9  out_treasury.value.lovelace >= cfg.protocol_fee
+//   Treasury leg (gated by the redeemer's `treasury_output_index: Option<Int>`)
+//     Some(idx) — caller is paying a fee. Enforced via S7+S8+S9 on outputs[idx]:
+//       S7  out_treasury.address == cfg.treasury_addr
+//       S8  out_treasury.datum == InlineDatum(compute_output_tag(own_ref))
+//       S9  out_treasury.value.lovelace >= cfg.protocol_fee
+//     None — caller declined to supply a treasury output. ONLY permitted when:
+//       S9' cfg.protocol_fee == 0  (otherwise this would be a free-fee bypass)
 //   S10 bucket: blake2b(collection_policy ‖ na) % M
 //             == blake2b(collection_policy ‖ nb ‖ serialise(own_ref)) % M
 
@@ -124,7 +128,7 @@ fn validate_swap(
   config_nft_policy: PolicyId,
   nb_asset_name: ByteArray,
   listing_output_index: Int,
-  treasury_output_index: Int,
+  treasury_output_index: Option<Int>,
 ) -> Bool {
   let Transaction { inputs, reference_inputs, outputs, .. } = self
 
@@ -177,14 +181,9 @@ fn validate_swap(
   let own_tag = utils.compute_output_tag(own_ref)
 
   // O(1) lookups via redeemer hints. `list.expect_at` walks the list to the
-  // given index, so two calls cost O(listing_output_index + treasury_output_index)
-  // cons traversals total. For typical small swap txs (3-5 outputs at indexes
-  // 0 and 1) this is negligible. A fold-2 combinator would replace two forward
-  // walks with one full pass + accumulator destructure — same asymptotic shape,
-  // marginal constant-factor savings. Keep `expect_at` for readability; revisit
-  // if benchmarks ever flag this as a hot spot.
+  // given index. For the listing successor we always need one walk. The
+  // treasury walk only happens on the Some(idx) branch below.
   let out_listing = list.expect_at(outputs, listing_output_index)
-  let out_treasury = list.expect_at(outputs, treasury_output_index)
 
   // Build the expected new listing datum once for S4 — compare-by-equality
   // saves field-by-field checks.
@@ -226,12 +225,33 @@ fn validate_swap(
         actual_lovelace >= expected_lovelace
       },
     )?,
-    // S7: treasury address
-    (out_treasury.address == cfg.treasury_addr)?,
-    // S8: treasury uniqueness tag (double-satisfaction Case 1)
-    (out_treasury.datum == InlineDatum(own_tag))?,
-    // S9: protocol fee paid
-    (assets.expect_lovelace_of(out_treasury.value) >= cfg.protocol_fee)?,
+    // Treasury leg, gated by the redeemer's Option<Int> hint.
+    //   Some(idx) — caller paid (or is willing to overpay): resolve
+    //               outputs[idx] and enforce S7+S8+S9.
+    //   None      — caller declined to supply a treasury output: only valid
+    //               when the config declares zero protocol fee (S9'). The
+    //               None branch creates no treasury output, so the
+    //               compute_output_tag(own_ref) double-satisfaction binding
+    //               is moot (nothing to share). The Some branch keeps it.
+    // Inlined inside the main `and { ... }` so trace order matches the
+    // documented S3-S10 sequence and the `?`-traces fire only on the path
+    // actually exercised by the failing tx.
+    when treasury_output_index is {
+      Some(idx) -> {
+        let out_treasury = list.expect_at(outputs, idx)
+        and {
+          // S7: treasury address
+          (out_treasury.address == cfg.treasury_addr)?,
+          // S8: treasury uniqueness tag (double-satisfaction Case 1)
+          (out_treasury.datum == InlineDatum(own_tag))?,
+          // S9: protocol fee paid (trivially true when cfg.protocol_fee == 0)
+          (assets.expect_lovelace_of(out_treasury.value) >= cfg.protocol_fee)?,
+        }
+      }
+      None ->
+        // S9'
+        (cfg.protocol_fee == 0)?
+    },
     // S10: bucket equation, anchored to own_ref — most expensive, evaluated last
     bucket_equation(
       collection_policy_id,

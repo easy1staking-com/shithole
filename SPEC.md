@@ -1,7 +1,9 @@
 # Shithole — Protocol Specification
 
-**Status:** **v0.5 — curation pivot.** Off-chain curation flow was simplified during the BE Phase-3 build (2026-05-12): CIP-171 auto-discovery deferred for v1; replaced by `POST /api/configs` — a trustless registration endpoint requiring a CIP-8 admin signature over the curation metadata. SPEC §10.2 and §10.3 realigned. On-chain protocol unchanged.
-**Date:** 2026-05-12.
+**Status:** **v0.6 — optional treasury leg.** The `Swap` redeemer's `treasury_output_index` becomes `Option<Int>`; when `None`, the validator enforces `cfg.protocol_fee == 0` (new invariant S9'). This lets admins offer truly free pits — v1's unconditional treasury output forced ~1 ADA min-utxo per swap even at `protocol_fee = 0`. Config datum is unchanged; existing config UTxOs stay valid. v1 listing-script address `addr1w98hf0qtu33rthwxhn9s5uhljldt7z2k5td6sk6l58jf3jqtqv0lt` was drained 2026-05-16 and is dormant.
+**Date:** 2026-05-17.
+
+**v0.5 — curation pivot** (2026-05-12): Off-chain curation flow simplified — CIP-171 auto-discovery deferred for v1; replaced by `POST /api/configs` — a trustless registration endpoint requiring a CIP-8 admin signature over the curation metadata. SPEC §10.2 and §10.3 realigned.
 
 ---
 
@@ -125,15 +127,18 @@ The spend validator takes `Option<Data>` (not `Option<ListingDatum>`) so that th
 type ListingRedeemer {
   Swap {
     nb_asset_name: AssetName,
-    listing_output_index: Int,      // index into tx.outputs of the new listing UTxO
-    treasury_output_index: Int,     // index into tx.outputs of the protocol-fee payment
+    listing_output_index: Int,                  // index into tx.outputs of the new listing UTxO
+    treasury_output_index: Option<Int>,         // Some(idx) ⇒ outputs[idx] carries the protocol fee
+                                                // None     ⇒ no treasury output; requires cfg.protocol_fee == 0
   }
   | Cancel
   | Recover
 }
 ```
 
-`NA`'s asset name is read directly from the consumed listing's input value — it does not need to appear in the redeemer. The two output-index hints turn O(N) scans into O(1); wrong values cause downstream equality checks to fail (no security cost).
+`NA`'s asset name is read directly from the consumed listing's input value — it does not need to appear in the redeemer. The output-index hints turn O(N) scans into O(1); wrong values cause downstream equality checks to fail (no security cost).
+
+`treasury_output_index` is `Option<Int>` so admins can declare zero-fee pits (`cfg.protocol_fee == 0`) without forcing every swap to spend an extra min-utxo on a dust treasury output. When the caller declines to supply the output (`None`), the validator's S9' invariant requires `cfg.protocol_fee == 0` — otherwise the absence is rejected as a free-fee bypass.
 
 `Recover` is an admin-only rescue path for UTxOs that accidentally landed at the listing address with **no inline datum**. Validator strictly requires `datum == None` (so admin has zero power over any datum-bearing UTxO — legitimate listings always carry a datum) and `tx.extra_signatories` to contain `admin_pkh` (read from the config UTxO via reference input). Admin's responsibility off-chain to return rescued assets to the original sender.
 
@@ -264,9 +269,11 @@ For input `self` at outRef `self.outRef` with datum `input_datum` (cast from `Da
 | S4 | `out_listing.datum` (cast to `ListingDatum`) `== ListingDatum { lister_pkh: input_datum.lister_pkh, update_ref: Some(compute_output_tag(self.outRef)) }`. *(Combines lister continuity AND double-satisfaction Case 2 binding in one structural compare.)* |
 | S5 | `out_listing.value` strictly carries `(collection_policy_id, nb_asset_name) × 1` (`assets.has_nft_strict`). |
 | S6 | `out_listing.value.lovelace >= input.value.lovelace + cfg.lister_fee`. |
-| S7 | Let `out_treasury = tx.outputs[redeemer.treasury_output_index]`. `out_treasury.address == cfg.treasury_addr`. |
-| S8 | `out_treasury.datum == InlineDatum(compute_output_tag(self.outRef))`. *(Double-satisfaction defense for Case 1 — fee payment.)* |
-| S9 | `out_treasury.value.lovelace >= cfg.protocol_fee`. |
+| — | **Treasury leg** (`when redeemer.treasury_output_index is`): the `Some`/`None` split below. |
+| S7 | `Some(idx) →` Let `out_treasury = tx.outputs[idx]`. `out_treasury.address == cfg.treasury_addr`. |
+| S8 | `Some(idx) →` `out_treasury.datum == InlineDatum(compute_output_tag(self.outRef))`. *(Double-satisfaction defense for Case 1 — fee payment. Still fires when `cfg.protocol_fee == 0` if the caller chose to supply a treasury output anyway.)* |
+| S9 | `Some(idx) →` `out_treasury.value.lovelace >= cfg.protocol_fee` *(trivially true when `cfg.protocol_fee == 0`)*. |
+| S9' | `None →` `cfg.protocol_fee == 0`. Rejects the caller declining to pay when the config declares a non-zero fee. The `None` branch creates no treasury output, so the double-satisfaction binding via `compute_output_tag` is moot — there is nothing to share. |
 | S10 | Bucket equation: `from_bytearray_big_endian(blake2b_256(collection_policy_id ‖ na_asset_name)) % cfg.m == from_bytearray_big_endian(blake2b_256(collection_policy_id ‖ nb_asset_name ‖ cbor.serialise(self.outRef))) % cfg.m`. |
 
 The validator does **not** constrain the count, value, address, or datum of *other* outputs at `self.address`. Junk outputs at the listing address can exist, but the chain only guarantees correctness of the designated `out_listing`. Off-chain discovery handles junk filtering — see §10.2.

@@ -83,7 +83,10 @@ pub type ListingRedeemer {
   Swap {
     nb_asset_name: ByteArray,
     listing_output_index: Int,
-    treasury_output_index: Int,
+    // None ⇒ no treasury output supplied; the validator then requires
+    // cfg.protocol_fee == 0 (S9' in listing.ak). Some(idx) ⇒ index into
+    // tx.outputs of the protocol-fee payment, checked by S7/S8/S9.
+    treasury_output_index: Option<Int>,
   }
   Cancel
   Recover
