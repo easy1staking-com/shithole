@@ -128,7 +128,7 @@ shithole:
   # listing produces a 404). Disable only for tests that don't need the v3 path.
   p2p:
     enabled: ${SHITHOLE_P2P_ENABLED:true}
-    pools-resource: ${SHITHOLE_P2P_POOLS_RESOURCE:classpath:p2p/pools.json}
+    pools-resource: ${SHITHOLE_P2P_POOLS_RESOURCE:classpath:p2p/pools.json.gz}
     fail-on-missing-resource: ${SHITHOLE_P2P_FAIL_ON_MISSING:true}
 
   # Bootstrap-only: paths to packaged JSON fixtures used by controllers

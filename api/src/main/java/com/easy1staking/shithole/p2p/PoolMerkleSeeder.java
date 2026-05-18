@@ -13,12 +13,14 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HexFormat;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Two-phase boot seeder for v3 pool merkle roots. Runs once on
@@ -90,7 +92,17 @@ public class PoolMerkleSeeder {
         }
 
         PoolsManifest manifest;
-        try (InputStream in = resource.getInputStream()) {
+        // Resource location may carry a `.gz` suffix — the builder emits
+        // gzipped manifests by default because the uncompressed form is
+        // ~73 MB. Sniff the suffix and stack GZIPInputStream when needed.
+        // BufferedInputStream is intentional: GZIPInputStream's default
+        // read buffer is tiny and Jackson's streaming parser triggers many
+        // small reads.
+        boolean gzipped = properties.poolsResource().endsWith(".gz");
+        try (InputStream raw = resource.getInputStream();
+             InputStream in = gzipped
+                     ? new GZIPInputStream(new BufferedInputStream(raw))
+                     : new BufferedInputStream(raw)) {
             manifest = objectMapper.readValue(in, PoolsManifest.class);
         } catch (IOException e) {
             throw new IllegalStateException(
@@ -163,7 +175,7 @@ public class PoolMerkleSeeder {
     @ConfigurationProperties(prefix = "shithole.p2p")
     public record PoolMerkleSeederProperties(
             @DefaultValue("true") boolean enabled,
-            @DefaultValue("classpath:p2p/pools.json") String poolsResource,
+            @DefaultValue("classpath:p2p/pools.json.gz") String poolsResource,
             @DefaultValue("true") boolean failOnMissingResource) {
     }
 
