@@ -1,5 +1,6 @@
 package com.easy1staking.shithole.indexer;
 
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ListPlutusData;
@@ -69,7 +70,7 @@ class ListingEventsIndexerTest {
                 .listingScriptAddress(WATCHED_ADDR)
                 .build();
         when(curatedRepo.findAll()).thenReturn(List.of(cc));
-        registry = new WatchAddressRegistry(curatedRepo);
+        registry = new WatchAddressRegistry(curatedRepo, Networks.preprod());
         registry.reconcile(); // load synchronously
 
         decoder = new ListingDatumDecoder();
@@ -352,7 +353,7 @@ class ListingEventsIndexerTest {
         // means the indexer is wired but does nothing.
         CuratedCollectionRepository emptyRepo = org.mockito.Mockito.mock(CuratedCollectionRepository.class);
         when(emptyRepo.findAll()).thenReturn(List.of());
-        WatchAddressRegistry emptyRegistry = new WatchAddressRegistry(emptyRepo);
+        WatchAddressRegistry emptyRegistry = new WatchAddressRegistry(emptyRepo, Networks.preprod());
         emptyRegistry.reconcile();
         assertThat(emptyRegistry.size()).isZero();
 

@@ -51,6 +51,14 @@ dependencies {
     // plutus.json + the config_nft_policy parameter.
     implementation("com.bloxbean.cardano:aiken-java-binding:0.1.1-preview2")
 
+    // Hydra-derived sha2_256 merkle tree library. Byte-compatible with the
+    // on-chain `aiken_merkle_tree/mt` lib (the contracts/ side uses the Aiken
+    // port; this is the Java port). easy1staking-com/jpgstore-sniper uses
+    // this exact version on the off-chain side; matching it guarantees that
+    // BE-computed roots + proofs verify against the v3 wanted_listing
+    // validator without any algorithmic drift.
+    implementation("org.cardanofoundation:merkle-tree-java:0.0.7")
+
     // CCL annotation processor for blueprint-driven model generation from contracts/plutus.json
     compileOnly("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")
     annotationProcessor("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")
@@ -120,5 +128,16 @@ tasks.register<JavaExec>("preprodSwap") {
     description = "Execute one on-chain Swap: find an (NA,NB) bucket match across wallet + pool, build/sign/submit the swap tx."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.easy1staking.shithole.tools.preprod.PreprodSwapTool")
+    standardInput = System.`in`
+}
+
+// ---------------------------------------------------------------------------
+// P2P (v3 wanted_listing) tools.
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("p2pBuildPoolMerkle") {
+    group = "p2p tools"
+    description = "Read .local/rug-pool-matching-traits-merged.csv + .local/hosky-traits/nft_traits.jsonl, compute per-pool merkle roots via merkle-tree-java, write the canonical api/src/main/resources/p2p/pools.json that the BE seeds from at startup."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.p2p.PoolMerkleBuilder")
     standardInput = System.`in`
 }

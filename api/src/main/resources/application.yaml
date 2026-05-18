@@ -122,6 +122,15 @@ shithole:
   curation:
     operator-pkhs: ${OPERATOR_PKHS:}
 
+  # v3 wanted-listing pool-merkle service. The seeder reads `pools-resource`
+  # at boot, recomputes every claimed root, and FAILS THE BOOT on mismatch
+  # (catches resource tampering / merkle-tree-java drift before any in-flight
+  # listing produces a 404). Disable only for tests that don't need the v3 path.
+  p2p:
+    enabled: ${SHITHOLE_P2P_ENABLED:true}
+    pools-resource: ${SHITHOLE_P2P_POOLS_RESOURCE:classpath:p2p/pools.json}
+    fail-on-missing-resource: ${SHITHOLE_P2P_FAIL_ON_MISSING:true}
+
   # Bootstrap-only: paths to packaged JSON fixtures used by controllers
   # until DB-backed implementations are wired up.
   fixtures:

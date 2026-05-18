@@ -1,5 +1,6 @@
 package com.easy1staking.shithole.indexer;
 
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +28,7 @@ class WatchAddressRegistryTest {
 
     @BeforeEach
     void setUp() {
-        registry = new WatchAddressRegistry(repo);
+        registry = new WatchAddressRegistry(repo, Networks.preprod());
     }
 
     @Test
