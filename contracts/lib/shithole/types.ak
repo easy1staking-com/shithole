@@ -91,3 +91,64 @@ pub type ListingRedeemer {
   Cancel
   Recover
 }
+
+// ============================================================================
+// Wanted-listing UTxO (held at parameterized spend-script address, v3)
+// ============================================================================
+
+/// A buyer's open offer for a trait-conditioned swap.
+///
+/// The buyer locks ONE NFT (their unwanted "offered" NFT) plus bounty ADA at
+/// the wanted-listing script address. They commit to accept any
+/// NFT-of-the-same-collection whose asset_name is provable in
+/// `accepted_merkle_root`. Sellers fulfill alone (no buyer signature at
+/// fulfill time) by providing a deposit input + merkle proof in the redeemer.
+///
+/// Unlike v2 swap-pool listings, wanted-listings DO NOT replant on fulfill —
+/// they dissolve. The deposited NFT flows to `buyer_address`, the offered
+/// NFT + bounty flow to the seller (minus protocol fee). Because the datum
+/// is never mutated, there's no `update_ref` slot; anti-double-sat binding
+/// lives on the buyer-output instead
+/// (`buyer_output.datum == InlineDatum(compute_output_tag(own_ref))`,
+/// enforced by the validator).
+pub type WantedDatum {
+  /// Reclaim-key holder. Whoever can sign with this pkh can pull the
+  /// offered NFT + bounty back via the Reclaim redeemer. Kept as the
+  /// first field so we can defensively extract it via partial decode
+  /// (same pattern v2 listing.ak uses for Cancel).
+  ///
+  /// Deliberately INDEPENDENT of `buyer_address.payment_credential` so a
+  /// buyer can fulfill into a cold/HW wallet while keeping Reclaim
+  /// authority on a hot wallet — or gift the deposit to a different
+  /// recipient without giving them reclaim rights.
+  buyer_pkh: VerificationKeyHash,
+  /// EXACT destination address for the deposited NFT. Validator enforces
+  /// full Address equality (payment + stake credentials), so buyers using
+  /// a base address tied to a specific stake credential get the NFT into
+  /// the wallet that's actually delegating to the bonus-trait stake pool.
+  buyer_address: Address,
+  accepted_merkle_root: ByteArray,
+}
+
+/// Redeemer for the wanted-listing validator.
+///
+/// `Fulfill` is the happy path: seller deposits a trait-matching NFT and
+/// receives the offered NFT + bounty.
+///
+/// `Reclaim` lets the buyer pull their offered NFT + bounty back out of
+/// the listing. Authorized by `signed_by(buyer_pkh)`.
+pub type WantedRedeemer {
+  Fulfill {
+    /// Merkle proof of the deposited NFT's `asset_name` (28 bytes) against
+    /// `WantedDatum.accepted_merkle_root`. List of 32-byte sibling hashes
+    /// from leaf to root. The verifier uses sorted-pair concatenation so
+    /// the proof needs no direction bits.
+    merkle_proof: List<ByteArray>,
+    /// Some(idx) ⇒ outputs[idx] is the treasury payment, validated against
+    /// cfg.protocol_fee + the compute_output_tag(own_ref) anti-double-sat
+    /// tag. None ⇒ no treasury output supplied; validator requires
+    /// `cfg.protocol_fee == 0`.
+    treasury_output_index: Option<Int>,
+  }
+  Reclaim
+}
