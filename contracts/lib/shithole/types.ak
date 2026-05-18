@@ -1,4 +1,5 @@
 use aiken/crypto.{VerificationKeyHash}
+use aiken_merkle_tree/mt.{Proof}
 use cardano/address.{Address}
 
 // ============================================================================
@@ -139,11 +140,12 @@ pub type WantedDatum {
 /// the listing. Authorized by `signed_by(buyer_pkh)`.
 pub type WantedRedeemer {
   Fulfill {
-    /// Merkle proof of the deposited NFT's `asset_name` (28 bytes) against
-    /// `WantedDatum.accepted_merkle_root`. List of 32-byte sibling hashes
-    /// from leaf to root. The verifier uses sorted-pair concatenation so
-    /// the proof needs no direction bits.
-    merkle_proof: List<ByteArray>,
+    /// Merkle membership proof of the deposited NFT's `asset_name` against
+    /// `WantedDatum.accepted_merkle_root`. Built off-chain via the
+    /// `aiken_merkle_tree/mt` library's `get_proof`; verified on-chain
+    /// via `mt.is_member`. Each ProofItem is a directional `Left(Root)`
+    /// or `Right(Root)`. Hashing is sha2_256; leaf = sha2_256(asset_name).
+    merkle_proof: Proof<ByteArray>,
     /// Some(idx) ⇒ outputs[idx] is the treasury payment, validated against
     /// cfg.protocol_fee + the compute_output_tag(own_ref) anti-double-sat
     /// tag. None ⇒ no treasury output supplied; validator requires

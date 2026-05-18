@@ -20,4 +20,11 @@ name = "aiken-lang/fuzz"
 version = "v2.1.1"
 source = "github"
 
+# Battle-tested Hydra-derived merkle library, same one jpgstore-sniper uses.
+# sha2_256 leaf+internal hashing, directional Left/Right proofs.
+[[dependencies]]
+name = "easy1staking-com/aiken-merkle-tree"
+version = "feat/migrate-latest-stdlib"
+source = "github"
+
 [config]

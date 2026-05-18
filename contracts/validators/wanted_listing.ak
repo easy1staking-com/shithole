@@ -1,7 +1,6 @@
 use aiken/collection/dict
 use aiken/collection/list
-use aiken/crypto.{blake2b_256}
-use aiken/primitive/bytearray
+use aiken_merkle_tree/mt.{Proof, from_hash, is_member}
 use cardano/assets.{PolicyId, Value}
 use cardano/transaction.{InlineDatum, OutputReference, Transaction}
 use shithole/types.{ConfigDatum, Fulfill, Reclaim, WantedDatum, WantedRedeemer}
@@ -105,7 +104,7 @@ fn validate_fulfill(
   input_datum: WantedDatum,
   own_ref: OutputReference,
   config_nft_policy: PolicyId,
-  merkle_proof: List<ByteArray>,
+  merkle_proof: Proof<ByteArray>,
   treasury_output_index: Option<Int>,
 ) -> Bool {
   let Transaction { reference_inputs, outputs, .. } = self
@@ -162,16 +161,16 @@ fn validate_fulfill(
   let deposit_asset_name =
     extract_single_collection_nft(buyer_out.value, collection_policy_id)
 
-  // W6: merkle proof verifies deposit_asset_name (28-byte leaf) → root via
-  // sorted-pair blake2b_256 hashing. 28-vs-32 byte length separation gives
-  // implicit domain separation between leaves and internal nodes (the
-  // security ultimately rests on blake2b preimage resistance, not on the
-  // length difference).
+  // W6: merkle proof verifies deposit_asset_name → accepted_merkle_root via
+  // the aiken_merkle_tree library (sha2_256 leaves + internals, directional
+  // Left/Right proof items). identity serialiser since asset_names are
+  // already raw ByteArrays.
   expect
-    verify_merkle_proof(
+    is_member(
+      from_hash(input_datum.accepted_merkle_root),
       deposit_asset_name,
       merkle_proof,
-      input_datum.accepted_merkle_root,
+      identity,
     )
 
   // Treasury leg (W7-W9 / W9'). Same Some/None gate as v2 listing's S7-S9 / S9'.
@@ -224,30 +223,3 @@ fn extract_single_collection_nft(
 }
 
 // use https://github.com/easy1staking-com/aiken-merkle-tree to validate, and I think it's sha256 and not blake?
-/// Verify a sorted-pair merkle proof.
-///
-/// Leaves are raw 28-byte asset_names. Internal nodes are
-/// `blake2b_256(concat(left, right))`. At each step the verifier
-/// concatenates the smaller value first, so the proof needs no direction
-/// bits.
-///
-/// Domain separation between leaves and internals is guaranteed by the
-/// 28-byte vs 32-byte length difference.
-fn verify_merkle_proof(
-  leaf: ByteArray,
-  proof: List<ByteArray>,
-  root: ByteArray,
-) -> Bool {
-  let computed =
-    list.foldl(
-      proof,
-      leaf,
-      fn(sibling, acc) {
-        when bytearray.compare(acc, sibling) is {
-          Less -> blake2b_256(bytearray.concat(acc, sibling))
-          _ -> blake2b_256(bytearray.concat(sibling, acc))
-        }
-      },
-    )
-  computed == root
-}

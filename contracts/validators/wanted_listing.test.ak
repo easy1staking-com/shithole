@@ -1,5 +1,4 @@
-use aiken/crypto.{blake2b_256}
-use aiken/primitive/bytearray
+use aiken_merkle_tree/mt.{Proof, from_list, get_proof, root, to_hash}
 use cardano/address.{Address, Script, VerificationKey}
 use cardano/assets
 use cardano/transaction.{
@@ -194,29 +193,29 @@ fn treasury_output(own_ref: OutputReference, lovelace: Int) -> Output {
 }
 
 // ============================================================================
-// Merkle helpers (mirror the on-chain verifier so we can compute roots and
-// proofs for fixtures with confidence — sorted-pair, blake2b_256, leaves
-// are raw asset_names, internals are 32-byte hashes).
+// Merkle helpers — thin wrappers over the aiken_merkle_tree library so the
+// tests build trees and proofs the EXACT same way the on-chain validator
+// verifies them. Off-chain (BE / FE) code must mirror this same pipeline:
+//   - leaves are raw asset_name bytes; `identity` serialiser
+//   - the library hashes leaves with sha2_256 internally
+//   - tree topology is determined by `from_list`'s left-leaning split-by-half
 // ============================================================================
 
-fn sorted_pair_hash(a: ByteArray, b: ByteArray) -> ByteArray {
-  when bytearray.compare(a, b) is {
-    Less -> blake2b_256(bytearray.concat(a, b))
-    _ -> blake2b_256(bytearray.concat(b, a))
-  }
+/// Build the merkle root bytes for a list of asset_names. Returns the raw
+/// 32-byte sha2_256-derived root — what we'd store in WantedDatum.
+fn build_root(items: List<ByteArray>) -> ByteArray {
+  expect Some(h) =
+    from_list(items, identity)
+      |> root
+      |> to_hash
+  h
 }
 
-/// Build a merkle root over a 2-element set. Proof for leaf X is just [Y].
-fn root_of_pair(a: ByteArray, b: ByteArray) -> ByteArray {
-  sorted_pair_hash(a, b)
-}
-
-/// Build a merkle root over a 4-element set with a fixed tree shape:
-///   root = H( H(a,b), H(c,d) )
-/// Proof for leaf `a`:  [b, H(c,d)]
-/// Proof for leaf `c`:  [d, H(a,b)]
-fn root_of_four(a: ByteArray, b: ByteArray, c: ByteArray, d: ByteArray) -> ByteArray {
-  sorted_pair_hash(sorted_pair_hash(a, b), sorted_pair_hash(c, d))
+/// Build a membership proof for a given asset_name against the tree spanned
+/// by `items`. Fails the test if `item ∉ items` (proof would be `None`).
+fn build_proof(items: List<ByteArray>, item: ByteArray) -> Proof<ByteArray> {
+  expect Some(p) = get_proof(from_list(items, identity), item, identity)
+  p
 }
 
 // ============================================================================
@@ -226,7 +225,7 @@ fn root_of_four(a: ByteArray, b: ByteArray, c: ByteArray, d: ByteArray) -> ByteA
 fn invoke_fulfill(
   tx: Transaction,
   root: ByteArray,
-  merkle_proof: List<ByteArray>,
+  merkle_proof: Proof<ByteArray>,
   treasury_output_index: Option<Int>,
 ) -> Bool {
   let listing_datum: Data =
@@ -279,8 +278,9 @@ fn happy_fulfill_tx(root: ByteArray) -> Transaction {
 }
 
 test fulfill_succeeds() {
-  let root = root_of_pair(test_deposit_name, test_other_name)
-  let proof = [test_other_name]
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
+  let proof = build_proof(items, test_deposit_name)
   invoke_fulfill(happy_fulfill_tx(root), root, proof, Some(1))
 }
 
@@ -289,27 +289,30 @@ test fulfill_succeeds() {
 // ============================================================================
 
 test fulfill_fails_with_wrong_proof() fail {
-  let root = root_of_pair(test_deposit_name, test_other_name)
-  // Wrong sibling — proof doesn't verify to root.
-  let proof = [test_third_name]
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
+  // Proof generated for a DIFFERENT leaf in the same tree. is_member will
+  // hash `test_deposit_name` (the leaf the validator pulled from the buyer
+  // output's value) and chain it via the test_other_name proof — root
+  // mismatch → reject.
+  let proof = build_proof(items, test_other_name)
   invoke_fulfill(happy_fulfill_tx(root), root, proof, Some(1))
 }
 
 test fulfill_fails_with_empty_proof_against_nontrivial_root() fail {
   // Tree of 2 leaves needs proof of length 1; supplying 0 should fail.
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let proof = []
   invoke_fulfill(happy_fulfill_tx(root), root, proof, Some(1))
 }
 
 test fulfill_succeeds_with_four_leaf_tree() {
-  // 4-leaf tree where deposit is leaf `a`. Proof for a is [b, H(c,d)].
-  let b = test_other_name
-  let c = test_third_name
+  // 4-leaf tree; library builds it via left-leaning split-by-half.
   let d = #"aabbccddeeff00112233445566778899aabbccddeeff001122334444"
-  let root = root_of_four(test_deposit_name, b, c, d)
-  let h_cd = sorted_pair_hash(c, d)
-  let proof = [b, h_cd]
+  let items = [test_deposit_name, test_other_name, test_third_name, d]
+  let root = build_root(items)
+  let proof = build_proof(items, test_deposit_name)
   invoke_fulfill(happy_fulfill_tx(root), root, proof, Some(1))
 }
 
@@ -331,7 +334,8 @@ test fulfill_fails_when_buyer_output_has_wrong_policy_nft() fail {
   // it checks `p == collection_policy_id` exactly.
   let wrong_policy =
     #"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = valid_config_datum()
   let bad_buyer_out =
     Output {
@@ -348,7 +352,7 @@ test fulfill_fails_when_buyer_output_has_wrong_policy_nft() fail {
       reference_inputs: [config_ref_input(cfg)],
       outputs: [bad_buyer_out, treasury_output(wanted_outref(), cfg.protocol_fee)],
     }
-  invoke_fulfill(tx, root, [test_other_name], Some(1))
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
 test fulfill_fails_when_buyer_output_has_extra_tokens() fail {
@@ -356,7 +360,8 @@ test fulfill_fails_when_buyer_output_has_extra_tokens() fail {
   // collection_policy_id. Co-tenant tokens are rejected.
   let extra_policy =
     #"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = valid_config_datum()
   let bad_buyer_out =
     Output {
@@ -374,11 +379,12 @@ test fulfill_fails_when_buyer_output_has_extra_tokens() fail {
       reference_inputs: [config_ref_input(cfg)],
       outputs: [bad_buyer_out, treasury_output(wanted_outref(), cfg.protocol_fee)],
     }
-  invoke_fulfill(tx, root, [test_other_name], Some(1))
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
 test fulfill_fails_when_buyer_doesnt_receive_nft() fail {
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = valid_config_datum()
   let tx =
     Transaction {
@@ -395,12 +401,13 @@ test fulfill_fails_when_buyer_doesnt_receive_nft() fail {
         treasury_output(wanted_outref(), cfg.protocol_fee),
       ],
     }
-  invoke_fulfill(tx, root, [test_other_name], Some(1))
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
 test fulfill_fails_when_buyer_output_has_wrong_nft() fail {
   // Buyer's output carries a different NFT than what was deposited.
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = valid_config_datum()
   let tx =
     Transaction {
@@ -410,7 +417,7 @@ test fulfill_fails_when_buyer_output_has_wrong_nft() fail {
         treasury_output(wanted_outref(), cfg.protocol_fee),
       ],
     }
-  invoke_fulfill(tx, root, [test_other_name], Some(1))
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
 // ============================================================================
@@ -418,7 +425,8 @@ test fulfill_fails_when_buyer_output_has_wrong_nft() fail {
 // ============================================================================
 
 test fulfill_succeeds_with_zero_fee_and_no_treasury() {
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = zero_fee_config_datum()
   let tx =
     Transaction {
@@ -428,16 +436,18 @@ test fulfill_succeeds_with_zero_fee_and_no_treasury() {
       // No treasury output.
       outputs: [buyer_output(test_deposit_name, wanted_outref())],
     }
-  invoke_fulfill(tx, root, [test_other_name], None)
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), None)
 }
 
 test fulfill_fails_with_none_treasury_when_fee_positive() fail {
-  let root = root_of_pair(test_deposit_name, test_other_name)
-  invoke_fulfill(happy_fulfill_tx(root), root, [test_other_name], None)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
+  invoke_fulfill(happy_fulfill_tx(root), root, build_proof(items, test_deposit_name), None)
 }
 
 test fulfill_fails_with_wrong_treasury_address() fail {
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let wrong_addr =
     Address { payment_credential: VerificationKey(test_seller_pkh), stake_credential: None }
   let cfg = valid_config_datum()
@@ -454,12 +464,13 @@ test fulfill_fails_with_wrong_treasury_address() fail {
         },
       ],
     }
-  invoke_fulfill(tx, root, [test_other_name], Some(1))
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
 test fulfill_fails_with_wrong_treasury_tag() fail {
   // Tag derived from a DIFFERENT outref — double-sat defense fires.
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = valid_config_datum()
   let tx =
     Transaction {
@@ -474,11 +485,12 @@ test fulfill_fails_with_wrong_treasury_tag() fail {
         },
       ],
     }
-  invoke_fulfill(tx, root, [test_other_name], Some(1))
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
 test fulfill_fails_with_insufficient_treasury_lovelace() fail {
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = valid_config_datum()
   let tx =
     Transaction {
@@ -494,7 +506,7 @@ test fulfill_fails_with_insufficient_treasury_lovelace() fail {
         },
       ],
     }
-  invoke_fulfill(tx, root, [test_other_name], Some(1))
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
 // ============================================================================
@@ -533,7 +545,8 @@ test reclaim_fails_without_buyer_sig() fail {
 /// each invocation excludes the OTHER listing's offered NFT from its
 /// deposit candidates.
 test multi_fulfill_two_listings_pass() {
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = valid_config_datum()
   let other_deposit =
     Input {
@@ -578,7 +591,10 @@ test multi_fulfill_two_listings_pass() {
   wanted_listing.wanted_listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
-    Fulfill { merkle_proof: [test_other_name], treasury_output_index: Some(2) },
+    Fulfill {
+      merkle_proof: build_proof(items, test_deposit_name),
+      treasury_output_index: Some(2),
+    },
     wanted_outref(),
     tx,
   )
@@ -589,7 +605,8 @@ test multi_fulfill_two_listings_pass() {
 /// fail W6 (tag mismatch) — same pattern as v2's
 /// `multi_swap_blocked_by_treasury_tag_binding`.
 test multi_fulfill_blocked_by_treasury_tag_binding() fail {
-  let root = root_of_pair(test_deposit_name, test_other_name)
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
   let cfg = valid_config_datum()
   let other_deposit =
     Input {
@@ -633,7 +650,12 @@ test multi_fulfill_blocked_by_treasury_tag_binding() fail {
   wanted_listing.wanted_listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
-    Fulfill { merkle_proof: [test_deposit_name], treasury_output_index: Some(2) },
+    Fulfill {
+      // Listing B's deposit is test_other_name. Proof must be valid so we
+      // confirm the test fails on the treasury tag check, not on merkle.
+      merkle_proof: build_proof(items, test_other_name),
+      treasury_output_index: Some(2),
+    },
     other_wanted_outref(),
     tx,
   )
