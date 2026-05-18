@@ -133,11 +133,22 @@ fn config_ref_input(cfg: ConfigDatum) -> Input {
 /// Wanted-listing input UTxO: the offered NFT + bounty lovelace at the
 /// parameterized script address.
 fn wanted_input(root: ByteArray, outref: OutputReference) -> Input {
+  wanted_input_with_lovelace(root, outref, test_bounty_lovelace + 2_000_000)
+}
+
+/// Variant of `wanted_input` that lets a test specify the EXACT lovelace
+/// amount locked in the listing UTxO. Used to drive the seller-break-even
+/// floor (W2) checks at boundaries.
+fn wanted_input_with_lovelace(
+  root: ByteArray,
+  outref: OutputReference,
+  lovelace: Int,
+) -> Input {
   Input {
     output_reference: outref,
     output: Output {
       address: test_wanted_addr(),
-      value: assets.from_lovelace(test_bounty_lovelace + 2_000_000)
+      value: assets.from_lovelace(lovelace)
         |> assets.add(test_collection_policy, test_offered_name, 1),
       datum: InlineDatum(
         WantedDatum {
@@ -504,6 +515,117 @@ test fulfill_fails_with_insufficient_treasury_lovelace() fail {
           datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
           reference_script: None,
         },
+      ],
+    }
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
+}
+
+// ============================================================================
+// Seller break-even floor (W2)
+//
+// `own_input.lovelace >= cfg.protocol_fee + min_seller_compensation`. Floor
+// is hardcoded at 2_000_000 lovelace in types.ak so a seller is guaranteed
+// to cover their tx fee + the buyer_output's ~1.5 ADA min_utxo from the
+// listing UTxO alone. Anything above flows to the seller as a tip.
+// ============================================================================
+
+test fulfill_succeeds_when_listing_lovelace_exactly_at_floor() {
+  // Floor = protocol_fee (1 ADA) + min_seller_compensation (2 ADA) = 3 ADA.
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
+  let cfg = valid_config_datum()
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        wanted_input_with_lovelace(root, wanted_outref(), 3_000_000),
+        deposit_input(test_deposit_name),
+      ],
+      reference_inputs: [config_ref_input(cfg)],
+      outputs: [
+        buyer_output(test_deposit_name, wanted_outref()),
+        treasury_output(wanted_outref(), cfg.protocol_fee),
+      ],
+    }
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
+}
+
+test fulfill_fails_when_listing_lovelace_below_floor() fail {
+  // Floor = 3 ADA, listing carries 2_999_999 — 1 lovelace short.
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
+  let cfg = valid_config_datum()
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        wanted_input_with_lovelace(root, wanted_outref(), 2_999_999),
+        deposit_input(test_deposit_name),
+      ],
+      reference_inputs: [config_ref_input(cfg)],
+      outputs: [
+        buyer_output(test_deposit_name, wanted_outref()),
+        treasury_output(wanted_outref(), cfg.protocol_fee),
+      ],
+    }
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
+}
+
+test fulfill_fails_on_zero_fee_path_when_listing_lovelace_below_floor() fail {
+  // protocol_fee=0 ⇒ floor = 2 ADA. Listing has 1.5 ADA — below floor even
+  // without a treasury output.
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
+  let cfg = zero_fee_config_datum()
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        wanted_input_with_lovelace(root, wanted_outref(), 1_500_000),
+        deposit_input(test_deposit_name),
+      ],
+      reference_inputs: [config_ref_input(cfg)],
+      outputs: [buyer_output(test_deposit_name, wanted_outref())],
+    }
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), None)
+}
+
+test fulfill_succeeds_on_zero_fee_path_exactly_at_floor() {
+  // protocol_fee=0 ⇒ floor = exactly 2 ADA. No treasury output.
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
+  let cfg = zero_fee_config_datum()
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        wanted_input_with_lovelace(root, wanted_outref(), 2_000_000),
+        deposit_input(test_deposit_name),
+      ],
+      reference_inputs: [config_ref_input(cfg)],
+      outputs: [buyer_output(test_deposit_name, wanted_outref())],
+    }
+  invoke_fulfill(tx, root, build_proof(items, test_deposit_name), None)
+}
+
+test fulfill_succeeds_with_high_tip() {
+  // Listing locks 50 ADA — well above floor. The 47 ADA above
+  // (protocol_fee + 2 ADA) is the seller's tip / incentive. Validator must
+  // accept without enforcing where the surplus goes (seller routes to self).
+  let items = [test_deposit_name, test_other_name]
+  let root = build_root(items)
+  let cfg = valid_config_datum()
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [
+        wanted_input_with_lovelace(root, wanted_outref(), 50_000_000),
+        deposit_input(test_deposit_name),
+      ],
+      reference_inputs: [config_ref_input(cfg)],
+      outputs: [
+        buyer_output(test_deposit_name, wanted_outref()),
+        treasury_output(wanted_outref(), cfg.protocol_fee),
       ],
     }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))

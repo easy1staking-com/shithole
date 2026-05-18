@@ -2,8 +2,11 @@ use aiken/collection/dict
 use aiken/collection/list
 use aiken_merkle_tree/mt.{Proof, from_hash, is_member}
 use cardano/assets.{PolicyId, Value}
-use cardano/transaction.{InlineDatum, OutputReference, Transaction}
-use shithole/types.{ConfigDatum, Fulfill, Reclaim, WantedDatum, WantedRedeemer}
+use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
+use shithole/types.{
+  ConfigDatum, Fulfill, Reclaim, WantedDatum, WantedRedeemer,
+  min_seller_compensation,
+}
 use shithole/utils
 
 // ============================================================================
@@ -77,13 +80,15 @@ validator wanted_listing(config_nft_policy: PolicyId) {
 //
 // Invariants:
 //   W1 config ref input pinpointed via config_nft_policy → cfg, collection_policy_id
-//   W2 deposit_input: an input that is NOT own_ref, strictly carries 1 NFT
-//      under collection_policy_id and no other non-ADA assets. Records
-//      deposit_asset_name (28 bytes).
-//   W3 merkle proof: blake2b_256-sorted-pair chain rooted at
+//   W2 own_input lovelace floor: the consumed listing UTxO must carry at
+//      least `cfg.protocol_fee + min_seller_compensation` lovelace. Protects
+//      sellers from listings that can't possibly cover their tx fee + the
+//      buyer-bound output's ~1.5 ADA min_utxo. Anything above this floor
+//      flows to the seller as their fulfillment incentive.
+//   W3 buyer_output: some output at buyer_pkh's payment credential carries
+//      the deposit NFT and the anti-double-sat tag.
+//   W4 merkle proof: sha2_256 chain rooted at
 //      input_datum.accepted_merkle_root, with leaf = deposit_asset_name.
-//   W4 buyer_output: some output at buyer_pkh's payment credential carries
-//      the deposit NFT.
 //   Treasury leg (gated by redeemer.treasury_output_index : Option<Int>):
 //     Some(idx) →
 //       W5 outputs[idx].address == cfg.treasury_addr
@@ -107,7 +112,7 @@ fn validate_fulfill(
   merkle_proof: Proof<ByteArray>,
   treasury_output_index: Option<Int>,
 ) -> Bool {
-  let Transaction { reference_inputs, outputs, .. } = self
+  let Transaction { reference_inputs, inputs, outputs, .. } = self
 
   // W1: locate config UTxO + extract cfg, collection_policy_id (= asset name
   // on the config NFT, enforced at config mint time).
@@ -126,7 +131,16 @@ fn validate_fulfill(
   expect InlineDatum(cfg_data) = cfg_input.output.datum
   expect cfg: ConfigDatum = cfg_data
 
-  // W2: precompute the buyer-output identity. `own_tag` binds an output to
+  // W2: seller break-even floor. The consumed listing must carry at least
+  // `cfg.protocol_fee + min_seller_compensation` lovelace so the seller is
+  // guaranteed to cover their tx fee + the buyer-output's min_utxo from the
+  // listing alone. Read the input value via find_input on own_ref (cheap,
+  // single-pass) and assert the floor BEFORE doing any merkle work.
+  expect Some(own_input) = find_input(inputs, own_ref)
+  expect
+    assets.expect_lovelace_of(own_input.output.value) >= cfg.protocol_fee + min_seller_compensation
+
+  // W3: precompute the buyer-output identity. `own_tag` binds an output to
   // THIS specific consumed listing UTxO (anti-double-sat for the buyer
   // side, same construction v2 listing.ak uses for its treasury).
   // Wrapping in InlineDatum once OUTSIDE the find-loop avoids re-allocating
@@ -134,7 +148,7 @@ fn validate_fulfill(
   let own_tag = utils.compute_output_tag(own_ref)
   let buyer_out_datum = InlineDatum(own_tag)
 
-  // W3 + W4: locate the buyer-output by BOTH (a) the EXACT buyer_address
+  // W3: locate the buyer-output by BOTH (a) the EXACT buyer_address
   // the datum specifies (full Address equality — payment cred + stake
   // cred, so the NFT lands in a wallet with the bonus-staking delegation
   // set) AND (b) the own_tag inline datum.
@@ -153,15 +167,15 @@ fn validate_fulfill(
       },
     )
 
-  // W5: buyer_out strictly carries ONE NFT under collection_policy_id and
-  // no other non-ADA assets. Extracting the deposit's asset_name from the
-  // output (rather than the input) sidesteps the multi-listing "which
+  // W3 (cont.): buyer_out strictly carries ONE NFT under collection_policy_id
+  // and no other non-ADA assets. Extracting the deposit's asset_name from
+  // the output (rather than the input) sidesteps the multi-listing "which
   // deposit belongs to me" question entirely — the seller commits via the
   // value they route to the buyer, and the validator reads it back.
   let deposit_asset_name =
     extract_single_collection_nft(buyer_out.value, collection_policy_id)
 
-  // W6: merkle proof verifies deposit_asset_name → accepted_merkle_root via
+  // W4: merkle proof verifies deposit_asset_name → accepted_merkle_root via
   // the aiken_merkle_tree library (sha2_256 leaves + internals, directional
   // Left/Right proof items). identity serialiser since asset_names are
   // already raw ByteArrays.
@@ -173,21 +187,21 @@ fn validate_fulfill(
       identity,
     )
 
-  // Treasury leg (W7-W9 / W9'). Same Some/None gate as v2 listing's S7-S9 / S9'.
+  // Treasury leg (W5-W7 / W7'). Same Some/None gate as v2 listing's S7-S9 / S9'.
   when treasury_output_index is {
     Some(idx) -> {
       let out_treasury = list.expect_at(outputs, idx)
       and {
-        // W7: treasury address
+        // W5: treasury address
         (out_treasury.address == cfg.treasury_addr)?,
-        // W8: anti-double-sat tag
+        // W6: anti-double-sat tag
         (out_treasury.datum == InlineDatum(own_tag))?,
-        // W9: protocol fee paid (trivially true when cfg.protocol_fee == 0)
+        // W7: protocol fee paid (trivially true when cfg.protocol_fee == 0)
         (assets.expect_lovelace_of(out_treasury.value) >= cfg.protocol_fee)?,
       }
     }
     None ->
-      // W9'
+      // W7'
       (cfg.protocol_fee == 0)?
   }
 }
@@ -221,5 +235,3 @@ fn extract_single_collection_nft(
   expect [Pair(name, 1)] = dict.to_pairs(inner)
   name
 }
-
-// use https://github.com/easy1staking-com/aiken-merkle-tree to validate, and I think it's sha256 and not blake?

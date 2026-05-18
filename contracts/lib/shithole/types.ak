@@ -13,6 +13,24 @@ use cardano/address.{Address}
 /// never strip their incentive to zero. 1 ADA = 1_000_000 lovelace.
 pub const min_lister_fee: Int = 1_000_000
 
+/// Hardcoded floor on the lovelace a buyer must lock in a wanted-listing
+/// UTxO, ON TOP of `cfg.protocol_fee`. The wanted_listing validator enforces
+/// `own_input.lovelace >= cfg.protocol_fee + min_seller_compensation` on the
+/// Fulfill path so a seller can plausibly cover the buyer-bound output's
+/// min_utxo (~1.5 ADA for an NFT + inline datum) plus the Cardano tx fee
+/// (~0.3-0.5 ADA) from the listing alone. Any lovelace ABOVE this floor is
+/// the seller's fulfillment tip.
+///
+/// 2 ADA is a starting point chosen for preprod testing. It is INTENTIONALLY
+/// tight — once we have real fulfill-tx fee measurements and a confirmed
+/// buyer_output min_utxo (which depends on min-UTxO-per-byte at submission
+/// time + the exact Address shape), refine this constant. Better safe is
+/// 2.5 ADA if measurements show the floor is too aggressive.
+///
+/// Protocol-level constant (not a per-collection config knob) so an admin
+/// can't strip the seller's break-even floor.
+pub const min_seller_compensation: Int = 2_000_000
+
 // ============================================================================
 // Config UTxO (mint handler creates it; spend handler updates it)
 // ============================================================================

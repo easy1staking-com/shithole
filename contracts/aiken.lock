@@ -35,4 +35,4 @@ requirements = []
 source = "github"
 
 [etags]
-"easy1staking-com/aiken-merkle-tree@feat/migrate-latest-stdlib" = [{ secs_since_epoch = 1779116146, nanos_since_epoch = 954070000 }, "bf6d21903cb91a6b27aadde3ba17360fa82955cb30425adadba4fde12281083c"]
+"easy1staking-com/aiken-merkle-tree@feat/migrate-latest-stdlib" = [{ secs_since_epoch = 1779131113, nanos_since_epoch = 275539000 }, "bf6d21903cb91a6b27aadde3ba17360fa82955cb30425adadba4fde12281083c"]
