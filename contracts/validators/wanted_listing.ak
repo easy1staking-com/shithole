@@ -4,9 +4,7 @@ use aiken/crypto.{blake2b_256}
 use aiken/primitive/bytearray
 use cardano/assets.{PolicyId, Value}
 use cardano/transaction.{InlineDatum, OutputReference, Transaction}
-use shithole/types.{
-  ConfigDatum, Fulfill, Reclaim, WantedDatum, WantedRedeemer,
-}
+use shithole/types.{ConfigDatum, Fulfill, Reclaim, WantedDatum, WantedRedeemer}
 use shithole/utils
 
 // ============================================================================
@@ -129,44 +127,52 @@ fn validate_fulfill(
   expect InlineDatum(cfg_data) = cfg_input.output.datum
   expect cfg: ConfigDatum = cfg_data
 
-  // W2: own_tag binds outputs to THIS specific consumed listing UTxO. Same
-  // anti-double-sat construction v2 listing.ak uses for its treasury.
+  // W2: precompute the buyer-output identity. `own_tag` binds an output to
+  // THIS specific consumed listing UTxO (anti-double-sat for the buyer
+  // side, same construction v2 listing.ak uses for its treasury).
+  // Wrapping in InlineDatum once OUTSIDE the find-loop avoids re-allocating
+  // it on every output we walk.
   let own_tag = utils.compute_output_tag(own_ref)
+  let buyer_out_datum = InlineDatum(own_tag)
 
-  // W3: locate the buyer-output by its own_tag inline datum. This is the
-  // KEY anti-double-sat lever: a single output's datum can only carry ONE
-  // tag, so it can only satisfy ONE consumed listing's validator. Without
-  // this, two listings from the same buyer with overlapping merkle roots
-  // could be drained by a single seller-supplied NFT (one buyer output for
-  // two listings → seller pockets both bounties).
+  // W3 + W4: locate the buyer-output by BOTH (a) the EXACT buyer_address
+  // the datum specifies (full Address equality — payment cred + stake
+  // cred, so the NFT lands in a wallet with the bonus-staking delegation
+  // set) AND (b) the own_tag inline datum.
+  //
+  // The combined filter is the anti-double-sat lever: a single output's
+  // datum can only carry ONE tag, so even when two listings share the
+  // same buyer_address and accept overlapping merkle roots, a seller can't
+  // route ONE NFT to satisfy both — the second listing's invocation needs
+  // its own tag in its own output. Address check first, since it's the
+  // more discriminating filter on a typical tx with diverse outputs.
   expect Some(buyer_out) =
     list.find(
       outputs,
-      fn(o) { o.datum == InlineDatum(own_tag) && o.address != cfg.treasury_addr },
+      fn(o) {
+        o.address == input_datum.buyer_address && o.datum == buyer_out_datum
+      },
     )
-
-  // W4: buyer_out delivered to the EXACT buyer address the datum specifies
-  // (full Address equality — payment cred AND stake cred). This lets buyers
-  // pin delivery to a wallet with their bonus-staking delegation set.
-  expect buyer_out.address == input_datum.buyer_address
 
   // W5: buyer_out strictly carries ONE NFT under collection_policy_id and
   // no other non-ADA assets. Extracting the deposit's asset_name from the
   // output (rather than the input) sidesteps the multi-listing "which
   // deposit belongs to me" question entirely — the seller commits via the
   // value they route to the buyer, and the validator reads it back.
-  let deposit_asset_name = extract_single_collection_nft(buyer_out.value, collection_policy_id)
+  let deposit_asset_name =
+    extract_single_collection_nft(buyer_out.value, collection_policy_id)
 
   // W6: merkle proof verifies deposit_asset_name (28-byte leaf) → root via
   // sorted-pair blake2b_256 hashing. 28-vs-32 byte length separation gives
   // implicit domain separation between leaves and internal nodes (the
   // security ultimately rests on blake2b preimage resistance, not on the
   // length difference).
-  expect verify_merkle_proof(
-    deposit_asset_name,
-    merkle_proof,
-    input_datum.accepted_merkle_root,
-  )
+  expect
+    verify_merkle_proof(
+      deposit_asset_name,
+      merkle_proof,
+      input_datum.accepted_merkle_root,
+    )
 
   // Treasury leg (W7-W9 / W9'). Same Some/None gate as v2 listing's S7-S9 / S9'.
   when treasury_output_index is {
@@ -217,6 +223,7 @@ fn extract_single_collection_nft(
   name
 }
 
+// use https://github.com/easy1staking-com/aiken-merkle-tree to validate, and I think it's sha256 and not blake?
 /// Verify a sorted-pair merkle proof.
 ///
 /// Leaves are raw 28-byte asset_names. Internal nodes are
