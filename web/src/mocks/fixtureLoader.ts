@@ -11,11 +11,18 @@
  * code runs in production — MSW is not started.
  */
 
-import type { CollectionState, CuratedCollection, ListingsResponse, NftMetadata } from "@/types/api";
+import type {
+  CollectionState,
+  CuratedCollection,
+  ListingsResponse,
+  NftMetadata,
+  Pool,
+} from "@/types/api";
 
 import curatedJson from "@/mocks/fixtures/api/curated.json";
 import hoskyCollection from "@/mocks/fixtures/api/collections/hosky.json";
 import hoskyListings from "@/mocks/fixtures/api/collections/hosky-listings.json";
+import poolsJson from "@/mocks/fixtures/api/p2p/pools.json";
 
 import nft1 from "@/mocks/fixtures/api/nft/a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303031.json";
 import nft2 from "@/mocks/fixtures/api/nft/a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559484f534b594361736847726162303030303030303032.json";
@@ -41,6 +48,13 @@ import imgHosky10 from "@/mocks/fixtures/hosky/images/HOSKYCashGrab000000010.png
 
 /** Curated list (home page). */
 export const curated: CuratedCollection[] = curatedJson as CuratedCollection[];
+
+/**
+ * v3 curated pools for the wanted-listing picker. Roots + asset_names_hex
+ * are placeholders; real values come from the BE seeder once
+ * `api/src/main/resources/p2p/pools.json` is populated.
+ */
+export const pools: Pool[] = poolsJson as Pool[];
 
 /** Per-slug collection envelope. */
 export const collectionBySlug: Record<string, CollectionState> = {

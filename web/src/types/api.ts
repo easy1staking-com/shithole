@@ -153,3 +153,52 @@ export type NftMetadata = {
   traits: NftTrait[];
   description: string | null;
 };
+
+/* ------------------------------------------------------------------ */
+/* v3 wanted-listing — pool-merkle endpoints                           */
+/* (BE: P2pController; SPEC §11 wanted-listings)                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Summary of one curated stake pool's currently-active merkle root. The
+ * FE renders these in the pool picker on the wanted-listing creation flow.
+ *
+ * `ticker` is the stable label (HOSKY, A3C, ...) across re-curations.
+ * `pool_id_hex` is the 28-byte bech32-decoded stake pool hash, or null
+ * for community-tracked pools that haven't published one yet.
+ * `merkle_root_hex` is the 32-byte sha2_256 root the buyer commits to
+ * when creating a wanted listing (the on-chain `accepted_merkle_root`).
+ */
+export type Pool = {
+  ticker: string;
+  pool_id_hex: string | null;
+  merkle_root_hex: string;
+  total_assets: number;
+  is_active: boolean;
+};
+
+/**
+ * One step in a merkle membership proof. `side` is "left" or "right" — the
+ * sibling's position relative to the running hash at this level. `hash_hex`
+ * is the 32-byte sibling sha2_256 hash. Forwarded verbatim into a Fulfill
+ * redeemer's `merkle_proof` field; the on-chain validator does the verify.
+ *
+ * Shape mirrors `aiken_merkle_tree/mt.ProofItem` and the matching
+ * `org.cardanofoundation:merkle-tree-java` `ProofItem.Left|Right`.
+ */
+export type ProofStep = {
+  side: "left" | "right";
+  hash_hex: string;
+};
+
+/**
+ * A complete membership proof — the chain of `ProofStep`s a seller submits
+ * with a `Fulfill` redeemer to prove their deposit NFT's asset_name is in
+ * the buyer's `accepted_merkle_root` set. An empty `proof` array is valid
+ * for a 1-leaf tree (rare in practice — pool sets are large).
+ */
+export type Proof = {
+  merkle_root_hex: string;
+  asset_name_hex: string;
+  proof: ProofStep[];
+};

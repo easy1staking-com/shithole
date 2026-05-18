@@ -13,7 +13,14 @@
 
 import { http, HttpResponse } from "msw";
 
-import { collectionBySlug, curated, imageUrlForUnit, listingsBySlug, nftByUnit } from "./fixtureLoader";
+import {
+  collectionBySlug,
+  curated,
+  imageUrlForUnit,
+  listingsBySlug,
+  nftByUnit,
+  pools,
+} from "./fixtureLoader";
 
 export const handlers = [
   http.get("/api/curated", () => {
@@ -94,6 +101,46 @@ export const handlers = [
           "mock-mode BE cannot verify CIP-8 signatures; set NEXT_PUBLIC_API_MODE=live for the real flow",
       },
       { status: 401 },
+    );
+  }),
+
+  /* ---- v3 wanted-listing — pool-merkle endpoints ------------------- */
+
+  http.get("/api/p2p/pools", () => {
+    return HttpResponse.json(pools.filter((p) => p.is_active));
+  }),
+
+  http.get("/api/p2p/pools/by-root/:root", ({ params }) => {
+    const root = params.root as string;
+    const pool = pools.find((p) => p.merkle_root_hex === root);
+    if (!pool) {
+      return HttpResponse.json({ error: "not_found", root }, { status: 404 });
+    }
+    return HttpResponse.json(pool);
+  }),
+
+  http.get("/api/p2p/pools/:ticker", ({ params }) => {
+    const ticker = params.ticker as string;
+    const pool = pools.find((p) => p.is_active && p.ticker === ticker);
+    if (!pool) {
+      return HttpResponse.json({ error: "not_found", ticker }, { status: 404 });
+    }
+    return HttpResponse.json(pool);
+  }),
+
+  // Proof generation needs real merkle data — the fixture pools.json carries
+  // placeholder roots/asset_names, so we can't synthesise a valid proof
+  // off-chain. Return 404 in mock mode so the UI exercises the empty branch;
+  // switch NEXT_PUBLIC_API_MODE=live for the real flow once the BE seeder
+  // is populated.
+  http.get("/api/p2p/pools/:root/proofs/:assetName", () => {
+    return HttpResponse.json(
+      {
+        error: "not_found",
+        message:
+          "mock-mode MSW serves placeholder pool data; proofs only available against live BE",
+      },
+      { status: 404 },
     );
   }),
 

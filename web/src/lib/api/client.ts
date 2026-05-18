@@ -14,6 +14,8 @@ import type {
   CuratedCollection,
   ListingsResponse,
   NftMetadata,
+  Pool,
+  Proof,
 } from "@/types/api";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
@@ -171,4 +173,59 @@ export function registerConfig(
   body: ConfigRegistrationRequest,
 ): Promise<ConfigRegistrationResponse> {
   return postJson<ConfigRegistrationResponse>("/api/configs", body);
+}
+
+/* ------------------------------------------------------------------ */
+/* v3 wanted-listing — pool-merkle endpoints                           */
+/* ------------------------------------------------------------------ */
+
+/** List currently-active curated pools. Empty array is valid (pre-curation). */
+export function fetchPools(): Promise<Pool[]> {
+  return getJson<Pool[]>("/api/p2p/pools");
+}
+
+/** Single active pool by ticker, or null on 404. */
+export async function fetchPoolByTicker(ticker: string): Promise<Pool | null> {
+  try {
+    return await getJson<Pool>(`/api/p2p/pools/${encodeURIComponent(ticker)}`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/**
+ * Reverse lookup: which pool produced this merkle root? Works for
+ * historical (no-longer-active) roots too — used to label a wanted listing
+ * whose datum carries a now-superseded root. Returns null on 404.
+ */
+export async function fetchPoolByRoot(merkleRootHex: string): Promise<Pool | null> {
+  try {
+    return await getJson<Pool>(
+      `/api/p2p/pools/by-root/${encodeURIComponent(merkleRootHex)}`,
+    );
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/**
+ * Membership proof for `assetNameHex` against `merkleRootHex`. Returns null
+ * if the root is unknown or the asset_name is not a leaf of that tree —
+ * callers should treat both as "this seller can't fulfill against this
+ * listing" rather than a hard error.
+ */
+export async function fetchProof(
+  merkleRootHex: string,
+  assetNameHex: string,
+): Promise<Proof | null> {
+  try {
+    return await getJson<Proof>(
+      `/api/p2p/pools/${encodeURIComponent(merkleRootHex)}/proofs/${encodeURIComponent(assetNameHex)}`,
+    );
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
 }
