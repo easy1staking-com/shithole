@@ -4,7 +4,7 @@ use aiken_merkle_tree/mt.{Proof, from_hash, is_member}
 use cardano/assets.{PolicyId, Value}
 use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
 use shithole/types.{
-  ConfigDatum, Fulfill, Reclaim, WantedDatum, WantedRedeemer,
+  ConfigDatum, Fulfill, Reclaim, Rescue, WantedDatum, WantedRedeemer,
   min_seller_compensation,
 }
 use shithole/utils
@@ -30,9 +30,9 @@ use shithole/utils
 // protocol fee (if any) → treasury.
 //
 // ----------------------------------------------------------------------------
-// Datum type is `Option<Data>` (not `Option<WantedDatum>`) so the `Reclaim`
-// branch can recover the buyer's pkh via a partial decode even if the rest of
-// the datum is somehow corrupt — mirrors the v2 Cancel pattern.
+// Datum extraction happens inside each branch so the `Recover` path can
+// specifically require `datum == None` (admin rescue of no-datum UTxOs), while
+// `Reclaim` keeps the defensive partial-decode trick from v2's Cancel.
 // ============================================================================
 
 validator wanted_listing(config_nft_policy: PolicyId) {
@@ -65,6 +65,26 @@ validator wanted_listing(config_nft_policy: PolicyId) {
         expect Some(input_data) = datum
         let buyer_pkh = utils.extract_first_bytearray_field(input_data)
         utils.signed_by(self, buyer_pkh)
+      }
+
+      Rescue -> {
+        // Admin rescue for UTxOs that landed at this address with NO datum
+        // (accidental pay-to-script). Strictly requires `datum == None` so
+        // the admin has zero power over any datum-bearing UTxO — a real
+        // wanted listing always carries a WantedDatum, so it can never be
+        // touched via this branch. Same semantics as v2 listing.ak's
+        // Recover, renamed to avoid constructor-name collision in types.ak.
+        expect None = datum
+        let cfg_input =
+          list.expect_find(
+            self.reference_inputs,
+            fn(i) {
+              assets.has_any_nft_strict(i.output.value, config_nft_policy)
+            },
+          )
+        expect InlineDatum(cfg_data) = cfg_input.output.datum
+        expect cfg: ConfigDatum = cfg_data
+        utils.signed_by(self, cfg.admin_pkh)
       }
     }
   }

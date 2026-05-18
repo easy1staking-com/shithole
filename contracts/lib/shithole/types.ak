@@ -156,6 +156,13 @@ pub type WantedDatum {
 ///
 /// `Reclaim` lets the buyer pull their offered NFT + bounty back out of
 /// the listing. Authorized by `signed_by(buyer_pkh)`.
+///
+/// `Rescue` is the admin-only path for UTxOs that landed at the wanted-
+/// listing address with NO datum (someone pay-to-script'd by accident).
+/// Strictly requires `datum == None` — the admin has zero power over any
+/// datum-bearing UTxO. Same semantics as v2 `ListingRedeemer::Recover`;
+/// renamed here because Aiken's constructor names are module-level and
+/// would collide with the v2 listing redeemer's `Recover`.
 pub type WantedRedeemer {
   Fulfill {
     /// Merkle membership proof of the deposited NFT's `asset_name` against
@@ -171,4 +178,5 @@ pub type WantedRedeemer {
     treasury_output_index: Option<Int>,
   }
   Reclaim
+  Rescue
 }

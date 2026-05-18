@@ -4,7 +4,7 @@ use cardano/assets
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
 }
-use shithole/types.{ConfigDatum, Fulfill, Reclaim, WantedDatum}
+use shithole/types.{ConfigDatum, Fulfill, Reclaim, Rescue, WantedDatum}
 use shithole/utils
 use wanted_listing
 
@@ -268,6 +268,36 @@ fn invoke_reclaim(tx: Transaction) -> Bool {
     wanted_outref(),
     tx,
   )
+}
+
+/// Rescue-path invocation. Caller supplies the `datum` value to test —
+/// real Rescue should run with `None` (admin rescue of no-datum UTxOs);
+/// supplying `Some(...)` exercises the validator's refusal to touch
+/// datum-bearing UTxOs through this branch.
+fn invoke_rescue(tx: Transaction, datum: Option<Data>) -> Bool {
+  wanted_listing.wanted_listing.spend(
+    test_config_nft_policy,
+    datum,
+    Rescue,
+    wanted_outref(),
+    tx,
+  )
+}
+
+/// Listing input with NO datum — the only legitimate Recover target. Used
+/// to simulate someone pay-to-script'ing the wanted-listing address without
+/// a datum (would otherwise be permanently stuck).
+fn no_datum_input(outref: OutputReference) -> Input {
+  Input {
+    output_reference: outref,
+    output: Output {
+      address: test_wanted_addr(),
+      value: assets.from_lovelace(2_000_000)
+        |> assets.add(test_collection_policy, test_offered_name, 1),
+      datum: NoDatum,
+      reference_script: None,
+    },
+  }
 }
 
 // ============================================================================
@@ -654,6 +684,93 @@ test reclaim_fails_without_buyer_sig() fail {
       extra_signatories: [test_seller_pkh],
     }
   invoke_reclaim(tx)
+}
+
+// ============================================================================
+// Rescue — admin recovery of no-datum UTxOs (mirrors v2 listing.ak Recover
+// semantically; renamed to avoid Aiken constructor-name collision in types.ak)
+//
+// Strictly requires `datum == None`. The admin has zero power over any UTxO
+// that carries a WantedDatum, even one whose datum shape is partially wrong:
+// `Rescue` succeeds ONLY when the UTxO truly has NoDatum.
+// ============================================================================
+
+test rescue_succeeds_with_admin_sig_on_no_datum_utxo() {
+  let cfg = valid_config_datum()
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [no_datum_input(wanted_outref())],
+      reference_inputs: [config_ref_input(cfg)],
+      extra_signatories: [test_admin_pkh],
+    }
+  invoke_rescue(tx, None)
+}
+
+test rescue_fails_without_admin_sig() fail {
+  let cfg = valid_config_datum()
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [no_datum_input(wanted_outref())],
+      reference_inputs: [config_ref_input(cfg)],
+      // Buyer signed, not the admin — admin gate must reject.
+      extra_signatories: [test_buyer_pkh],
+    }
+  invoke_rescue(tx, None)
+}
+
+test rescue_fails_when_datum_is_present() fail {
+  // Even with the admin's signature and a valid config, Rescue must
+  // refuse to touch a UTxO that has a datum — that's a real wanted
+  // listing, not an accidental pay-to-script. Buyer-Reclaim is the
+  // legitimate path for datum-bearing UTxOs.
+  let cfg = valid_config_datum()
+  let listing_datum: Data =
+    WantedDatum {
+      buyer_pkh: test_buyer_pkh,
+      buyer_address: test_buyer_addr(),
+      accepted_merkle_root: #"00",
+    }
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [wanted_input(#"00", wanted_outref())],
+      reference_inputs: [config_ref_input(cfg)],
+      extra_signatories: [test_admin_pkh],
+    }
+  invoke_rescue(tx, Some(listing_datum))
+}
+
+test rescue_fails_without_config_ref_input() fail {
+  // No config ref input ⇒ no admin_pkh to check against ⇒ list.expect_find
+  // fails before the signature check even runs.
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [no_datum_input(wanted_outref())],
+      reference_inputs: [],
+      extra_signatories: [test_admin_pkh],
+    }
+  invoke_rescue(tx, None)
+}
+
+test rescue_fails_when_datum_is_malformed_data() fail {
+  // Defensive: even if the datum is structurally nonsense (a bare integer,
+  // not a WantedDatum), Rescue must still reject. The `expect None = datum`
+  // gate fires before any decode is attempted, so the admin can't use this
+  // path to drain UTxOs whose datum got corrupted by a buggy off-chain
+  // writer. (Codex regression coverage.)
+  let cfg = valid_config_datum()
+  let malformed: Data = 42
+  let tx =
+    Transaction {
+      ..transaction.placeholder,
+      inputs: [wanted_input(#"00", wanted_outref())],
+      reference_inputs: [config_ref_input(cfg)],
+      extra_signatories: [test_admin_pkh],
+    }
+  invoke_rescue(tx, Some(malformed))
 }
 
 // ============================================================================

@@ -25,6 +25,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildFulfillRedeemer,
   buildReclaimRedeemer,
+  buildRescueRedeemer,
   buildWantedDatum,
 } from "@/lib/tx/wanted";
 
@@ -318,5 +319,28 @@ describe("buildReclaimRedeemer", () => {
   it("produces stable CBOR (regression anchor)", () => {
     // Constr alt=1 with 0 fields ⇒ CBOR tag 122 + empty array ⇒ d87a80.
     expect(Data.toCBORHex(buildReclaimRedeemer())).toBe("d87a80");
+  });
+});
+
+/* ============================================================ */
+/* Rescue redeemer                                              */
+/* ============================================================ */
+
+describe("buildRescueRedeemer", () => {
+  it("is equivalent to Constr 2 []", () => {
+    const actual = buildRescueRedeemer();
+    const expected = Data.constr(2n, []);
+    expect(asHex(actual)).toBe(asHex(expected));
+  });
+
+  it("produces stable CBOR (regression anchor)", () => {
+    // Constr alt=2 with 0 fields ⇒ CBOR tag 123 + empty array ⇒ d87b80.
+    expect(Data.toCBORHex(buildRescueRedeemer())).toBe("d87b80");
+  });
+
+  it("is distinct from Reclaim", () => {
+    expect(Data.toCBORHex(buildRescueRedeemer())).not.toBe(
+      Data.toCBORHex(buildReclaimRedeemer()),
+    );
   });
 });

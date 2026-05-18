@@ -8,11 +8,15 @@
  *     buyer_address: Address               — Constr 0 field 1
  *     accepted_merkle_root: ByteArray      — Constr 0 field 2
  *
- *   WantedRedeemer = Fulfill | Reclaim
+ *   WantedRedeemer = Fulfill | Reclaim | Rescue
  *     Fulfill (Constr 0):
  *       merkle_proof: Proof<ByteArray>     — List<ProofItem>
  *       treasury_output_index: Option<Int> — Constr 0 [Int] (Some) | Constr 1 [] (None)
  *     Reclaim (Constr 1): no fields
+ *     Rescue  (Constr 2): no fields — admin-only path for accidentally
+ *                         pay-to-script'd no-datum UTxOs (mirrors v2
+ *                         ListingRedeemer.Recover; renamed in Aiken to avoid
+ *                         constructor-name collision in types.ak)
  *
  *   ProofItem<a> (from aiken_merkle_tree)
  *     Left  (Constr 0) [hash: ByteArray]
@@ -195,6 +199,16 @@ export function buildFulfillRedeemer(input: FulfillRedeemerInput): Data.Data {
  */
 export function buildReclaimRedeemer(): Data.Data {
   return Data.constr(1n, []);
+}
+
+/**
+ * Build the admin's Rescue redeemer: {@code Constr 2 []}. Used to spend a
+ * UTxO that landed at the wanted-listing address with NO datum (someone
+ * accidentally pay-to-script'd). Validator strictly requires {@code datum ==
+ * None} and admin signature pulled from the config ref input.
+ */
+export function buildRescueRedeemer(): Data.Data {
+  return Data.constr(2n, []);
 }
 
 /* -------------------------------------------------------------------------- */
