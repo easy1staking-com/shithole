@@ -3,6 +3,7 @@ package com.easy1staking.shithole.indexer;
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
+import com.easy1staking.shithole.service.WantedListingScriptAddressDeriver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +13,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -24,11 +27,18 @@ class WatchAddressRegistryTest {
     @Mock
     private CuratedCollectionRepository repo;
 
+    @Mock
+    private WantedListingScriptAddressDeriver wantedDeriver;
+
     private WatchAddressRegistry registry;
 
     @BeforeEach
     void setUp() {
-        registry = new WatchAddressRegistry(repo, Networks.preprod());
+        // Stub the deriver to a fixed dummy address. lenient() because some
+        // tests don't trigger reconcile/registration paths that would call it.
+        lenient().when(wantedDeriver.deriveAddress(anyString()))
+                .thenReturn("addr_test1w_wanted_dummy");
+        registry = new WatchAddressRegistry(repo, Networks.preprod(), wantedDeriver);
     }
 
     @Test

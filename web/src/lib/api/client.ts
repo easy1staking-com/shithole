@@ -15,6 +15,7 @@ import type {
   CuratedCollection,
   ListingsResponse,
   NftMetadata,
+  P2pListing,
   Pool,
   Proof,
 } from "@/types/api";
@@ -224,6 +225,56 @@ export function fetchAssetPoolMembership(
   return postJson<AssetPoolMembership>("/api/p2p/asset-pool-membership", {
     asset_names_hex: assetNamesHex,
   });
+}
+
+export type P2pListingsQuery = {
+  /** Filter by collection's config_nft_policy hex. */
+  config?: string;
+  /** Filter by accepted_merkle_root(s) — wallet's matchable pools. */
+  roots?: string[];
+  size?: number;
+  page?: number;
+};
+
+/**
+ * Active wanted-listings, newest first. Apply at most one filter at a
+ * time (BE picks the more-specific path when both are provided — config
+ * is ignored if `roots` is non-empty).
+ */
+export function fetchP2pListings(
+  query: P2pListingsQuery = {},
+): Promise<P2pListing[]> {
+  const qs = new URLSearchParams();
+  if (query.config) qs.set("config", query.config);
+  if (query.roots && query.roots.length > 0) {
+    for (const r of query.roots) qs.append("root", r);
+  }
+  qs.set("size", String(query.size ?? 50));
+  qs.set("page", String(query.page ?? 0));
+  return getJson<P2pListing[]>(`/api/p2p/listings?${qs.toString()}`);
+}
+
+export type P2pListingsByBuyerQuery = {
+  includeSpent?: boolean;
+  size?: number;
+  page?: number;
+};
+
+/**
+ * Listings created by a specific buyer pkh. Default returns active only.
+ * Drives the /me/p2p "your listings" view.
+ */
+export function fetchP2pListingsByBuyer(
+  buyerPkhHex: string,
+  query: P2pListingsByBuyerQuery = {},
+): Promise<P2pListing[]> {
+  const qs = new URLSearchParams();
+  if (query.includeSpent) qs.set("includeSpent", "true");
+  qs.set("size", String(query.size ?? 50));
+  qs.set("page", String(query.page ?? 0));
+  return getJson<P2pListing[]>(
+    `/api/p2p/listings/by-buyer/${encodeURIComponent(buyerPkhHex)}?${qs.toString()}`,
+  );
 }
 
 /**

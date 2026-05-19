@@ -1,14 +1,18 @@
 package com.easy1staking.shithole.controller;
 
 import com.easy1staking.shithole.entity.PoolMerkleRootEntity;
+import com.easy1staking.shithole.entity.WantedListingEventEntity;
 import com.easy1staking.shithole.model.AssetPoolMembershipRequest;
+import com.easy1staking.shithole.model.P2pListingDto;
 import com.easy1staking.shithole.model.PoolDto;
 import com.easy1staking.shithole.model.ProofDto;
 import com.easy1staking.shithole.p2p.PoolMerkleService;
 import com.easy1staking.shithole.repository.PoolMerkleRootRepository;
+import com.easy1staking.shithole.repository.WantedListingEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.cardanofoundation.merkle.ProofItem;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,8 +20,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,6 +59,7 @@ public class P2pController {
 
     private final PoolMerkleRootRepository poolMerkleRootRepository;
     private final PoolMerkleService poolMerkleService;
+    private final WantedListingEventRepository wantedListingEventRepository;
 
     @GetMapping(value = "/p2p/pools", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<PoolDto>> activePools() {
@@ -156,6 +163,96 @@ public class P2pController {
             return new ProofDto.ProofStep("right", HEX.formatHex(r.getHash()));
         }
         throw new IllegalStateException("unknown ProofItem subtype: " + item);
+    }
+
+    /* ---- listings — browse + by-buyer ----------------------------------- */
+
+    /**
+     * Browse currently-active wanted listings, newest first. Optional
+     * filters narrow by collection (configNftPolicy hex) or by accepted
+     * merkle root (one or repeated query params).
+     *
+     * <p>Cap page size at 100 so a curious caller can't drag the whole
+     * table over the wire. Default 50.
+     */
+    @GetMapping(value = "/p2p/listings", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<P2pListingDto>> activeListings(
+            @RequestParam(value = "config", required = false) String configNftPolicyHex,
+            @RequestParam(value = "root", required = false) List<String> merkleRootHexes,
+            @RequestParam(value = "size", defaultValue = "50") int size,
+            @RequestParam(value = "page", defaultValue = "0") int page) {
+        int safeSize = Math.max(1, Math.min(100, size));
+        int safePage = Math.max(0, page);
+        var pageable = PageRequest.of(safePage, safeSize);
+
+        List<WantedListingEventEntity> rows;
+        if (merkleRootHexes != null && !merkleRootHexes.isEmpty()) {
+            List<byte[]> rootsBytes = merkleRootHexes.stream()
+                    .map(h -> parseHexExact(h, MERKLE_ROOT_BYTES))
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .toList();
+            if (rootsBytes.isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+            rows = wantedListingEventRepository.findActiveByMerkleRoots(rootsBytes, pageable);
+        } else if (configNftPolicyHex != null && !configNftPolicyHex.isEmpty()) {
+            Optional<byte[]> policyOpt = parseHexExact(configNftPolicyHex, 28);
+            if (policyOpt.isEmpty()) return ResponseEntity.badRequest().build();
+            rows = wantedListingEventRepository.findActiveByConfigNftPolicy(
+                    policyOpt.get(), pageable);
+        } else {
+            rows = wantedListingEventRepository.findAllActive(pageable);
+        }
+        return ResponseEntity.ok(rows.stream().map(P2pController::toListingDto).toList());
+    }
+
+    /**
+     * "Your listings" view — by buyer pkh. {@code includeSpent=true} returns
+     * both active + historical (good for a "past listings" subview);
+     * default returns active only.
+     */
+    @GetMapping(value = "/p2p/listings/by-buyer/{buyerPkhHex}",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<P2pListingDto>> listingsByBuyer(
+            @PathVariable("buyerPkhHex") String buyerPkhHex,
+            @RequestParam(value = "includeSpent", defaultValue = "false") boolean includeSpent,
+            @RequestParam(value = "size", defaultValue = "50") int size,
+            @RequestParam(value = "page", defaultValue = "0") int page) {
+        Optional<byte[]> pkhOpt = parseHexExact(buyerPkhHex, 28);
+        if (pkhOpt.isEmpty()) return ResponseEntity.badRequest().build();
+        int safeSize = Math.max(1, Math.min(100, size));
+        int safePage = Math.max(0, page);
+        var pageable = PageRequest.of(safePage, safeSize);
+
+        List<WantedListingEventEntity> rows = includeSpent
+                ? wantedListingEventRepository.findAllByBuyerPkh(pkhOpt.get(), pageable)
+                : wantedListingEventRepository.findActiveByBuyerPkh(pkhOpt.get(), pageable);
+        return ResponseEntity.ok(rows.stream().map(P2pController::toListingDto).toList());
+    }
+
+    /* ---- helpers -------------------------------------------------------- */
+
+    private static P2pListingDto toListingDto(WantedListingEventEntity e) {
+        return P2pListingDto.builder()
+                .txHash(HEX.formatHex(e.getTxHash()))
+                .outputIndex(e.getOutputIndex())
+                .configNftPolicy(HEX.formatHex(e.getConfigNftPolicy()))
+                .buyerPkh(HEX.formatHex(e.getBuyerPkh()))
+                .buyerAddressBech32(e.getBuyerAddressBech32())
+                .acceptedMerkleRoot(HEX.formatHex(e.getAcceptedMerkleRoot()))
+                .offeredNftUnit(HEX.formatHex(e.getOfferedNftUnit()))
+                .lovelace(e.getLovelace())
+                .createdAtSlot(e.getCreatedAtSlot())
+                .createdAt(e.getCreatedAt() == null ? null
+                        : e.getCreatedAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                .spentAction(e.getSpentAction())
+                .spentAtSlot(e.getSpentAtSlot())
+                .spentAt(e.getSpentAt() == null ? null
+                        : e.getSpentAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                .spentByTxHash(e.getSpentByTxHash() == null ? null
+                        : HEX.formatHex(e.getSpentByTxHash()))
+                .build();
     }
 
     /**

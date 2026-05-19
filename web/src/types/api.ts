@@ -211,3 +211,31 @@ export type Proof = {
  * those are the "trade away" candidates in the create flow.
  */
 export type AssetPoolMembership = Record<string, string[]>;
+
+/**
+ * One v3 wanted-listing row as served by `GET /api/p2p/listings` and
+ * `GET /api/p2p/listings/by-buyer/{buyer_pkh}`. All identifiers are
+ * lowercase hex unless suffixed `_bech32`.
+ *
+ * <p>{@code spent_action} is null while the listing is active. A null
+ * + no {@code spent_*} timestamps means the UTxO is still on-chain and
+ * fulfillable. Any other value (currently always {@code spent_unknown})
+ * means it was consumed.
+ */
+export type P2pListing = {
+  tx_hash: string;
+  output_index: number;
+  config_nft_policy: string;
+  buyer_pkh: string;
+  buyer_address_bech32: string;
+  accepted_merkle_root: string;
+  /** policy_id (28 bytes) + asset_name (0..32 bytes), concatenated hex. */
+  offered_nft_unit: string;
+  lovelace: number;
+  created_at_slot: number;
+  created_at: string;
+  spent_action?: string | null;
+  spent_at_slot?: number | null;
+  spent_at?: string | null;
+  spent_by_tx_hash?: string | null;
+};

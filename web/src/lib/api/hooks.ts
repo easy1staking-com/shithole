@@ -12,11 +12,15 @@ import {
   fetchCurated,
   fetchListings,
   fetchNftMetadata,
+  fetchP2pListings,
+  fetchP2pListingsByBuyer,
   fetchPoolByRoot,
   fetchPoolByTicker,
   fetchPools,
   fetchProof,
   type ListingsQuery,
+  type P2pListingsByBuyerQuery,
+  type P2pListingsQuery,
 } from "./client";
 import type {
   AssetPoolMembership,
@@ -24,6 +28,7 @@ import type {
   CuratedCollection,
   ListingsResponse,
   NftMetadata,
+  P2pListing,
   Pool,
   Proof,
 } from "@/types/api";
@@ -47,6 +52,22 @@ export const queryKeys = {
     [
       "assetPoolMembership",
       [...assetNamesHex].map((h) => h.toLowerCase()).sort().join(","),
+    ] as const,
+  p2pListings: (query: P2pListingsQuery) =>
+    [
+      "p2pListings",
+      query.config ?? null,
+      [...(query.roots ?? [])].sort().join(",") || null,
+      query.page ?? 0,
+      query.size ?? 50,
+    ] as const,
+  p2pListingsByBuyer: (buyerPkhHex: string, query: P2pListingsByBuyerQuery) =>
+    [
+      "p2pListingsByBuyer",
+      buyerPkhHex.toLowerCase(),
+      query.includeSpent ?? false,
+      query.page ?? 0,
+      query.size ?? 50,
     ] as const,
 };
 
@@ -167,6 +188,40 @@ export function useAssetPoolMembership(
     enabled: assetNamesHex.length > 0,
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000, // 5 min; the BE seeder only re-runs at boot
+    ...options,
+  });
+}
+
+/**
+ * Active wanted-listings, optionally filtered. Drives /p2p browse.
+ * Short stale time (10s) — listings come and go as buyers create + sellers
+ * fulfill. Refetch on focus is fine here.
+ */
+export function useP2pListings(
+  query: P2pListingsQuery = {},
+  options?: QueryOptions<P2pListing[]>,
+): UseQueryResult<P2pListing[], Error> {
+  return useQuery({
+    queryKey: queryKeys.p2pListings(query),
+    queryFn: () => fetchP2pListings(query),
+    staleTime: 10_000,
+    ...options,
+  });
+}
+
+/**
+ * Listings created by a specific buyer pkh. Drives /me/p2p.
+ */
+export function useP2pListingsByBuyer(
+  buyerPkhHex: string | null,
+  query: P2pListingsByBuyerQuery = {},
+  options?: QueryOptions<P2pListing[]>,
+): UseQueryResult<P2pListing[], Error> {
+  return useQuery({
+    queryKey: queryKeys.p2pListingsByBuyer(buyerPkhHex ?? "", query),
+    queryFn: () => fetchP2pListingsByBuyer(buyerPkhHex!, query),
+    enabled: Boolean(buyerPkhHex),
+    staleTime: 10_000,
     ...options,
   });
 }

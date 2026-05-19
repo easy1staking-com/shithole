@@ -144,6 +144,10 @@ export const handlers = [
     );
   }),
 
+  /* p2p listings — empty in mock mode (no on-chain data without BE) */
+  http.get("/api/p2p/listings", () => HttpResponse.json([])),
+  http.get("/api/p2p/listings/by-buyer/:buyerPkh", () => HttpResponse.json([])),
+
   // Batch pool membership — for mock mode, deterministically assign each
   // asset_name to two arbitrary pools (HOSKY + first active) so the FE
   // ribbons UI can be exercised without a real BE.
