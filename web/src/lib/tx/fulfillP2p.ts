@@ -23,6 +23,7 @@ import { blake2b } from "@noble/hashes/blake2b";
 import { applyWantedListingScript } from "./createP2pListing";
 import type { EvolutionClient } from "./evolutionClient";
 import { buildFulfillRedeemer } from "./p2p";
+import { hexToBytes, serialiseOutputReference } from "@/lib/pit/bucketMath";
 import type { Network } from "./swap";
 import { inlineDatum, toAddress, toAssets, txHashHex } from "./txAdapters";
 import type { UTxO } from "./utxo";
@@ -136,22 +137,19 @@ export async function submitFulfillP2p(
 /* -------------------------------------------------------------------------- */
 /* compute_output_tag(oref) = blake2b_256(cbor.serialise(oref))               */
 /* -------------------------------------------------------------------------- */
-
+/*
+ * Aiken's cbor.serialise emits indefinite-length CBOR arrays (0x9F .. 0xFF)
+ * for Constr values. Evolution's Data.toCBORHex emits definite-length —
+ * byte-different, which produces a different blake2b hash and the
+ * validator rejects the tag. v2 swap.ts shipped a hand-crafted
+ * serialiser matching Aiken's exact output; we reuse it verbatim.
+ */
 function computeOutputTag(txHashHexStr: string, outputIndex: number): Uint8Array {
-  const tag = Data.constr(0n, [
-    Data.bytearray(txHashHexStr.toLowerCase()),
-    Data.int(BigInt(outputIndex)),
-  ]);
-  const cbor = Data.toCBORHex(tag);
-  return blake2b(hexToBytes(cbor), { dkLen: 32 });
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const out = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < out.length; i++) {
-    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return out;
+  const orefCbor = serialiseOutputReference(
+    hexToBytes(txHashHexStr),
+    outputIndex,
+  );
+  return blake2b(orefCbor, { dkLen: 32 });
 }
 
 function bytesToHex(b: Uint8Array): string {
