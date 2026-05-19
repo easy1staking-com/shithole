@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
+import { ConfirmationChip } from "@/components/ConfirmationChip";
 import { useP2pListingsByBuyer } from "@/lib/api/hooks";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { makeClient } from "@/lib/tx/evolutionClient";
@@ -29,7 +30,9 @@ import type { P2pListing } from "@/types/api";
  */
 type BulkState =
   | { kind: "idle" }
-  | { kind: "running"; current: number; total: number; label: string }
+  | { kind: "submitting"; current: number; total: number; label: string }
+  | { kind: "confirming"; current: number; total: number; label: string }
+  | { kind: "confirmed"; count: number }
   | { kind: "error"; message: string };
 
 function listingKey(l: P2pListing): string {
@@ -87,7 +90,8 @@ export function MyListingsBoard() {
     });
   }, [liveListings]);
 
-  const isBulkRunning = bulkState.kind === "running";
+  const isBulkRunning =
+    bulkState.kind === "submitting" || bulkState.kind === "confirming";
 
   const handleBulkReclaim = useCallback(async () => {
     if (!api || !paymentKeyHashHex) {
@@ -104,6 +108,9 @@ export function MyListingsBoard() {
     }
     const groups = [...byPolicy.entries()];
     if (groups.length === 0) return;
+    // Sum of listings being reclaimed — used in the "✓ N confirmed"
+    // success chip after the loop completes.
+    const totalListings = groups.reduce((s, [, l]) => s + l.length, 0);
 
     try {
       const client = await makeClient(api);
@@ -111,12 +118,9 @@ export function MyListingsBoard() {
       const total = groups.length;
       for (let i = 0; i < groups.length; i++) {
         const [policy, listings] = groups[i];
-        setBulkState({
-          kind: "running",
-          current: i + 1,
-          total,
-          label: `reclaiming ${listings.length} listing${listings.length === 1 ? "" : "s"}`,
-        });
+        const label = `reclaiming ${listings.length} listing${listings.length === 1 ? "" : "s"}`;
+        // Phase 1: build + submit the tx (~1-2s).
+        setBulkState({ kind: "submitting", current: i + 1, total, label });
         const utxos = await Promise.all(
           listings.map((l) =>
             fetchUtxoByOutRef(client, l.tx_hash, l.output_index),
@@ -128,6 +132,8 @@ export function MyListingsBoard() {
           listingUtxos: utxos,
           buyerPkhHex: paymentKeyHashHex,
         });
+        // Phase 2: wait for chain inclusion (~30-60s on preprod).
+        setBulkState({ kind: "confirming", current: i + 1, total, label });
         await awaitTxConfirmation(client, r.txHash);
         // Optimistically hide the reclaimed listings so the user sees the
         // rows disappear before the BE indexer notices.
@@ -139,7 +145,12 @@ export function MyListingsBoard() {
       queryClient.invalidateQueries({ queryKey: ["p2pListingsByBuyer"] });
       queryClient.invalidateQueries({ queryKey: ["walletCollection"] });
       setSelected(new Set());
-      setBulkState({ kind: "idle" });
+      // Brief "confirmed" chip before sliding back to idle. Lingers ~4s
+      // so the user gets visual closure without the bar nagging forever.
+      setBulkState({ kind: "confirmed", count: totalListings });
+      setTimeout(() => {
+        setBulkState((s) => (s.kind === "confirmed" ? { kind: "idle" } : s));
+      }, 4000);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("bulk reclaim failed:", message);
@@ -235,14 +246,25 @@ export function MyListingsBoard() {
         })}
       </ul>
 
-      {/* Sticky bulk action bar — appears once anything is selected. */}
-      {selectedCount > 0 && (
+      {/* Sticky bulk action bar — appears once anything is selected OR
+       *  during the post-loop "confirmed" pulse so the user gets visual
+       *  closure even after we clear the selection. */}
+      {(selectedCount > 0 || bulkState.kind === "confirmed") && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur">
           <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-6 py-3">
-            <div className="text-xs text-zinc-300">
-              <span className="font-mono text-amber-300">{selectedCount}</span>{" "}
-              selected
-              {bulkState.kind === "running" && (
+            <div className="flex items-center gap-2 text-xs text-zinc-300">
+              {bulkState.kind === "confirmed" ? (
+                <ConfirmationChip status="confirmed" />
+              ) : (
+                <>
+                  <span className="font-mono text-amber-300">
+                    {selectedCount}
+                  </span>{" "}
+                  selected
+                </>
+              )}
+              {(bulkState.kind === "submitting" ||
+                bulkState.kind === "confirming") && (
                 <span className="ml-2 text-zinc-500">
                   · {bulkState.label}
                   {bulkState.total > 1
@@ -250,15 +272,24 @@ export function MyListingsBoard() {
                     : ""}
                 </span>
               )}
+              {bulkState.kind === "confirming" && (
+                <ConfirmationChip status="confirming" />
+              )}
             </div>
-            <button
-              type="button"
-              onClick={handleBulkReclaim}
-              disabled={isBulkRunning}
-              className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
-            >
-              {isBulkRunning ? "reclaiming…" : `reclaim ${selectedCount}`}
-            </button>
+            {bulkState.kind !== "confirmed" && (
+              <button
+                type="button"
+                onClick={handleBulkReclaim}
+                disabled={isBulkRunning}
+                className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+              >
+                {bulkState.kind === "submitting"
+                  ? "submitting…"
+                  : bulkState.kind === "confirming"
+                    ? "confirming…"
+                    : `reclaim ${selectedCount}`}
+              </button>
+            )}
           </div>
           {bulkState.kind === "error" && (
             <p

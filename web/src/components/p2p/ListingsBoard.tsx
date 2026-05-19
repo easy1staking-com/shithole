@@ -395,7 +395,20 @@ function ListingCard({
   const name =
     meta.data?.name ?? asciiOrShortHex(listing.offered_nft_unit.slice(56));
   const imageUrl = meta.data?.image_url ?? null;
-  const bountyAda = (Number(listing.lovelace) / 1_000_000).toFixed(2);
+  const depositAda = (Number(listing.lovelace) / 1_000_000).toFixed(2);
+  // Rough estimate of the swapper's actual ADA take, for the chip
+  // tooltip. Assumes the collection's protocol_fee is ~1 ADA (true for
+  // v1 Hosky; a per-collection lookup would tighten this when more
+  // collections come online). The constants match BountyStep's
+  // ESTIMATED_BUYER_OUTPUT_MIN (1.4) + ESTIMATED_TX_FEE (0.4).
+  const estSwapperTakeAda = Math.max(
+    0,
+    Number(listing.lovelace) / 1_000_000 - (1 + 1.4 + 0.4),
+  );
+  const chipTitle =
+    `${depositAda} ADA locked by the buyer.\n` +
+    `at swap time: 1 ADA → treasury, ~1.4 → returned to buyer w/ NFT, ~0.4 → tx fee.\n` +
+    `your take: ~${estSwapperTakeAda.toFixed(2)} ADA + their NFT.`;
   // The offered NFT may carry traits for multiple pools; show all of
   // them in the "matches traits of" row. The target pool gets its own
   // row below ("wants traits of") so the two semantics are visually
@@ -424,8 +437,19 @@ function ListingCard({
             …
           </div>
         )}
-        <span className="absolute right-2 top-2 rounded-md bg-zinc-950/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-300 backdrop-blur">
-          {bountyAda} ADA
+        {/* Two-line chip: estimated take + their NFT (what the swapper
+         *  walks away with), then the deposit muted below. Replaces the
+         *  bare "X ADA" chip which conflated locked-ADA with payout. */}
+        <span
+          title={chipTitle}
+          className="absolute right-2 top-2 flex flex-col items-end rounded-md bg-zinc-950/80 px-1.5 py-0.5 font-mono text-[10px] backdrop-blur"
+        >
+          <span className="font-semibold text-amber-300">
+            ~{estSwapperTakeAda.toFixed(2)} ADA + NFT
+          </span>
+          <span className="text-[9px] text-zinc-500">
+            from {depositAda} ADA deposit
+          </span>
         </span>
       </div>
       <div className="space-y-2 p-3">
