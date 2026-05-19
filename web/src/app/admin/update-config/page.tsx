@@ -62,10 +62,13 @@ export default function UpdateConfigPage() {
   const [step, setStep] = useState<Step>({ kind: "idle" });
 
   // When the BE returns the current config, pre-fill the form so the
-  // admin only needs to edit the fields they care about.
+  // admin only needs to edit the fields they care about. setState-in-
+  // effect is the right pattern: the form is editable (uncontrolled-
+  // then-controlled), and we seed it once from the async query result.
   useEffect(() => {
     if (!collection.data) return;
     const c = collection.data.config;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setValues({
       m: c.m,
       protocolFeeAda: c.protocol_fee / 1_000_000,
@@ -350,8 +353,11 @@ function addressViewToBech32(c: CollectionState): string {
 }
 
 function reconstructBech32(c: CollectionState): string {
-  // Lazy import to avoid pulling Address machinery into the SSR bundle
-  // for routes that don't use this page.
+  // Lazy require() to keep Evolution's Address machinery out of the
+  // SSR bundle for routes that don't render this admin page. A dynamic
+  // import would be async; this helper is called synchronously from
+  // multiple places, so require() is the pragmatic choice.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ev = require("@evolution-sdk/evolution") as {
     Address: typeof import("@evolution-sdk/evolution").Address;
     Credential: typeof import("@evolution-sdk/evolution").Credential;

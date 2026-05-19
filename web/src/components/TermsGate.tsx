@@ -47,6 +47,11 @@ export function TermsGate() {
     // useSearchParams() keeps every page statically renderable.
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
+      // setState-in-effect is the right pattern here: window.location is
+      // unavailable during SSR, so we can't lazy-init this from the
+      // server-render. The mount-once read + setState bridges the
+      // server/client gap.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (params.get("from") === "gate") setHasGateBypass(true);
     }
 
