@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import { NftPickerStep } from "@/components/p2p/NftPickerStep";
 import { PoolPicker, PoolSummary } from "@/components/p2p/PoolPicker";
-import { useCollection, useCurated } from "@/lib/api/hooks";
+import { useCollection, useCurated, useNftMetadata } from "@/lib/api/hooks";
+import type { WalletCollectionNft } from "@/lib/wallet/useWalletCollectionNfts";
 import type { Pool } from "@/types/api";
 
 /**
@@ -19,9 +21,8 @@ import type { Pool } from "@/types/api";
  * Reads {@code ?collection=<slug>} from the URL. If absent, falls back to a
  * collection picker so users who landed here from the global nav can pick.
  *
- * <p>Steps 2 and 3 are stubbed until the wallet-NFT picker + tx builder
- * land — this commit ships step 1 fully wired so the page is reachable +
- * the chosen pool can be reflected in URL state.
+ * <p>Step 3 is stubbed until the bounty input + tx builder land — this
+ * commit ships steps 1+2 (pool + NFT picker) fully wired.
  */
 export function CreateListingForm() {
   const params = useSearchParams();
@@ -85,6 +86,9 @@ function FlowForCollection({ slug }: { slug: string }) {
   const collection = useCollection(slug);
   const router = useRouter();
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
+  const [selectedNft, setSelectedNft] = useState<WalletCollectionNft | null>(
+    null,
+  );
 
   const handleSelectPool = useCallback(
     (pool: Pool) => {
@@ -99,6 +103,13 @@ function FlowForCollection({ slug }: { slug: string }) {
     },
     [router, slug],
   );
+
+  const handleSelectNft = useCallback((nft: WalletCollectionNft) => {
+    setSelectedNft(nft);
+    // NFT unit doesn't go into the URL — it's sensitive-ish (reveals the
+    // user's wallet holdings) and the picker is fast to re-render from
+    // wallet state anyway.
+  }, []);
 
   if (collection.isPending) {
     return <p className="text-sm text-zinc-500">looking up the pit…</p>;
@@ -143,28 +154,60 @@ function FlowForCollection({ slug }: { slug: string }) {
       <Step
         number={2}
         title="pick the NFT you want to get rid of"
-        complete={false}
+        complete={!!selectedNft}
         disabled={!selectedPool}
       >
-        <p className="text-sm text-zinc-500">
-          {selectedPool
-            ? "wallet picker landing in the next commit — stay tuned."
-            : "pick a pool first."}
-        </p>
+        {selectedPool ? (
+          <>
+            <NftPickerStep
+              collectionPolicyHex={collection.data.collection_policy_id}
+              accent={collection.data.theme?.accent_color ?? "#b87333"}
+              selectedUnit={selectedNft?.unit ?? null}
+              onSelect={handleSelectNft}
+            />
+            {selectedNft && (
+              <div className="flex items-center gap-2 pt-3">
+                <span className="text-xs text-zinc-500">picked:</span>
+                <NftSummary unit={selectedNft.unit} />
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-zinc-500">pick a pool first.</p>
+        )}
       </Step>
 
       <Step
         number={3}
         title="how generous are you feeling?"
         complete={false}
-        disabled={!selectedPool}
+        disabled={!selectedPool || !selectedNft}
       >
         <p className="text-sm text-zinc-500">
-          bounty input landing in the next commit — minimum will be
-          protocol_fee + 2 ADA. anything extra is your tip to attract a
-          taker.
+          {!selectedPool
+            ? "pick a pool first."
+            : !selectedNft
+              ? "pick an NFT first."
+              : "bounty input + sign landing in the next commit. minimum is protocol_fee + 2 ADA — anything extra is your tip to attract a taker."}
         </p>
       </Step>
+    </div>
+  );
+}
+
+/* ============================================================ */
+/* Selected-NFT summary chip                                    */
+/* ============================================================ */
+
+function NftSummary({ unit }: { unit: string }) {
+  const meta = useNftMetadata(unit);
+  const label =
+    meta.data?.name ??
+    meta.data?.asset_name ??
+    `${unit.slice(56, 64)}…`;
+  return (
+    <div className="flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300">
+      <span className="font-mono">{label}</span>
     </div>
   );
 }
@@ -196,7 +239,10 @@ function Step({
             ? "border-amber-700/60 bg-amber-950/10"
             : "border-zinc-800 bg-zinc-950/40")
       }
-      aria-disabled={disabled || undefined}
+      // No aria-disabled on <section>: not supported by role=region per
+      // ARIA; we communicate disabled-ness via the muted styling above and
+      // the disabled state of the child controls (PoolPicker buttons,
+      // NftPickerStep cards) when prerequisites aren't met.
     >
       <h2 className="flex items-center gap-2 text-base font-medium">
         <span
