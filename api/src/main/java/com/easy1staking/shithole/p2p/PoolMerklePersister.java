@@ -87,12 +87,17 @@ public class PoolMerklePersister {
 
         // Warm the service cache while we hold the tx — exceptions here roll
         // back the active flip too, which is the desired all-or-nothing.
+        // We also populate the asset→pools inverted index, used by the FE
+        // wallet picker to show pool ribbons per NFT.
         for (PoolsManifest.PoolEntry pool : manifest.pools()) {
             byte[] root = HEX.parseHex(pool.merkleRootHex());
             List<byte[]> assetNames = pool.assetNamesHex().stream()
                     .map(HEX::parseHex)
                     .toList();
             poolMerkleService.cacheTree(root, assetNames);
+            poolMerkleService.cachePoolMembership(pool.ticker(), pool.assetNamesHex());
         }
+        log.info("v3 pool-merkle: pool-membership index populated for {} pool(s)",
+                manifest.pools().size());
     }
 }

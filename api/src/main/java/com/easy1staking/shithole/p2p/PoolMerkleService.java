@@ -53,6 +53,21 @@ public class PoolMerkleService {
             new ConcurrentHashMap<>();
 
     /**
+     * Inverted index for the FE's NFT picker: {@code asset_name_hex →
+     * [ticker, …]}. Lets the wallet picker show pool ribbons per NFT and
+     * implement "select unmatched" in one BE round-trip.
+     *
+     * <p>Populated by the seeder during boot via {@link #cachePoolMembership}.
+     * Active pools only — historical (superseded) roots don't contribute, so
+     * the membership view always reflects the current curation snapshot.
+     *
+     * <p>Lowercase-hex keys; tickers are interned ({@link String#intern})
+     * so the 420k-entry map only holds 12 distinct ticker String instances.
+     */
+    private final ConcurrentHashMap<String, java.util.LinkedHashSet<String>>
+            tickersByAssetHex = new ConcurrentHashMap<>();
+
+    /**
      * Build a tree from a canonical-ordered asset_names list and return its
      * 32-byte root. Used by the seeder during the recompute-and-verify phase
      * and by {@code PoolMerkleBuilder} when authoring {@code pools.json}.
@@ -69,6 +84,37 @@ public class PoolMerkleService {
      */
     public MerkleElement<byte[]> buildTree(List<byte[]> assetNames) {
         return MerkleTree.fromList(assetNames, IDENTITY_SERIALISER);
+    }
+
+    /**
+     * Record pool membership for a single pool's asset_name set. The seeder
+     * calls this once per active pool at boot; subsequent calls for the same
+     * (asset_name_hex, ticker) pair are idempotent.
+     *
+     * <p>Use {@link String#intern} on the ticker so the 12 distinct tickers
+     * share one String instance across the ~420k-entry index. Cuts memory
+     * footprint of the values roughly in half vs unintern'd Strings.
+     */
+    public void cachePoolMembership(String ticker, List<String> assetNamesHex) {
+        String interned = ticker.intern();
+        for (String hex : assetNamesHex) {
+            tickersByAssetHex
+                    .computeIfAbsent(hex.toLowerCase(), k -> new java.util.LinkedHashSet<>())
+                    .add(interned);
+        }
+    }
+
+    /**
+     * Return the active-pool tickers that include this asset_name in their
+     * merkle tree. Empty list when no active pool accepts it.
+     *
+     * <p>Order is insertion order (which mirrors seeder iteration order over
+     * pools alphabetically), so it's stable across calls.
+     */
+    public List<String> getPoolMembership(String assetNameHex) {
+        java.util.LinkedHashSet<String> tickers =
+                tickersByAssetHex.get(assetNameHex.toLowerCase());
+        return tickers == null ? List.of() : List.copyOf(tickers);
     }
 
     /**

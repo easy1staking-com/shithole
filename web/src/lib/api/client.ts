@@ -10,6 +10,7 @@
  */
 
 import type {
+  AssetPoolMembership,
   CollectionState,
   CuratedCollection,
   ListingsResponse,
@@ -208,6 +209,21 @@ export async function fetchPoolByRoot(merkleRootHex: string): Promise<Pool | nul
     if (e instanceof ApiError && e.status === 404) return null;
     throw e;
   }
+}
+
+/**
+ * Batch lookup — for each asset_name_hex, return the active pools' tickers
+ * that accept it. Empty list means the NFT isn't in any current pool's
+ * tree. Drives the FE wallet picker's pool ribbons + "select unmatched".
+ *
+ * <p>Response is keyed by lowercase hex even if the request used uppercase.
+ */
+export function fetchAssetPoolMembership(
+  assetNamesHex: string[],
+): Promise<AssetPoolMembership> {
+  return postJson<AssetPoolMembership>("/api/p2p/asset-pool-membership", {
+    asset_names_hex: assetNamesHex,
+  });
 }
 
 /**

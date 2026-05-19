@@ -7,7 +7,7 @@ import { useCallback, useState } from "react";
 import { BountyStep } from "@/components/p2p/BountyStep";
 import { NftPickerStep } from "@/components/p2p/NftPickerStep";
 import { PoolPicker, PoolSummary } from "@/components/p2p/PoolPicker";
-import { useCollection, useCurated, useNftMetadata } from "@/lib/api/hooks";
+import { useCollection, useCurated } from "@/lib/api/hooks";
 import {
   submitCreateP2pListing,
   type CreateP2pListingResult,
@@ -94,8 +94,13 @@ function FlowForCollection({ slug }: { slug: string }) {
   const collection = useCollection(slug);
   const router = useRouter();
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
-  const [selectedNft, setSelectedNft] = useState<WalletCollectionNft | null>(
-    null,
+  /**
+   * Multi-select NFT state — a Map keyed by unit so React equality stays
+   * cheap (only Map identity changes, not the entire selection set per
+   * render). One Map entry = one wanted-listing UTxO that will be created.
+   */
+  const [selectedNfts, setSelectedNfts] = useState<Map<string, WalletCollectionNft>>(
+    new Map(),
   );
 
   const handleSelectPool = useCallback(
@@ -112,11 +117,20 @@ function FlowForCollection({ slug }: { slug: string }) {
     [router, slug],
   );
 
-  const handleSelectNft = useCallback((nft: WalletCollectionNft) => {
-    setSelectedNft(nft);
-    // NFT unit doesn't go into the URL — it's sensitive-ish (reveals the
-    // user's wallet holdings) and the picker is fast to re-render from
-    // wallet state anyway.
+  const handleToggleNft = useCallback((nft: WalletCollectionNft) => {
+    setSelectedNfts((prev) => {
+      const next = new Map(prev);
+      if (next.has(nft.unit)) {
+        next.delete(nft.unit);
+      } else {
+        next.set(nft.unit, nft);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSetSelection = useCallback((nfts: WalletCollectionNft[]) => {
+    setSelectedNfts(new Map(nfts.map((n) => [n.unit, n])));
   }, []);
 
   // Wallet bits the Step-3 submission needs.
@@ -132,7 +146,7 @@ function FlowForCollection({ slug }: { slug: string }) {
 
   const handleSubmitBounty = useCallback(
     async (bountyLovelace: bigint) => {
-      if (!selectedPool || !selectedNft) return;
+      if (!selectedPool || selectedNfts.size === 0) return;
       if (!api || !paymentKeyHashHex || !addressBech32 || !collection.data) {
         setSubmitError("connect your wallet first");
         return;
@@ -152,7 +166,7 @@ function FlowForCollection({ slug }: { slug: string }) {
           buyerPkhHex: paymentKeyHashHex,
           buyerBech32Address: addressBech32,
           acceptedMerkleRootHex: selectedPool.merkle_root_hex,
-          offeredNftUnit: selectedNft.unit,
+          offeredNftUnits: Array.from(selectedNfts.keys()),
           bountyLovelace,
         });
         setSubmitResult(result);
@@ -168,7 +182,7 @@ function FlowForCollection({ slug }: { slug: string }) {
       addressBech32,
       collection.data,
       selectedPool,
-      selectedNft,
+      selectedNfts,
     ],
   );
 
@@ -214,25 +228,19 @@ function FlowForCollection({ slug }: { slug: string }) {
 
       <Step
         number={2}
-        title="pick the NFT you want to get rid of"
-        complete={!!selectedNft}
+        title="pick the NFTs you want to get rid of"
+        complete={selectedNfts.size > 0}
         disabled={!selectedPool}
       >
         {selectedPool ? (
-          <>
-            <NftPickerStep
-              collectionPolicyHex={collection.data.collection_policy_id}
-              accent={collection.data.theme?.accent_color ?? "#b87333"}
-              selectedUnit={selectedNft?.unit ?? null}
-              onSelect={handleSelectNft}
-            />
-            {selectedNft && (
-              <div className="flex items-center gap-2 pt-3">
-                <span className="text-xs text-zinc-500">picked:</span>
-                <NftSummary unit={selectedNft.unit} />
-              </div>
-            )}
-          </>
+          <NftPickerStep
+            collectionPolicyHex={collection.data.collection_policy_id}
+            accent={collection.data.theme?.accent_color ?? "#b87333"}
+            selectedPoolTicker={selectedPool.ticker}
+            selectedUnits={new Set(selectedNfts.keys())}
+            onToggle={handleToggleNft}
+            onSetSelection={handleSetSelection}
+          />
         ) : (
           <p className="text-sm text-zinc-500">pick a pool first.</p>
         )}
@@ -242,18 +250,19 @@ function FlowForCollection({ slug }: { slug: string }) {
         number={3}
         title="how generous are you feeling?"
         complete={!!submitResult}
-        disabled={!selectedPool || !selectedNft}
+        disabled={!selectedPool || selectedNfts.size === 0}
       >
         {!selectedPool ? (
           <p className="text-sm text-zinc-500">pick a pool first.</p>
-        ) : !selectedNft ? (
-          <p className="text-sm text-zinc-500">pick an NFT first.</p>
+        ) : selectedNfts.size === 0 ? (
+          <p className="text-sm text-zinc-500">pick at least one NFT first.</p>
         ) : submitResult ? (
           <SuccessPanel result={submitResult} />
         ) : (
           <>
             <BountyStep
               protocolFeeLovelace={BigInt(collection.data.config.protocol_fee)}
+              listingCount={selectedNfts.size}
               onSubmit={handleSubmitBounty}
               submitting={submitting}
             />
@@ -274,10 +283,13 @@ function FlowForCollection({ slug }: { slug: string }) {
 /* ============================================================ */
 
 function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
+  const n = result.outputs.length;
   return (
     <div className="space-y-3">
       <p className="text-sm text-amber-200">
-        bounty posted. waiting for some idiot to take the bait.
+        {n === 1
+          ? "bounty posted. waiting for some idiot to take the bait."
+          : `${n} bounties posted. waiting for ${n} idiots to take the bait.`}
       </p>
       <dl className="space-y-1 text-xs">
         <div className="flex gap-2">
@@ -285,36 +297,29 @@ function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
           <dd className="font-mono text-zinc-300 break-all">{result.txHash}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="w-24 text-zinc-500">output</dt>
+          <dt className="w-24 text-zinc-500">script</dt>
+          <dd className="font-mono text-zinc-400 break-all">
+            {result.wantedScriptAddress.slice(0, 14)}…{result.wantedScriptAddress.slice(-6)}
+          </dd>
+        </div>
+        <div className="flex gap-2">
+          <dt className="w-24 text-zinc-500">
+            {n === 1 ? "output" : "outputs"}
+          </dt>
           <dd className="font-mono text-zinc-400">
-            #{result.outputIndex} @ {result.wantedScriptAddress.slice(0, 14)}…
+            {result.outputs.map((o) => `#${o.outputIndex}`).join(", ")}
           </dd>
         </div>
       </dl>
       <p className="text-xs text-zinc-500">
-        the listing settles on chain in ~30-60s. your s#!t is locked at the
-        script address with your bounty; you can reclaim it any time.
+        the {n === 1 ? "listing" : "listings"} settle on chain in ~30-60s.
+        your s#!t is locked at the script address with your bounty; you can
+        reclaim {n === 1 ? "it" : "them"} any time.
       </p>
     </div>
   );
 }
 
-/* ============================================================ */
-/* Selected-NFT summary chip                                    */
-/* ============================================================ */
-
-function NftSummary({ unit }: { unit: string }) {
-  const meta = useNftMetadata(unit);
-  const label =
-    meta.data?.name ??
-    meta.data?.asset_name ??
-    `${unit.slice(56, 64)}…`;
-  return (
-    <div className="flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300">
-      <span className="font-mono">{label}</span>
-    </div>
-  );
-}
 
 /* ============================================================ */
 /* Step shell                                                   */

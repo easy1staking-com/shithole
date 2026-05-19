@@ -155,4 +155,37 @@ class PoolMerkleServiceTest {
         Optional<List<ProofItem>> proof = service.getProof(unknownRoot, NAME_A);
         assertThat(proof).isEmpty();
     }
+
+    @Test
+    void poolMembershipIndexIsBuiltCorrectly() {
+        // NAME_A is in HOSKY + A3C; NAME_B in HOSKY; NAME_C in none.
+        service.cachePoolMembership("HOSKY", List.of(HEX.formatHex(NAME_A), HEX.formatHex(NAME_B)));
+        service.cachePoolMembership("A3C", List.of(HEX.formatHex(NAME_A)));
+
+        assertThat(service.getPoolMembership(HEX.formatHex(NAME_A)))
+                .containsExactlyInAnyOrder("HOSKY", "A3C");
+        assertThat(service.getPoolMembership(HEX.formatHex(NAME_B)))
+                .containsExactly("HOSKY");
+        assertThat(service.getPoolMembership(HEX.formatHex(NAME_C))).isEmpty();
+    }
+
+    @Test
+    void poolMembershipLookupIsCaseInsensitive() {
+        service.cachePoolMembership("HOSKY", List.of(HEX.formatHex(NAME_A).toUpperCase()));
+        // Stored normalised; lookup with either case works.
+        assertThat(service.getPoolMembership(HEX.formatHex(NAME_A).toLowerCase()))
+                .containsExactly("HOSKY");
+        assertThat(service.getPoolMembership(HEX.formatHex(NAME_A).toUpperCase()))
+                .containsExactly("HOSKY");
+    }
+
+    @Test
+    void poolMembershipIsIdempotentOnReinsert() {
+        // Replaying the same (ticker, asset) pair (e.g. from a re-boot
+        // hitting the same seed) doesn't dupe tickers in the result list.
+        service.cachePoolMembership("HOSKY", List.of(HEX.formatHex(NAME_A)));
+        service.cachePoolMembership("HOSKY", List.of(HEX.formatHex(NAME_A)));
+        assertThat(service.getPoolMembership(HEX.formatHex(NAME_A)))
+                .containsExactly("HOSKY");
+    }
 }

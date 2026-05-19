@@ -27,10 +27,17 @@ import {
  */
 export function BountyStep({
   protocolFeeLovelace,
+  listingCount,
   onSubmit,
   submitting,
 }: {
   protocolFeeLovelace: bigint;
+  /**
+   * Number of listings being created in this tx (= N offered NFTs). The
+   * bounty is per-listing, so total ADA committed is bounty × N. UI shows
+   * this explicitly when N > 1.
+   */
+  listingCount: number;
   onSubmit: (bountyLovelace: bigint) => void;
   submitting: boolean;
 }) {
@@ -45,6 +52,8 @@ export function BountyStep({
   const protocolFee = protocolFeeLovelace;
   const sellerComp = MIN_SELLER_COMPENSATION_LOVELACE;
   const tip = parsed != null && parsed >= floor ? parsed - floor : 0n;
+  const nBig = BigInt(Math.max(1, listingCount));
+  const totalLocked = parsed != null ? parsed * nBig : 0n;
 
   return (
     <div className="space-y-4">
@@ -80,6 +89,9 @@ export function BountyStep({
       </label>
 
       <dl className="space-y-1 rounded-md border border-zinc-800 bg-zinc-950/40 p-3 text-xs">
+        <div className="pb-1 text-[10px] uppercase tracking-wider text-zinc-600">
+          per listing
+        </div>
         <Row
           label="protocol fee → treasury"
           value={protocolFee}
@@ -102,16 +114,33 @@ export function BountyStep({
           }
         />
         <div className="my-1 border-t border-zinc-800" />
-        <Row label="total locked" value={parsed ?? 0n} tone="bold" />
+        <Row label="bounty per listing" value={parsed ?? 0n} tone="bold" />
+        {listingCount > 1 && (
+          <>
+            <div className="my-1 border-t border-zinc-800" />
+            <Row
+              label={`× ${listingCount} listings`}
+              value={totalLocked}
+              tone="bold"
+              help="total ADA locked across all selected NFTs"
+            />
+          </>
+        )}
       </dl>
 
       <button
         type="button"
-        disabled={!aboveFloor || submitting}
+        disabled={!aboveFloor || submitting || listingCount === 0}
         onClick={() => parsed != null && onSubmit(parsed)}
         className="w-full rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
       >
-        {submitting ? "summoning an idiot…" : "post the bounty"}
+        {submitting
+          ? "summoning idiots…"
+          : listingCount === 0
+            ? "pick at least one NFT"
+            : listingCount === 1
+              ? "post the bounty"
+              : `post ${listingCount} bounties`}
       </button>
     </div>
   );

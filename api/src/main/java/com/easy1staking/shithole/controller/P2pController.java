@@ -1,6 +1,7 @@
 package com.easy1staking.shithole.controller;
 
 import com.easy1staking.shithole.entity.PoolMerkleRootEntity;
+import com.easy1staking.shithole.model.AssetPoolMembershipRequest;
 import com.easy1staking.shithole.model.PoolDto;
 import com.easy1staking.shithole.model.ProofDto;
 import com.easy1staking.shithole.p2p.PoolMerkleService;
@@ -12,11 +13,15 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -42,8 +47,9 @@ import java.util.Optional;
 public class P2pController {
 
     private static final HexFormat HEX = HexFormat.of();
-    private static final int MERKLE_ROOT_BYTES = 32; // sha2_256
-    private static final int ASSET_NAME_BYTES = 28;  // CIP-25 max
+    private static final int MERKLE_ROOT_BYTES = 32;       // sha2_256
+    private static final int ASSET_NAME_MIN_BYTES = 1;     // CIP-25 (Hosky uses 22)
+    private static final int ASSET_NAME_MAX_BYTES = 32;    // CIP-25 hard cap
 
     private final PoolMerkleRootRepository poolMerkleRootRepository;
     private final PoolMerkleService poolMerkleService;
@@ -83,7 +89,8 @@ public class P2pController {
             @PathVariable("merkleRootHex") String merkleRootHex,
             @PathVariable("assetNameHex") String assetNameHex) {
         Optional<byte[]> rootOpt = parseHexExact(merkleRootHex, MERKLE_ROOT_BYTES);
-        Optional<byte[]> assetOpt = parseHexExact(assetNameHex, ASSET_NAME_BYTES);
+        Optional<byte[]> assetOpt =
+                parseHexRange(assetNameHex, ASSET_NAME_MIN_BYTES, ASSET_NAME_MAX_BYTES);
         if (rootOpt.isEmpty() || assetOpt.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -97,6 +104,38 @@ public class P2pController {
                         .build())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Batch lookup — for each requested {@code asset_name_hex}, return the
+     * tickers of all CURRENTLY-ACTIVE pools whose merkle tree includes it.
+     * Drives the FE wallet picker's pool ribbons + "select unmatched" affordance.
+     *
+     * <p>The request bounds each asset_name to 1-32 bytes (CIP-25 max);
+     * malformed entries are simply absent from the response rather than
+     * failing the whole batch — the FE renders "no pools" for those.
+     *
+     * <p>Response shape: {@code { asset_name_hex_lowercase: [ticker, …] }}.
+     * Keys are lowercase even if the request used uppercase, so the FE can
+     * cache by a single normalised key.
+     */
+    @PostMapping(value = "/p2p/asset-pool-membership",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, List<String>>> assetPoolMembership(
+            @RequestBody AssetPoolMembershipRequest req) {
+        if (req == null || req.assetNamesHex() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        Map<String, List<String>> out = new LinkedHashMap<>();
+        for (String raw : req.assetNamesHex()) {
+            Optional<byte[]> parsed =
+                    parseHexRange(raw, ASSET_NAME_MIN_BYTES, ASSET_NAME_MAX_BYTES);
+            if (parsed.isEmpty()) continue;
+            String norm = raw.toLowerCase();
+            out.put(norm, poolMerkleService.getPoolMembership(norm));
+        }
+        return ResponseEntity.ok(out);
     }
 
     private static PoolDto toSummaryDto(PoolMerkleRootEntity e) {
@@ -117,6 +156,26 @@ public class P2pController {
             return new ProofDto.ProofStep("right", HEX.formatHex(r.getHash()));
         }
         throw new IllegalStateException("unknown ProofItem subtype: " + item);
+    }
+
+    /**
+     * Hex parse with a byte-length range, used for asset_names (1-32 bytes
+     * per CIP-25). Empty Optional means "respond 400 / skip".
+     */
+    private static Optional<byte[]> parseHexRange(String hex, int minLen, int maxLen) {
+        if (hex == null || hex.isEmpty()) {
+            return Optional.empty();
+        }
+        byte[] bytes;
+        try {
+            bytes = HEX.parseHex(hex);
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
+        if (bytes.length < minLen || bytes.length > maxLen) {
+            return Optional.empty();
+        }
+        return Optional.of(bytes);
     }
 
     /**

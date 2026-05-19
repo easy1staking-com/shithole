@@ -7,6 +7,7 @@
 import { useQuery, type UseQueryOptions, type UseQueryResult } from "@tanstack/react-query";
 
 import {
+  fetchAssetPoolMembership,
   fetchCollection,
   fetchCurated,
   fetchListings,
@@ -18,6 +19,7 @@ import {
   type ListingsQuery,
 } from "./client";
 import type {
+  AssetPoolMembership,
   CollectionState,
   CuratedCollection,
   ListingsResponse,
@@ -37,6 +39,15 @@ export const queryKeys = {
   poolByRoot: (root: string) => ["pool", "root", root] as const,
   proof: (root: string, assetName: string) =>
     ["proof", root, assetName] as const,
+  /**
+   * Cache key is a sorted+joined fingerprint of the asset_names list so two
+   * components looking up the same set of NFTs share a single fetch.
+   */
+  assetPoolMembership: (assetNamesHex: string[]) =>
+    [
+      "assetPoolMembership",
+      [...assetNamesHex].map((h) => h.toLowerCase()).sort().join(","),
+    ] as const,
 };
 
 type QueryOptions<TData> = Omit<UseQueryOptions<TData, Error, TData>, "queryKey" | "queryFn">;
@@ -136,6 +147,26 @@ export function usePoolByRoot(
     queryKey: queryKeys.poolByRoot(merkleRootHex),
     queryFn: () => fetchPoolByRoot(merkleRootHex),
     enabled: Boolean(merkleRootHex),
+    ...options,
+  });
+}
+
+/**
+ * Batch lookup of pool tickers per asset_name. Driven by the wallet's
+ * current NFT holdings for a collection; refetched on window focus is
+ * disabled because pool membership only changes when the BE re-seeds
+ * (rare).
+ */
+export function useAssetPoolMembership(
+  assetNamesHex: string[],
+  options?: QueryOptions<AssetPoolMembership>,
+): UseQueryResult<AssetPoolMembership, Error> {
+  return useQuery({
+    queryKey: queryKeys.assetPoolMembership(assetNamesHex),
+    queryFn: () => fetchAssetPoolMembership(assetNamesHex),
+    enabled: assetNamesHex.length > 0,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // 5 min; the BE seeder only re-runs at boot
     ...options,
   });
 }

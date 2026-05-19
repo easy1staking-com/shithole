@@ -202,3 +202,12 @@ export type Proof = {
   asset_name_hex: string;
   proof: ProofStep[];
 };
+
+/**
+ * Batch pool-membership response from
+ * `POST /api/p2p/asset-pool-membership`. Maps each requested asset_name
+ * (lowercase hex) to the list of currently-active pool tickers whose
+ * merkle tree accepts it. Empty list means the NFT isn't in any pool —
+ * those are the "trade away" candidates in the create flow.
+ */
+export type AssetPoolMembership = Record<string, string[]>;

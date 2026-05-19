@@ -111,24 +111,31 @@ export type CreateP2pListingInput = {
   buyerBech32Address: string;
   /** 32-byte sha2_256 merkle root committed to by this listing. */
   acceptedMerkleRootHex: string;
-  /** Full unit hex (policy + asset_name) of the offered NFT. */
-  offeredNftUnit: string;
   /**
-   * Total lovelace to lock in the listing UTxO. Must be at least
-   * cfg.protocol_fee + MIN_SELLER_COMPENSATION_LOVELACE, validated
-   * on-chain at Fulfill time. Caller is responsible for the floor —
-   * we don't have cfg.protocol_fee here, but {@link assertBountyFloor}
-   * is the helper UI layers should call before building.
+   * One offered NFT per listing UTxO — pass an array to batch-create N
+   * listings in a single tx (each becomes its own output at the script
+   * address, with the same WantedDatum but a different offered NFT).
+   * Order is irrelevant; the result returns outputs in submission order.
+   */
+  offeredNftUnits: string[];
+  /**
+   * Lovelace PER LISTING. Each output gets exactly this amount + 1 NFT.
+   * Must be at least cfg.protocol_fee + MIN_SELLER_COMPENSATION_LOVELACE,
+   * validated on-chain at Fulfill time. Total ADA committed by the buyer
+   * = bountyLovelace × offeredNftUnits.length.
    */
   bountyLovelace: bigint;
 };
 
 export type CreateP2pListingResult = {
   txHash: string;
-  /** Bech32 wanted_listing script address the offer was locked at. */
+  /** Bech32 wanted_listing script address the offers were locked at. */
   wantedScriptAddress: string;
-  /** Index of the listing output within the submitted tx. */
-  outputIndex: number;
+  /**
+   * One entry per offered NFT — same length as input.offeredNftUnits.
+   * `outputIndex` is the listing UTxO's index within the submitted tx.
+   */
+  outputs: Array<{ unit: string; outputIndex: number }>;
 };
 
 /**
@@ -163,19 +170,28 @@ export async function submitCreateP2pListing(
   client: EvolutionClient,
   input: CreateP2pListingInput,
 ): Promise<CreateP2pListingResult> {
-  // Defensive: enforce the protocol floor independent of caller. We
-  // don't know cfg.protocol_fee here, but at minimum the bounty must
-  // cover the 2 ADA seller-compensation floor (treats protocol_fee=0
-  // as a lower bound, which is the most permissive case).
+  if (input.offeredNftUnits.length === 0) {
+    throw new Error("at least one NFT must be offered");
+  }
+  // Defensive: enforce the protocol floor independent of caller.
   if (input.bountyLovelace < MIN_SELLER_COMPENSATION_LOVELACE) {
     throw new Error(
       `bountyLovelace ${input.bountyLovelace} is below the protocol-level seller-compensation floor of ${MIN_SELLER_COMPENSATION_LOVELACE}`,
     );
   }
-  if (input.offeredNftUnit.length < 56) {
-    throw new Error(
-      `offeredNftUnit ${input.offeredNftUnit} is shorter than a policy id`,
-    );
+  // Defensive: dedup. The Cardano ledger forbids the same NFT appearing
+  // twice in a tx anyway (1-per-policy enforced by minting / utxo locks),
+  // but a buggy UI could try.
+  const seen = new Set<string>();
+  for (const u of input.offeredNftUnits) {
+    if (u.length < 56) {
+      throw new Error(`offered unit ${u} is shorter than a policy id`);
+    }
+    const lc = u.toLowerCase();
+    if (seen.has(lc)) {
+      throw new Error(`duplicate unit in offeredNftUnits: ${lc}`);
+    }
+    seen.add(lc);
   }
 
   const applied = await applyWantedListingScript(
@@ -189,31 +205,43 @@ export async function submitCreateP2pListing(
     acceptedMerkleRootHex: input.acceptedMerkleRootHex,
   });
 
-  const unit = input.offeredNftUnit.toLowerCase();
-  const txBuilder = client.newTx().payToAddress({
-    address: toAddress(applied.address),
-    assets: toAssets({ lovelace: input.bountyLovelace, [unit]: 1n }),
-    datum: inlineDatum(datum),
-  });
+  let txBuilder = client.newTx();
+  for (const rawUnit of input.offeredNftUnits) {
+    const unit = rawUnit.toLowerCase();
+    txBuilder = txBuilder.payToAddress({
+      address: toAddress(applied.address),
+      assets: toAssets({ lovelace: input.bountyLovelace, [unit]: 1n }),
+      datum: inlineDatum(datum),
+    });
+  }
 
   const built = await txBuilder.build();
 
-  // Resolve the listing output index from the built tx body — the
-  // builder may reorder for balancer reasons. Find the first output
-  // at the wanted-listing script address that carries the offered NFT.
+  // Resolve each NFT's actual output index from the built tx body — the
+  // balancer can reorder. Each unit gets exactly one matching output at
+  // the script address; we claim them in order to avoid the same output
+  // serving two units.
   const txBody = (await built.toTransaction()).body;
-  let outputIndex = -1;
-  for (let i = 0; i < txBody.outputs.length; i++) {
-    const o = txBody.outputs[i];
-    if (Address.toBech32(o.address) !== applied.address) continue;
-    if (!outputCarriesUnit(o, unit)) continue;
-    outputIndex = i;
-    break;
-  }
-  if (outputIndex < 0) {
-    throw new Error(
-      "assembled tx does not include the wanted-listing output — refusing to submit",
-    );
+  const claimed = new Set<number>();
+  const outputs: Array<{ unit: string; outputIndex: number }> = [];
+  for (const rawUnit of input.offeredNftUnits) {
+    const unit = rawUnit.toLowerCase();
+    let foundIdx = -1;
+    for (let i = 0; i < txBody.outputs.length; i++) {
+      if (claimed.has(i)) continue;
+      const o = txBody.outputs[i];
+      if (Address.toBech32(o.address) !== applied.address) continue;
+      if (!outputCarriesUnit(o, unit)) continue;
+      foundIdx = i;
+      break;
+    }
+    if (foundIdx < 0) {
+      throw new Error(
+        `assembled tx does not include the listing output for ${unit}`,
+      );
+    }
+    claimed.add(foundIdx);
+    outputs.push({ unit, outputIndex: foundIdx });
   }
 
   const signed = await built.sign();
@@ -222,7 +250,7 @@ export async function submitCreateP2pListing(
   return {
     txHash,
     wantedScriptAddress: applied.address,
-    outputIndex,
+    outputs,
   };
 }
 

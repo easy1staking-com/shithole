@@ -27,6 +27,9 @@ CREATE TABLE nft_traits (
     -- 28-byte asset_name (raw bytes). PK because NFTs are 1:1 with asset_name
     -- within the cashgrab policy. CHECK enforces the Cardano CIP-25 hard
     -- limit (asset_name = 28 bytes / 56 hex chars).
+    --
+    -- NOTE: this initial constraint is wrong (real CIP-25 allows 0-32 bytes;
+    -- Hosky CashGrab names are 22 bytes). Loosened forward in V1_0_4.
     asset_name BYTEA PRIMARY KEY CHECK (octet_length(asset_name) = 28),
     -- {category: value} map (Background → "Cyan", Fur → "Original", ...).
     -- We don't pre-normalize categories/values into separate columns: querying
