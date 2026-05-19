@@ -27,7 +27,7 @@ import {
   buildReclaimRedeemer,
   buildRescueRedeemer,
   buildWantedDatum,
-} from "@/lib/tx/wanted";
+} from "@/lib/tx/p2p";
 
 const BUYER_PKH = "11".repeat(28);
 const BUYER_STAKE_PKH = "aa".repeat(28);
