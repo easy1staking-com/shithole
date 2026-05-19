@@ -184,9 +184,26 @@ public final class MintHoskyMimicTool {
         System.out.println();
         System.out.println("==============================================================");
         System.out.println("CONFIG REGISTRATION INPUTS — paste into POST /api/configs:");
+        System.out.println();
+        System.out.println("On-chain identifiers:");
         System.out.println("  collection_policy_id = " + policyId);
         System.out.println("  admin pkh            = " + adminPkhHex);
         System.out.println("  admin address        = " + adminAddress);
+        System.out.println("  treasury_addr        = " + adminAddress
+                + "  (default: route fees to admin wallet)");
+        System.out.println();
+        System.out.println("Config datum:");
+        System.out.println("  m                    = 4");
+        System.out.println("  protocol_fee         = 1000000  (1 ADA; set 0 to test zero-fee path)");
+        System.out.println("  lister_fee           = 1000000  (must be >= MIN_LISTER_FEE = 1 ADA)");
+        System.out.println();
+        System.out.println("FE display:");
+        System.out.println("  slug                 = hosky-preprod");
+        System.out.println("  display_name         = Hosky CashGrab (preprod)");
+        System.out.println("  display_order        = 0");
+        System.out.println("  theme.accent_color   = #ff8c1a  (Hosky brand orange)");
+        System.out.println("  theme.background_url = /pit/hosky-bg.webp     (bundled FE asset)");
+        System.out.println("  theme.mascot_image_url = /pit/hosky-mascot.webp  (bundled FE asset)");
         System.out.println();
         System.out.println("Minted asset_name_hex's (now in admin wallet):");
         for (JsonNode nft : nfts) {
