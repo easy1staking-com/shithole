@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { AppHeader } from "@/components/AppHeader";
 import { Footer } from "@/components/Footer";
 import { TermsGate } from "@/components/TermsGate";
 import MaintenancePage from "./maintenance/page";
@@ -73,7 +74,12 @@ export default function RootLayout({
             <MaintenancePage />
           ) : (
             <>
-              <div className="flex-1">{children}</div>
+              <AppHeader />
+              {/* pt-14 reserves vertical space for the fixed AppHeader
+                  (h-14) so page content doesn't slide underneath it.
+                  Pages don't need to add their own top padding for the
+                  bar — they can keep using their existing py-* rhythm. */}
+              <div className="flex-1 pt-14">{children}</div>
               <Footer />
               <TermsGate />
             </>

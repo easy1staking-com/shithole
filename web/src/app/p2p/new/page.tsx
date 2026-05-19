@@ -17,8 +17,8 @@ export default function NewP2pListingPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-12">
       <nav className="text-xs uppercase tracking-widest text-zinc-500">
-        <Link href="/" className="hover:text-zinc-300">
-          ← back to pits
+        <Link href="/me/p2p" className="hover:text-zinc-300">
+          ← back to your offers
         </Link>
       </nav>
       <Suspense

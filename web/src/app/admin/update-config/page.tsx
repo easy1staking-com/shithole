@@ -7,7 +7,6 @@ import { fetchCollection, fetchCurated } from "@/lib/api/client";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { submitConfigUpdate } from "@/lib/tx/updateConfig";
-import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 import type { CollectionState, CuratedCollection } from "@/types/api";
@@ -133,16 +132,13 @@ export default function UpdateConfigPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-10">
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-mono text-2xl font-semibold text-zinc-100">
-            update config
-          </h1>
-          <p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">
-            admin · {networkName} · hidden
-          </p>
-        </div>
-        <WalletConnectButton />
+      <header>
+        <h1 className="font-mono text-2xl font-semibold text-zinc-100">
+          update config
+        </h1>
+        <p className="mt-1 text-xs uppercase tracking-widest text-zinc-500">
+          admin · {networkName} · hidden
+        </p>
       </header>
 
       <section className="space-y-2">

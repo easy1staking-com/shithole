@@ -4,7 +4,6 @@ import { useMemo } from "react";
 
 import { SelectableWalletCard } from "@/components/pit/SelectableWalletCard";
 import { useAssetPoolMembership } from "@/lib/api/hooks";
-import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 import {
   useWalletCollectionNfts,
   type WalletCollectionNft,
@@ -68,13 +67,10 @@ export function NftPickerStep({
 
   if (!addressBech32) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-zinc-400">
-          connect your wallet so we can see what s#!t you&apos;re willing
-          to part with.
-        </p>
-        <WalletConnectButton />
-      </div>
+      <p className="text-sm text-zinc-400">
+        connect your wallet via the chip in the top-right ↗ so we can see
+        what s#!t you&apos;re willing to part with.
+      </p>
     );
   }
 

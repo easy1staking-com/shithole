@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 
 import { useNftMetadata } from "@/lib/api/hooks";
 import type { Listing } from "@/types/api";
-import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 import {
   useWalletCollectionNfts,
   type WalletCollectionNft,
@@ -253,7 +252,6 @@ export function WalletDrawer({
               )}
             </button>
           )}
-          <WalletConnectButton />
         </div>
       </div>
 
