@@ -4,10 +4,18 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import { BountyStep } from "@/components/p2p/BountyStep";
 import { NftPickerStep } from "@/components/p2p/NftPickerStep";
 import { PoolPicker, PoolSummary } from "@/components/p2p/PoolPicker";
 import { useCollection, useCurated, useNftMetadata } from "@/lib/api/hooks";
+import {
+  submitCreateP2pListing,
+  type CreateP2pListingResult,
+} from "@/lib/tx/createP2pListing";
+import { makeClient } from "@/lib/tx/evolutionClient";
+import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
 import type { WalletCollectionNft } from "@/lib/wallet/useWalletCollectionNfts";
+import { useWalletStore } from "@/lib/wallet/walletStore";
 import type { Pool } from "@/types/api";
 
 /**
@@ -111,6 +119,59 @@ function FlowForCollection({ slug }: { slug: string }) {
     // wallet state anyway.
   }, []);
 
+  // Wallet bits the Step-3 submission needs.
+  const api = useWalletStore((s) => s.api);
+  const paymentKeyHashHex = useWalletStore((s) => s.paymentKeyHashHex);
+  const addressBech32 = useWalletStore((s) => s.addressBech32);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitResult, setSubmitResult] = useState<CreateP2pListingResult | null>(
+    null,
+  );
+
+  const handleSubmitBounty = useCallback(
+    async (bountyLovelace: bigint) => {
+      if (!selectedPool || !selectedNft) return;
+      if (!api || !paymentKeyHashHex || !addressBech32 || !collection.data) {
+        setSubmitError("connect your wallet first");
+        return;
+      }
+      // Network derives from NEXT_PUBLIC_CARDANO_NETWORK — same helper v2
+      // uses, so dev/preprod/mainnet builds pick the right networkId for
+      // the script address.
+      const network = toEvolutionNetwork(getNetworkName());
+
+      setSubmitting(true);
+      setSubmitError(null);
+      try {
+        const client = await makeClient(api);
+        const result = await submitCreateP2pListing(client, {
+          network,
+          configNftPolicyHex: collection.data.config_nft_policy,
+          buyerPkhHex: paymentKeyHashHex,
+          buyerBech32Address: addressBech32,
+          acceptedMerkleRootHex: selectedPool.merkle_root_hex,
+          offeredNftUnit: selectedNft.unit,
+          bountyLovelace,
+        });
+        setSubmitResult(result);
+      } catch (e) {
+        setSubmitError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [
+      api,
+      paymentKeyHashHex,
+      addressBech32,
+      collection.data,
+      selectedPool,
+      selectedNft,
+    ],
+  );
+
   if (collection.isPending) {
     return <p className="text-sm text-zinc-500">looking up the pit…</p>;
   }
@@ -180,17 +241,60 @@ function FlowForCollection({ slug }: { slug: string }) {
       <Step
         number={3}
         title="how generous are you feeling?"
-        complete={false}
+        complete={!!submitResult}
         disabled={!selectedPool || !selectedNft}
       >
-        <p className="text-sm text-zinc-500">
-          {!selectedPool
-            ? "pick a pool first."
-            : !selectedNft
-              ? "pick an NFT first."
-              : "bounty input + sign landing in the next commit. minimum is protocol_fee + 2 ADA — anything extra is your tip to attract a taker."}
-        </p>
+        {!selectedPool ? (
+          <p className="text-sm text-zinc-500">pick a pool first.</p>
+        ) : !selectedNft ? (
+          <p className="text-sm text-zinc-500">pick an NFT first.</p>
+        ) : submitResult ? (
+          <SuccessPanel result={submitResult} />
+        ) : (
+          <>
+            <BountyStep
+              protocolFeeLovelace={BigInt(collection.data.config.protocol_fee)}
+              onSubmit={handleSubmitBounty}
+              submitting={submitting}
+            />
+            {submitError && (
+              <p className="mt-3 text-xs text-red-400" role="alert">
+                {submitError}
+              </p>
+            )}
+          </>
+        )}
       </Step>
+    </div>
+  );
+}
+
+/* ============================================================ */
+/* Success panel                                                */
+/* ============================================================ */
+
+function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-amber-200">
+        bounty posted. waiting for some idiot to take the bait.
+      </p>
+      <dl className="space-y-1 text-xs">
+        <div className="flex gap-2">
+          <dt className="w-24 text-zinc-500">tx hash</dt>
+          <dd className="font-mono text-zinc-300 break-all">{result.txHash}</dd>
+        </div>
+        <div className="flex gap-2">
+          <dt className="w-24 text-zinc-500">output</dt>
+          <dd className="font-mono text-zinc-400">
+            #{result.outputIndex} @ {result.wantedScriptAddress.slice(0, 14)}…
+          </dd>
+        </div>
+      </dl>
+      <p className="text-xs text-zinc-500">
+        the listing settles on chain in ~30-60s. your s#!t is locked at the
+        script address with your bounty; you can reclaim it any time.
+      </p>
     </div>
   );
 }
