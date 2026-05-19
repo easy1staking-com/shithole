@@ -256,10 +256,10 @@ function FulfillBody({
       </section>
 
       {submitResult ? (
-        <p className="rounded-md border border-amber-700/40 bg-amber-950/20 p-3 text-sm text-amber-200">
-          fulfilled. tx{" "}
-          <span className="font-mono text-xs">{submitResult.txHash}</span>
-        </p>
+        <FulfillSuccess
+          txHash={submitResult.txHash}
+          offeredUnit={listing.offered_nft_unit}
+        />
       ) : (
         <button
           type="button"
@@ -361,4 +361,81 @@ function Row({
       </dd>
     </div>
   );
+}
+
+/* ============================================================ */
+/* Success state — post-fulfill CTAs                            */
+/* ============================================================ */
+
+function FulfillSuccess({
+  txHash,
+  offeredUnit,
+}: {
+  txHash: string;
+  offeredUnit: string;
+}) {
+  const net = getNetworkName();
+  const sub = net === "mainnet" ? "" : `${net}.`;
+  const explorerUrl = `https://${sub}cardanoscan.io/transaction/${txHash}`;
+  const assetNameAscii = asciiOrShortHex(offeredUnit.slice(56));
+  return (
+    <div className="space-y-4 rounded-md border border-amber-700/40 bg-amber-950/20 p-4 text-sm">
+      <p className="text-amber-200">
+        ✓ fulfilled. you got{" "}
+        <span className="font-mono text-amber-100">{assetNameAscii}</span>{" "}
+        + the bounty. another idiot is now slightly more delegated.
+      </p>
+      <dl className="text-xs text-zinc-400">
+        <div className="flex gap-2">
+          <dt className="w-16 text-zinc-500">tx</dt>
+          <dd className="font-mono break-all">
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-300 underline-offset-2 hover:underline"
+            >
+              {txHash}
+            </a>
+          </dd>
+        </div>
+      </dl>
+      <p className="text-xs text-zinc-500">
+        settles on chain in ~30-60s. the NFT lands in your wallet via the
+        same address that fulfilled.
+      </p>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Link
+          href="/p2p"
+          className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-400"
+        >
+          browse more listings →
+        </Link>
+        <Link
+          href="/me"
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+        >
+          your s#!t
+        </Link>
+        <Link
+          href="/"
+          className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+        >
+          home
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function asciiOrShortHex(hex: string): string {
+  if (!hex) return "(no name)";
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  if (bytes.every((b) => b >= 0x20 && b <= 0x7e)) {
+    return new TextDecoder().decode(bytes);
+  }
+  return `${hex.slice(0, 8)}…${hex.slice(-4)}`;
 }

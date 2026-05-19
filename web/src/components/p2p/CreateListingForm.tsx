@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { BountyStep } from "@/components/p2p/BountyStep";
 import { NftPickerStep } from "@/components/p2p/NftPickerStep";
@@ -284,8 +284,17 @@ function FlowForCollection({ slug }: { slug: string }) {
 
 function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
   const n = result.outputs.length;
+  // Link to the preprod/mainnet cardanoscan tx page so the user can watch
+  // settlement without leaving our flow. Network derived inline so we
+  // don't ship a stale mainnet link in a preprod build.
+  const explorerUrl = useMemo(() => {
+    const net = getNetworkName();
+    const sub = net === "mainnet" ? "" : `${net}.`;
+    return `https://${sub}cardanoscan.io/transaction/${result.txHash}`;
+  }, [result.txHash]);
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <p className="text-sm text-amber-200">
         {n === 1
           ? "bounty posted. waiting for some idiot to take the bait."
@@ -294,7 +303,16 @@ function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
       <dl className="space-y-1 text-xs">
         <div className="flex gap-2">
           <dt className="w-24 text-zinc-500">tx hash</dt>
-          <dd className="font-mono text-zinc-300 break-all">{result.txHash}</dd>
+          <dd className="font-mono text-zinc-300 break-all">
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline-offset-2 hover:underline"
+            >
+              {result.txHash}
+            </a>
+          </dd>
         </div>
         <div className="flex gap-2">
           <dt className="w-24 text-zinc-500">script</dt>
@@ -316,6 +334,30 @@ function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
         your s#!t is locked at the script address with your bounty; you can
         reclaim {n === 1 ? "it" : "them"} any time.
       </p>
+
+      {/* Post-tx CTAs — guide the user away from the dead-end "now what"
+       *  state. Primary action is "your listings" (they just made one);
+       *  secondary "browse" (see the global pool of open offers). */}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Link
+          href="/me/p2p"
+          className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-400"
+        >
+          your listings →
+        </Link>
+        <Link
+          href="/p2p"
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+        >
+          browse all open listings
+        </Link>
+        <Link
+          href="/"
+          className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+        >
+          home
+        </Link>
+      </div>
     </div>
   );
 }
