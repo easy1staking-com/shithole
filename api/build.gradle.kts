@@ -115,6 +115,14 @@ tasks.register<JavaExec>("preprodMintCollection") {
     standardInput = System.`in`
 }
 
+tasks.register<JavaExec>("preprodMintHoskyMimic") {
+    group = "preprod tools"
+    description = "Mint 10 preprod NFTs with mainnet Hosky asset_names (read from .local/hosky-cashgrab-mainnet.json) so the v3 wanted_listing merkle proofs verify end-to-end on preprod."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.MintHoskyMimicTool")
+    standardInput = System.`in`
+}
+
 tasks.register<JavaExec>("preprodListNft") {
     group = "preprod tools"
     description = "List one NFT at the registered listing-script address (use --args=\"ShitterNNN\" to pick)."

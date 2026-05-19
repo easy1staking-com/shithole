@@ -121,8 +121,11 @@ public class PoolMerkleSeeder {
             }
             byte[] claimedRoot = parseHexExactOrThrow(pool.merkleRootHex(), 32,
                     "merkle_root_hex for ticker=" + pool.ticker());
+            // Asset names are CIP-25 bytestrings, 0-32 bytes — NOT a fixed
+            // 28. Hosky CashGrab names are 22 bytes ("HOSKYCashGrab" + 9-
+            // digit serial). Use a range check, not exact-length.
             List<byte[]> assetNames = pool.assetNamesHex().stream()
-                    .map(hex -> parseHexExactOrThrow(hex, 28,
+                    .map(hex -> parseHexRangeOrThrow(hex, 1, 32,
                             "asset_names_hex entry under ticker=" + pool.ticker()))
                     .toList();
             if (assetNames.size() != pool.totalAssets()) {
@@ -132,6 +135,8 @@ public class PoolMerkleSeeder {
                                 + " but asset_names_hex has " + assetNames.size() + " entries");
             }
             if (pool.poolIdHex() != null) {
+                // Stake pool ids ARE always exactly 28 bytes (blake2b_224 of
+                // the cold key VKey) — keep the exact-length gate here.
                 parseHexExactOrThrow(pool.poolIdHex(), 28,
                         "pool_id_hex for ticker=" + pool.ticker());
             }
@@ -163,6 +168,29 @@ public class PoolMerkleSeeder {
             throw new IllegalStateException(
                     field + " expected " + expectedLen + " bytes but got " + bytes.length
                             + " (hex=" + hex + ")");
+        }
+        return bytes;
+    }
+
+    /**
+     * Hex parse that enforces a length range — used for asset_names which
+     * are 0-32 bytes per CIP-25, not a fixed 28.
+     */
+    private static byte[] parseHexRangeOrThrow(
+            String hex, int minLen, int maxLen, String field) {
+        if (hex == null) {
+            throw new IllegalStateException(field + " is null");
+        }
+        byte[] bytes;
+        try {
+            bytes = HEX.parseHex(hex);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(field + " is not valid hex: " + hex, e);
+        }
+        if (bytes.length < minLen || bytes.length > maxLen) {
+            throw new IllegalStateException(
+                    field + " expected " + minLen + "-" + maxLen
+                            + " bytes but got " + bytes.length + " (hex=" + hex + ")");
         }
         return bytes;
     }
