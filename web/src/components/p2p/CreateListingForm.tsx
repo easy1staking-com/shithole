@@ -1,13 +1,19 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
+import {
+  ConfirmationChip,
+  type ChainConfirmation,
+} from "@/components/ConfirmationChip";
 import { BountyStep } from "@/components/p2p/BountyStep";
 import { NftPickerStep } from "@/components/p2p/NftPickerStep";
 import { PoolPicker, PoolSummary } from "@/components/p2p/PoolPicker";
 import { useCollection, useCurated } from "@/lib/api/hooks";
+import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import {
   submitCreateP2pListing,
   type CreateP2pListingResult,
@@ -143,6 +149,8 @@ function FlowForCollection({ slug }: { slug: string }) {
   const [submitResult, setSubmitResult] = useState<CreateP2pListingResult | null>(
     null,
   );
+  const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
+  const queryClient = useQueryClient();
 
   const handleSubmitBounty = useCallback(
     async (bountyLovelace: bigint) => {
@@ -170,6 +178,29 @@ function FlowForCollection({ slug }: { slug: string }) {
           bountyLovelace,
         });
         setSubmitResult(result);
+        setConfirmation("confirming");
+        // Background-watch for chain landing. BE indexer reads on
+        // confirmation, so the new listings only show up in /me/p2p +
+        // /p2p after this resolves — invalidate then, not at submit time.
+        awaitTxConfirmation(client, result.txHash)
+          .then(() => {
+            setConfirmation("confirmed");
+            queryClient.invalidateQueries({ queryKey: ["p2pListings"] });
+            queryClient.invalidateQueries({ queryKey: ["p2pListingsByBuyer"] });
+            queryClient.invalidateQueries({
+              queryKey: [
+                "walletCollection",
+                addressBech32,
+                collection.data?.collection_policy_id,
+              ],
+            });
+          })
+          .catch((chainErr) => {
+            const msg =
+              chainErr instanceof Error ? chainErr.message : String(chainErr);
+            console.warn("p2p create-listing chain did not confirm:", msg);
+            setConfirmation("rejected");
+          });
       } catch (e) {
         setSubmitError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -183,6 +214,7 @@ function FlowForCollection({ slug }: { slug: string }) {
       collection.data,
       selectedPool,
       selectedNfts,
+      queryClient,
     ],
   );
 
@@ -257,7 +289,7 @@ function FlowForCollection({ slug }: { slug: string }) {
         ) : selectedNfts.size === 0 ? (
           <p className="text-sm text-zinc-500">pick at least one NFT first.</p>
         ) : submitResult ? (
-          <SuccessPanel result={submitResult} />
+          <SuccessPanel result={submitResult} confirmation={confirmation} />
         ) : (
           <>
             <BountyStep
@@ -282,7 +314,13 @@ function FlowForCollection({ slug }: { slug: string }) {
 /* Success panel                                                */
 /* ============================================================ */
 
-function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
+function SuccessPanel({
+  result,
+  confirmation,
+}: {
+  result: CreateP2pListingResult;
+  confirmation: ChainConfirmation;
+}) {
   const n = result.outputs.length;
   // Link to the preprod/mainnet cardanoscan tx page so the user can watch
   // settlement without leaving our flow. Network derived inline so we
@@ -297,8 +335,8 @@ function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
     <div className="space-y-4">
       <p className="text-sm text-amber-200">
         {n === 1
-          ? "bounty posted. waiting for some idiot to take the bait."
-          : `${n} bounties posted. waiting for ${n} idiots to take the bait.`}
+          ? "listing posted. waiting for some idiot to take the bait."
+          : `${n} listings posted. waiting for ${n} idiots to take the bait.`}
       </p>
       <dl className="space-y-1 text-xs">
         <div className="flex gap-2">
@@ -312,6 +350,12 @@ function SuccessPanel({ result }: { result: CreateP2pListingResult }) {
             >
               {result.txHash}
             </a>
+          </dd>
+        </div>
+        <div className="flex gap-2">
+          <dt className="w-24 text-zinc-500">chain</dt>
+          <dd>
+            <ConfirmationChip status={confirmation} />
           </dd>
         </div>
         <div className="flex gap-2">

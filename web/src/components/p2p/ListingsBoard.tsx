@@ -7,12 +7,13 @@ import { MultiSelectPopover } from "@/components/p2p/MultiSelectPopover";
 import {
   useAssetPoolMembership,
   useCurated,
+  useNftMetadata,
   useP2pListings,
   usePools,
 } from "@/lib/api/hooks";
 import { useWalletCollectionNfts } from "@/lib/wallet/useWalletCollectionNfts";
 import { useWalletStore } from "@/lib/wallet/walletStore";
-import type { P2pListing, Pool } from "@/types/api";
+import type { AssetPoolMembership, P2pListing, Pool } from "@/types/api";
 
 /**
  * /p2p browse — surface every active wanted listing the BE indexer
@@ -31,7 +32,13 @@ export function ListingsBoard() {
   const { data: pools, isPending: poolsPending } = usePools();
   const [filterTicker, setFilterTicker] = useState<string | null>(null);
   const [onlyFulfillable, setOnlyFulfillable] = useState(false);
-  const [excludedTickers, setExcludedTickers] = useState<Set<string>>(
+  // "Include pools" — when non-empty, only show listings whose OFFERED NFT
+  // belongs to at least one selected pool. Mental model: the seller is
+  // interested in receiving NFTs from THESE pools (because they collect
+  // those traits, or they plan to delegate there). Different from
+  // "fulfillable" — that filters by what the seller can deposit; this
+  // filters by what they'd receive.
+  const [includedTickers, setIncludedTickers] = useState<Set<string>>(
     () => new Set(),
   );
 
@@ -51,18 +58,20 @@ export function ListingsBoard() {
   // For v3 launch p2p is Hosky-only; pick the first curated collection's
   // policy id to scope the wallet-NFT lookup. When p2p expands to more
   // collections we'd union across all of them.
-  const { data: curated } = useCurated();
+  const { data: curated, isPending: curatedPending } = useCurated();
   const collectionPolicyHex = curated?.[0]?.collection_policy_id ?? null;
   const addressBech32 = useWalletStore((s) => s.addressBech32);
-  const { data: walletNfts } = useWalletCollectionNfts(
-    addressBech32,
-    collectionPolicyHex,
-  );
+  const { data: walletNfts, isPending: walletNftsPending } =
+    useWalletCollectionNfts(addressBech32, collectionPolicyHex);
   const walletAssetNamesHex = useMemo(
     () => (walletNfts ?? []).map((n) => n.assetNameHex),
     [walletNfts],
   );
-  const { data: walletMembership } = useAssetPoolMembership(walletAssetNamesHex);
+  const {
+    data: walletMembership,
+    isSuccess: membershipSuccess,
+    isError: membershipError,
+  } = useAssetPoolMembership(walletAssetNamesHex);
   // myMatchableTickers = union of all pool tickers any of the wallet's NFTs
   // belong to. A listing is matchable iff its target ticker is in this set.
   const myMatchableTickers = useMemo(() => {
@@ -81,21 +90,52 @@ export function ListingsBoard() {
     return m;
   }, [pools]);
 
+  // ---- offered-NFT pool memberships ----
+  // For the "include pools" filter we need to know which pools each
+  // listing's OFFERED NFT belongs to. Fetch once at the page level —
+  // ListingsList re-uses the same data for its per-card pool ribbons.
+  const offeredAssetNamesHex = useMemo(
+    () => (listings ?? []).map((l) => l.offered_nft_unit.slice(56)),
+    [listings],
+  );
+  const { data: offeredMembership } = useAssetPoolMembership(offeredAssetNamesHex);
+
   // Apply client-side filters. The BE-side `pool` filter narrows the
   // initial fetch; these run on top of that result.
   const filteredListings = useMemo(() => {
     if (!listings) return null;
     return listings.filter((l) => {
       const targetTicker = rootToTicker[l.accepted_merkle_root];
-      if (!targetTicker) return true; // listing's pool unknown to FE — keep
-      if (excludedTickers.has(targetTicker)) return false;
-      if (onlyFulfillable && !myMatchableTickers.has(targetTicker)) return false;
+
+      // "Only listings I can fulfill" — listing's target pool must be in
+      // the union of pools any of the wallet's NFTs belong to.
+      if (onlyFulfillable && targetTicker && !myMatchableTickers.has(targetTicker)) {
+        return false;
+      }
+
+      // "Include pools" — the listing's OFFERED NFT (what the seller
+      // would receive) must belong to at least one selected pool.
+      if (includedTickers.size > 0) {
+        const offeredName = l.offered_nft_unit.slice(56).toLowerCase();
+        const offeredTickers = offeredMembership?.[offeredName] ?? [];
+        if (!offeredTickers.some((t) => includedTickers.has(t))) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [listings, rootToTicker, excludedTickers, onlyFulfillable, myMatchableTickers]);
+  }, [
+    listings,
+    rootToTicker,
+    onlyFulfillable,
+    myMatchableTickers,
+    includedTickers,
+    offeredMembership,
+  ]);
 
-  const toggleExcluded = (ticker: string) => {
-    setExcludedTickers((prev) => {
+  const toggleIncluded = (ticker: string) => {
+    setIncludedTickers((prev) => {
       const next = new Set(prev);
       if (next.has(ticker)) next.delete(ticker);
       else next.add(ticker);
@@ -103,8 +143,19 @@ export function ListingsBoard() {
     });
   };
 
-  // "I can fulfill" toggle is only useful with a connected wallet.
-  const fulfillableDisabled = !addressBech32 || !walletMembership;
+  // "I can fulfill" toggle is only useful with a connected wallet AND
+  // once we know what's in the wallet. Settled = either the membership
+  // query succeeded OR errored (BE down, network blip — let the user
+  // still toggle; myMatchableTickers will just be empty). Don't gate on
+  // `data !== undefined`: useAssetPoolMembership short-circuits with
+  // enabled=false on empty input (wallet has zero NFTs in collection),
+  // and `data` stays undefined forever in error cases too.
+  const walletEmpty = (walletNfts?.length ?? 0) === 0;
+  const membershipSettled =
+    walletEmpty || membershipSuccess || membershipError;
+  const fulfillableLoading =
+    curatedPending || walletNftsPending || !membershipSettled;
+  const fulfillableDisabled = !addressBech32 || fulfillableLoading;
 
   return (
     <div className="space-y-6">
@@ -169,9 +220,11 @@ export function ListingsBoard() {
             (fulfillableDisabled ? " cursor-not-allowed opacity-50" : "")
           }
           title={
-            fulfillableDisabled
+            !addressBech32
               ? "connect your wallet to enable"
-              : "show only listings whose target pool matches one of your NFTs"
+              : fulfillableLoading
+                ? "loading your NFTs…"
+                : "show only listings whose target pool matches one of your NFTs"
           }
         >
           <input
@@ -184,29 +237,29 @@ export function ListingsBoard() {
           only listings I can fulfill
         </label>
         <MultiSelectPopover
-          label="exclude pools"
+          label="include pools"
           options={(pools ?? []).map((p) => ({ value: p.ticker, label: p.ticker }))}
-          selected={excludedTickers}
-          onToggle={toggleExcluded}
-          onClear={() => setExcludedTickers(new Set())}
+          selected={includedTickers}
+          onToggle={toggleIncluded}
+          onClear={() => setIncludedTickers(new Set())}
         />
       </div>
 
-      {/* Excluded chip strip — appears only when something is excluded. */}
-      {excludedTickers.size > 0 && (
+      {/* Included chip strip — appears only when there's something to show. */}
+      {includedTickers.size > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[10px] uppercase tracking-widest text-zinc-600">
-            excluded:
+            interested in NFTs from:
           </span>
-          {[...excludedTickers].sort().map((t) => (
+          {[...includedTickers].sort().map((t) => (
             <button
               key={t}
               type="button"
-              onClick={() => toggleExcluded(t)}
-              className="rounded-sm bg-zinc-900 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300 hover:bg-zinc-800"
-              title={`remove ${t} from excluded`}
+              onClick={() => toggleIncluded(t)}
+              className="rounded-sm bg-amber-950/40 px-1.5 py-0.5 font-mono text-[10px] text-amber-200 hover:bg-amber-900/40"
+              title={`remove ${t} from interest set`}
             >
-              {t} <span className="text-zinc-500">×</span>
+              {t} <span className="text-amber-200/60">×</span>
             </button>
           ))}
         </div>
@@ -222,12 +275,16 @@ export function ListingsBoard() {
         <EmptyState
           filterTicker={filterTicker}
           onlyFulfillable={onlyFulfillable}
-          excludedCount={excludedTickers.size}
+          includedCount={includedTickers.size}
           serverEmpty={(listings ?? []).length === 0}
         />
       )}
       {filteredListings && filteredListings.length > 0 && (
-        <ListingsList listings={filteredListings} pools={pools ?? []} />
+        <ListingsList
+          listings={filteredListings}
+          pools={pools ?? []}
+          offeredMembership={offeredMembership}
+        />
       )}
     </div>
   );
@@ -236,18 +293,18 @@ export function ListingsBoard() {
 function EmptyState({
   filterTicker,
   onlyFulfillable,
-  excludedCount,
+  includedCount,
   serverEmpty,
 }: {
   filterTicker: string | null;
   onlyFulfillable: boolean;
-  excludedCount: number;
+  includedCount: number;
   /** True when the BE returned 0 listings (vs. filters narrowed to 0). */
   serverEmpty: boolean;
 }) {
   // Pick the explanation that best matches WHY the list is empty so the
   // user knows whether to relax filters or create a listing themselves.
-  const filtersActive = onlyFulfillable || excludedCount > 0;
+  const filtersActive = onlyFulfillable || includedCount > 0;
   const headline = serverEmpty
     ? filterTicker
       ? `no open listings targeting ${filterTicker}`
@@ -280,17 +337,14 @@ function EmptyState({
 function ListingsList({
   listings,
   pools,
+  offeredMembership,
 }: {
   listings: P2pListing[];
   pools: Pool[];
+  /** Hoisted from the parent so the include-pools filter and the card
+   *  ribbons share one query result. */
+  offeredMembership: AssetPoolMembership | undefined;
 }) {
-  // Batch-fetch pool membership for every listing's offered asset, so the
-  // card ribbons render in one BE round-trip.
-  const assetNamesHex = useMemo(
-    () => listings.map((l) => l.offered_nft_unit.slice(56)),
-    [listings],
-  );
-  const { data: membership } = useAssetPoolMembership(assetNamesHex);
   const tickerToRoot = useMemo(
     () =>
       Object.fromEntries(
@@ -312,7 +366,10 @@ function ListingsList({
         <li key={`${l.tx_hash}#${l.output_index}`}>
           <ListingCard
             listing={l}
-            tickers={membership?.[l.offered_nft_unit.slice(56).toLowerCase()] ?? []}
+            tickers={
+              offeredMembership?.[l.offered_nft_unit.slice(56).toLowerCase()] ??
+              []
+            }
             targetTicker={rootToTicker[l.accepted_merkle_root] ?? null}
             tickerToRoot={tickerToRoot}
           />
@@ -334,51 +391,86 @@ function ListingCard({
   tickerToRoot: Record<string, string>;
 }) {
   void tickerToRoot; // reserved for a future "deep link to pool" affordance
-  const assetNameAscii = useMemo(
-    () => asciiOrShortHex(listing.offered_nft_unit.slice(56)),
-    [listing.offered_nft_unit],
-  );
+  const meta = useNftMetadata(listing.offered_nft_unit);
+  const name =
+    meta.data?.name ?? asciiOrShortHex(listing.offered_nft_unit.slice(56));
+  const imageUrl = meta.data?.image_url ?? null;
   const bountyAda = (Number(listing.lovelace) / 1_000_000).toFixed(2);
+  // The offered NFT may carry traits for multiple pools; show all of
+  // them in the "matches traits of" row. The target pool gets its own
+  // row below ("wants traits of") so the two semantics are visually
+  // separated — even if the offered NFT happens to also be in the
+  // target pool's tree (unusual, but possible), the target ribbon
+  // stays in its own row.
+  const offeredTickers = tickers.filter((t) => t !== targetTicker);
 
   return (
     <Link
       href={`/p2p/${listing.tx_hash}/${listing.output_index}`}
-      className="block rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 transition hover:border-zinc-600"
+      className="block overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/40 transition hover:border-zinc-600"
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate font-mono text-sm font-semibold">
-          {assetNameAscii}
-        </span>
-        <span className="shrink-0 font-mono text-xs text-amber-300">
+      <div className="relative aspect-square bg-zinc-900">
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt={name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            draggable={false}
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center text-xs text-zinc-600">
+            …
+          </div>
+        )}
+        <span className="absolute right-2 top-2 rounded-md bg-zinc-950/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-300 backdrop-blur">
           {bountyAda} ADA
         </span>
       </div>
-      <p className="mt-1 text-[10px] text-zinc-500">
-        targeting{" "}
-        <span className="font-mono text-zinc-300">
-          {targetTicker ?? "unknown pool"}
-        </span>
-      </p>
-      {tickers.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {tickers.map((t) => {
-            const isPrimary = t === targetTicker;
-            return (
-              <span
-                key={t}
-                className={
-                  "rounded-sm px-1 py-[1px] text-[9px] font-medium uppercase tracking-wide " +
-                  (isPrimary
-                    ? "bg-amber-500 text-zinc-950"
-                    : "bg-zinc-800 text-zinc-400")
-                }
-              >
-                {t}
+      <div className="space-y-2 p-3">
+        <p className="truncate font-mono text-sm font-semibold">{name}</p>
+
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-zinc-500">
+            matches traits of
+          </p>
+          <div className="mt-0.5 flex min-h-[16px] flex-wrap gap-1">
+            {offeredTickers.length > 0 ? (
+              offeredTickers.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-sm bg-zinc-800 px-1 py-[1px] text-[9px] font-medium uppercase tracking-wide text-zinc-300"
+                >
+                  {t}
+                </span>
+              ))
+            ) : (
+              <span className="text-[9px] uppercase tracking-wider text-zinc-700">
+                no curated pool
               </span>
-            );
-          })}
+            )}
+          </div>
         </div>
-      )}
+
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-zinc-500">
+            wants traits of
+          </p>
+          <div className="mt-0.5 flex min-h-[16px] flex-wrap gap-1">
+            <span
+              className={
+                "rounded-sm px-1 py-[1px] text-[9px] font-medium uppercase tracking-wide " +
+                (targetTicker
+                  ? "bg-amber-500 text-zinc-950"
+                  : "bg-zinc-800 text-zinc-500")
+              }
+            >
+              {targetTicker ?? "unknown pool"}
+            </span>
+          </div>
+        </div>
+      </div>
     </Link>
   );
 }

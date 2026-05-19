@@ -56,13 +56,6 @@ export type FulfillP2pResult = {
   txHash: string;
 };
 
-/**
- * Bytes-side min-utxo floor for the buyer_output. ~1.3 ADA is the actual
- * chain min for an NFT + small inline datum; 1.5 ADA gives headroom and
- * makes the seller's tx fee math simpler.
- */
-const BUYER_OUTPUT_MIN_LOVELACE = 1_500_000n;
-
 export async function submitFulfillP2p(
   client: EvolutionClient,
   input: FulfillP2pInput,
@@ -105,10 +98,15 @@ export async function submitFulfillP2p(
       redeemer,
     })
     // buyer_output (#0): deposit NFT → buyer's bech32 with tag inline datum.
+    // lovelace=0 here is a placeholder — autoMinUtxo bumps it to the
+    // protocol-computed chain min for this exact output shape (NFT +
+    // small inline datum + the buyer's address). Hardcoding a floor
+    // (e.g. 1.5 ADA) just wastes the seller's ADA when the real min is
+    // ~1.3 ADA.
     .payToAddress({
       address: toAddress(input.buyerBech32Address),
       assets: toAssets({
-        lovelace: BUYER_OUTPUT_MIN_LOVELACE,
+        lovelace: 0n,
         [input.depositNftUnit.toLowerCase()]: 1n,
       }),
       datum: inlineDatum(tagDatum),

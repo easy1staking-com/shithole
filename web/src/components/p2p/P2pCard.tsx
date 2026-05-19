@@ -40,11 +40,15 @@ export function P2pCard({ collection }: { collection: CuratedCollection }) {
   const stats = useMemo(() => {
     if (!listings) return null;
     if (listings.length === 0) {
-      return { count: 0, avgAda: null as number | null };
+      return { count: 0, poolCount: 0 };
     }
-    const total = listings.reduce((s, l) => s + Number(l.lovelace), 0);
-    const avgAda = total / listings.length / 1_000_000;
-    return { count: listings.length, avgAda };
+    // Spread across distinct target pools — how many different
+    // delegator audiences buyers are currently fishing in. More useful
+    // than an avg-bounty number (which was misleading: most of the
+    // locked ADA is min-utxo + treasury + chain fees, not swapper
+    // payout — see BountyStep's effective-cost math).
+    const roots = new Set(listings.map((l) => l.accepted_merkle_root));
+    return { count: listings.length, poolCount: roots.size };
   }, [listings]);
 
   return (
@@ -125,12 +129,13 @@ export function P2pCard({ collection }: { collection: CuratedCollection }) {
                 <span className="font-mono text-zinc-100">{stats.count}</span>{" "}
                 open
               </span>
-              {stats.avgAda !== null && (
+              {stats.poolCount > 1 && (
                 <span>
-                  · avg bounty{" "}
+                  · across{" "}
                   <span className="font-mono text-zinc-100">
-                    {stats.avgAda.toFixed(2)} ADA
-                  </span>
+                    {stats.poolCount}
+                  </span>{" "}
+                  pools
                 </span>
               )}
             </>

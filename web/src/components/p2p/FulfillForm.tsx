@@ -3,20 +3,29 @@
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
+
+import {
+  ConfirmationChip,
+  type ChainConfirmation,
+} from "@/components/ConfirmationChip";
+import { MultiSelectPopover } from "@/components/p2p/MultiSelectPopover";
 import { SelectableWalletCard } from "@/components/pit/SelectableWalletCard";
 import {
+  useAssetPoolMembership,
   useCurated,
   useCollection,
   useP2pListings,
   usePoolByRoot,
+  usePools,
   useProof,
 } from "@/lib/api/hooks";
+import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { fetchUtxoByOutRef, findConfigUtxo } from "@/lib/tx/swap";
 import { submitFulfillP2p } from "@/lib/tx/fulfillP2p";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { addressViewToBech32 } from "@/lib/util/addressView";
 import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
-import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 import {
   useWalletCollectionNfts,
   type WalletCollectionNft,
@@ -135,11 +144,70 @@ function FulfillBody({
     useWalletCollectionNfts(addressBech32, collectionPolicyHex);
   const [selected, setSelected] = useState<WalletCollectionNft | null>(null);
 
+  // Pool membership for every wallet NFT — drives both the ribbon row
+  // (which pools accept this NFT) and the greying logic (NFT is only
+  // depositable if its tickers include the listing's target pool).
+  const walletAssetNamesHex = useMemo(
+    () => (walletNfts ?? []).map((n) => n.assetNameHex),
+    [walletNfts],
+  );
+  const { data: membership, isPending: membershipPending } =
+    useAssetPoolMembership(walletAssetNamesHex);
+  const membershipReady = !membershipPending && !!membership;
+
+  // Pool catalog for the exclude-pools dropdown options. We filter to
+  // pools the user has at least one NFT in — excluding HOSKY when you
+  // have zero HOSKY-eligible NFTs would be noise.
+  const { data: pools } = usePools();
+  const walletTickers = useMemo(() => {
+    const out = new Set<string>();
+    if (!membership) return out;
+    for (const tickers of Object.values(membership)) {
+      for (const t of tickers) out.add(t);
+    }
+    return out;
+  }, [membership]);
+  const excludeOptions = useMemo(
+    () =>
+      (pools ?? [])
+        .filter((p) => walletTickers.has(p.ticker))
+        // The target pool is never an "exclude" candidate: excluding the
+        // pool you're trying to fulfill would just grey out every NFT.
+        .filter((p) => p.ticker !== targetPoolTicker)
+        .map((p) => ({ value: p.ticker, label: p.ticker })),
+    [pools, walletTickers, targetPoolTicker],
+  );
+
+  // "Exclude pools" — when non-empty, NFTs whose ticker set intersects
+  // these are greyed and unselectable. Mental model: "I want to swap an
+  // NFT for the bounty, but NOT one I also collect for X-pool rewards."
+  const [excludedTickers, setExcludedTickers] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const toggleExcluded = (ticker: string) => {
+    setExcludedTickers((prev) => {
+      const next = new Set(prev);
+      if (next.has(ticker)) next.delete(ticker);
+      else next.add(ticker);
+      return next;
+    });
+  };
+  // If the currently-selected NFT is in an excluded pool (user toggled
+  // pools after picking), treat it as unselected so submit can't fire.
+  // Derive instead of useEffect+setSelected — cleaner re: render cycles.
+  const effectiveSelected = useMemo(() => {
+    if (!selected) return null;
+    if (!membership) return selected;
+    const tickers = membership[selected.assetNameHex.toLowerCase()] ?? [];
+    if (tickers.some((t) => excludedTickers.has(t))) return null;
+    return selected;
+  }, [selected, membership, excludedTickers]);
+
   // Proof for the chosen NFT against the listing's merkle root. Empty
   // means the wallet's NFT doesn't qualify; UI guides the user away.
   const proofQuery = useProof(
     listing.accepted_merkle_root,
-    selected?.assetNameHex ?? "",
+    effectiveSelected?.assetNameHex ?? "",
   );
 
   const [submitting, setSubmitting] = useState(false);
@@ -147,18 +215,59 @@ function FulfillBody({
   const [submitResult, setSubmitResult] = useState<{ txHash: string } | null>(
     null,
   );
+  // Two-axis status, mirroring the pit swap (`/pit/[slug]/page.tsx`):
+  // submitResult flips on submit success; `confirmation` tracks the
+  // independent chain-side state via Evolution's awaitTx.
+  const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
+  const queryClient = useQueryClient();
 
-  const eligible = useMemo(() => {
-    if (!walletNfts) return [];
-    // For v1, "eligible" = NFTs whose hex matches the merkle root's set —
-    // but we don't ship the full set to the FE. So we leave eligibility
-    // for the proof query to confirm after picking. UI guidance: pick
-    // any of your NFTs; we'll tell you if it doesn't qualify.
-    return walletNfts;
-  }, [walletNfts]);
+  // Each wallet NFT is depositable iff (a) the target pool accepts it
+  // and (b) none of its other pools are in the user's exclude set.
+  // We compute the per-NFT verdict once so the picker and the count
+  // chip stay in sync.
+  type Verdict = {
+    disabled: boolean;
+    reason: string | null;
+    tickers: string[];
+  };
+  const verdicts: Map<string, Verdict> = useMemo(() => {
+    const m = new Map<string, Verdict>();
+    for (const nft of walletNfts ?? []) {
+      const tickers = membership?.[nft.assetNameHex.toLowerCase()] ?? [];
+      if (!membershipReady) {
+        m.set(nft.unit, { disabled: false, reason: null, tickers });
+        continue;
+      }
+      if (targetPoolTicker && !tickers.includes(targetPoolTicker)) {
+        m.set(nft.unit, {
+          disabled: true,
+          reason: `not accepted by ${targetPoolTicker}`,
+          tickers,
+        });
+        continue;
+      }
+      const hitsExcluded = tickers.find((t) => excludedTickers.has(t));
+      if (hitsExcluded) {
+        m.set(nft.unit, {
+          disabled: true,
+          reason: `excluded — also in ${hitsExcluded}`,
+          tickers,
+        });
+        continue;
+      }
+      m.set(nft.unit, { disabled: false, reason: null, tickers });
+    }
+    return m;
+  }, [walletNfts, membership, membershipReady, targetPoolTicker, excludedTickers]);
+
+  const eligibleCount = useMemo(() => {
+    let n = 0;
+    for (const v of verdicts.values()) if (!v.disabled) n++;
+    return n;
+  }, [verdicts]);
 
   const onSubmit = useCallback(async () => {
-    if (!selected || !proofQuery.data || !api || !addressBech32) {
+    if (!effectiveSelected || !proofQuery.data || !api || !addressBech32) {
       setSubmitError("missing pieces — wallet, proof, or NFT");
       return;
     }
@@ -180,26 +289,46 @@ function FulfillBody({
         configNftPolicyHex: listing.config_nft_policy,
         listingUtxo,
         buyerBech32Address: listing.buyer_address_bech32,
-        depositNftUnit: selected.unit,
+        depositNftUnit: effectiveSelected.unit,
         merkleProof: proofQuery.data.proof.map((s) => ({
           side: s.side,
           hashHex: s.hash_hex,
         })),
       });
       setSubmitResult(result);
+      setConfirmation("confirming");
+      // Background-wait for chain confirmation. BE indexer reads on
+      // confirmation, so invalidate active-listing + wallet queries
+      // only after the chain actually lands it.
+      awaitTxConfirmation(client, result.txHash)
+        .then(() => {
+          setConfirmation("confirmed");
+          queryClient.invalidateQueries({ queryKey: ["p2pListings"] });
+          queryClient.invalidateQueries({
+            queryKey: ["walletCollection", addressBech32, collectionPolicyHex],
+          });
+        })
+        .catch((chainErr) => {
+          const chainMsg =
+            chainErr instanceof Error ? chainErr.message : String(chainErr);
+          console.warn("p2p fulfill chain did not confirm:", chainMsg);
+          setConfirmation("rejected");
+        });
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : String(e));
     } finally {
       setSubmitting(false);
     }
   }, [
-    selected,
+    effectiveSelected,
     proofQuery.data,
     api,
     addressBech32,
     listing,
     protocolFeeLovelace,
     treasuryAddr,
+    collectionPolicyHex,
+    queryClient,
   ]);
 
   if (!addressBech32) {
@@ -207,11 +336,10 @@ function FulfillBody({
       <div className="space-y-4">
         <ListingSummary listing={listing} targetPoolTicker={targetPoolTicker} />
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
-          <p className="mb-2 text-sm text-zinc-400">
-            connect your wallet to see if any of your NFTs match this
-            listing&apos;s accepted pool.
+          <p className="text-sm text-zinc-400">
+            connect your wallet via the chip in the top-right ↗ to see if any
+            of your NFTs match this listing&apos;s accepted pool.
           </p>
-          <WalletConnectButton />
         </div>
       </div>
     );
@@ -222,27 +350,80 @@ function FulfillBody({
       <ListingSummary listing={listing} targetPoolTicker={targetPoolTicker} />
 
       <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
-        <h2 className="text-base font-medium">pick the NFT to deposit</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-medium">pick the NFT to deposit</h2>
+          {(walletNfts?.length ?? 0) > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-zinc-500">
+                {membershipReady
+                  ? `${eligibleCount} of ${walletNfts?.length ?? 0} can fulfill`
+                  : "loading pool data…"}
+              </span>
+              {excludeOptions.length > 0 && (
+                <MultiSelectPopover
+                  label="exclude pools"
+                  options={excludeOptions}
+                  selected={excludedTickers}
+                  onToggle={toggleExcluded}
+                  onClear={() => setExcludedTickers(new Set())}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
+        {excludedTickers.size > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-widest text-zinc-600">
+              keeping NFTs from:
+            </span>
+            {[...excludedTickers].sort().map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => toggleExcluded(t)}
+                className="rounded-sm bg-amber-950/40 px-1.5 py-0.5 font-mono text-[10px] text-amber-200 hover:bg-amber-900/40"
+                title={`stop excluding ${t}`}
+              >
+                {t} <span className="text-amber-200/60">×</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {walletPending && <p className="text-sm text-zinc-500">peeking inside your wallet…</p>}
-        {!walletPending && eligible.length === 0 && (
+        {!walletPending && (walletNfts?.length ?? 0) === 0 && (
           <p className="text-sm text-zinc-500">
             no NFTs from this collection in your wallet.
           </p>
         )}
-        {eligible.length > 0 && (
+        {(walletNfts?.length ?? 0) > 0 && (
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-            {eligible.map((nft) => (
-              <SelectableWalletCard
-                key={nft.unit}
-                nft={nft}
-                accent="#ff8c1a"
-                selected={selected?.unit === nft.unit}
-                onToggle={() => setSelected(nft)}
-              />
-            ))}
+            {walletNfts!.map((nft) => {
+              const v = verdicts.get(nft.unit) ?? {
+                disabled: false,
+                reason: null,
+                tickers: [],
+              };
+              return (
+                <NftCardWithRibbon
+                  key={nft.unit}
+                  nft={nft}
+                  accent="#ff8c1a"
+                  selected={effectiveSelected?.unit === nft.unit}
+                  disabled={v.disabled}
+                  disabledReason={v.reason}
+                  onToggle={() => setSelected(nft)}
+                  tickers={v.tickers}
+                  membershipReady={membershipReady}
+                  targetPoolTicker={targetPoolTicker}
+                  excludedTickers={excludedTickers}
+                />
+              );
+            })}
           </div>
         )}
-        {selected && (
+        {effectiveSelected && (
           <ProofStatus
             isPending={proofQuery.isPending}
             isError={proofQuery.isError}
@@ -259,17 +440,18 @@ function FulfillBody({
         <FulfillSuccess
           txHash={submitResult.txHash}
           offeredUnit={listing.offered_nft_unit}
+          confirmation={confirmation}
         />
       ) : (
         <button
           type="button"
-          disabled={!selected || !proofQuery.data || submitting}
+          disabled={!effectiveSelected || !proofQuery.data || submitting}
           onClick={onSubmit}
           className="w-full rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
         >
           {submitting
             ? "submitting…"
-            : !selected
+            : !effectiveSelected
               ? "pick an NFT first"
               : !proofQuery.data
                 ? proofQuery.isPending
@@ -370,9 +552,11 @@ function Row({
 function FulfillSuccess({
   txHash,
   offeredUnit,
+  confirmation,
 }: {
   txHash: string;
   offeredUnit: string;
+  confirmation: ChainConfirmation;
 }) {
   const net = getNetworkName();
   const sub = net === "mainnet" ? "" : `${net}.`;
@@ -399,11 +583,13 @@ function FulfillSuccess({
             </a>
           </dd>
         </div>
+        <div className="mt-1 flex gap-2">
+          <dt className="w-16 text-zinc-500">chain</dt>
+          <dd>
+            <ConfirmationChip status={confirmation} />
+          </dd>
+        </div>
       </dl>
-      <p className="text-xs text-zinc-500">
-        settles on chain in ~30-60s. the NFT lands in your wallet via the
-        same address that fulfilled.
-      </p>
       <div className="flex flex-wrap gap-2 pt-1">
         <Link
           href="/p2p"
@@ -423,6 +609,93 @@ function FulfillSuccess({
         >
           home
         </Link>
+      </div>
+    </div>
+  );
+}
+
+function NftCardWithRibbon({
+  nft,
+  accent,
+  selected,
+  disabled,
+  disabledReason,
+  onToggle,
+  tickers,
+  membershipReady,
+  targetPoolTicker,
+  excludedTickers,
+}: {
+  nft: WalletCollectionNft;
+  accent: string;
+  selected: boolean;
+  disabled: boolean;
+  disabledReason: string | null;
+  onToggle: (nft: WalletCollectionNft) => void;
+  tickers: string[];
+  membershipReady: boolean;
+  targetPoolTicker: string | null;
+  excludedTickers: Set<string>;
+}) {
+  // Surface the target pool first (the "good" ribbon), then excluded
+  // pools (the "bad" ribbons), then the rest. Helps the user understand
+  // at a glance why a card is greyed.
+  const orderedTickers = useMemo(() => {
+    const primary = tickers.filter((t) => t === targetPoolTicker);
+    const excluded = tickers.filter(
+      (t) => t !== targetPoolTicker && excludedTickers.has(t),
+    );
+    const rest = tickers.filter(
+      (t) => t !== targetPoolTicker && !excludedTickers.has(t),
+    );
+    return [...primary, ...excluded, ...rest];
+  }, [tickers, targetPoolTicker, excludedTickers]);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <SelectableWalletCard
+        nft={nft}
+        accent={accent}
+        selected={selected}
+        onToggle={onToggle}
+        disabled={disabled}
+        disabledTitle={disabledReason ?? undefined}
+      />
+      <div className="flex min-h-[18px] flex-wrap items-center gap-1">
+        {!membershipReady ? (
+          <span className="h-[14px] w-12 animate-pulse rounded-sm bg-zinc-800/60" />
+        ) : orderedTickers.length === 0 ? (
+          <span className="text-[9px] uppercase tracking-wider text-zinc-600">
+            no pool
+          </span>
+        ) : (
+          orderedTickers.map((t) => {
+            const isTarget = t === targetPoolTicker;
+            const isExcluded = !isTarget && excludedTickers.has(t);
+            return (
+              <span
+                key={t}
+                className={
+                  "rounded-sm px-1 py-[1px] text-[9px] font-medium uppercase tracking-wide " +
+                  (isTarget
+                    ? "bg-amber-500 text-zinc-950"
+                    : isExcluded
+                      ? "bg-red-900/60 text-red-200"
+                      : "bg-zinc-800 text-zinc-400")
+                }
+                title={
+                  isTarget
+                    ? `accepted by ${t} (the pool you're targeting)`
+                    : isExcluded
+                      ? `excluded by you — also in ${t}`
+                      : `also accepted by ${t}`
+                }
+              >
+                {t}
+              </span>
+            );
+          })
+        )}
       </div>
     </div>
   );
