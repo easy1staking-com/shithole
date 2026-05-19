@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { useAssetPoolMembership, useP2pListings, usePools } from "@/lib/api/hooks";
+import { MultiSelectPopover } from "@/components/p2p/MultiSelectPopover";
+import {
+  useAssetPoolMembership,
+  useCurated,
+  useP2pListings,
+  usePools,
+} from "@/lib/api/hooks";
+import { useWalletCollectionNfts } from "@/lib/wallet/useWalletCollectionNfts";
+import { useWalletStore } from "@/lib/wallet/walletStore";
 import type { P2pListing, Pool } from "@/types/api";
 
 /**
@@ -22,6 +30,10 @@ import type { P2pListing, Pool } from "@/types/api";
 export function ListingsBoard() {
   const { data: pools, isPending: poolsPending } = usePools();
   const [filterTicker, setFilterTicker] = useState<string | null>(null);
+  const [onlyFulfillable, setOnlyFulfillable] = useState(false);
+  const [excludedTickers, setExcludedTickers] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const filterRoot = useMemo(() => {
     if (!pools || !filterTicker) return null;
@@ -34,6 +46,65 @@ export function ListingsBoard() {
     isError,
     error,
   } = useP2pListings(filterRoot ? { roots: [filterRoot] } : {});
+
+  // ---- "I can fulfill" data plumbing ----
+  // For v3 launch p2p is Hosky-only; pick the first curated collection's
+  // policy id to scope the wallet-NFT lookup. When p2p expands to more
+  // collections we'd union across all of them.
+  const { data: curated } = useCurated();
+  const collectionPolicyHex = curated?.[0]?.collection_policy_id ?? null;
+  const addressBech32 = useWalletStore((s) => s.addressBech32);
+  const { data: walletNfts } = useWalletCollectionNfts(
+    addressBech32,
+    collectionPolicyHex,
+  );
+  const walletAssetNamesHex = useMemo(
+    () => (walletNfts ?? []).map((n) => n.assetNameHex),
+    [walletNfts],
+  );
+  const { data: walletMembership } = useAssetPoolMembership(walletAssetNamesHex);
+  // myMatchableTickers = union of all pool tickers any of the wallet's NFTs
+  // belong to. A listing is matchable iff its target ticker is in this set.
+  const myMatchableTickers = useMemo(() => {
+    const out = new Set<string>();
+    if (!walletMembership) return out;
+    for (const tickers of Object.values(walletMembership)) {
+      for (const t of tickers) out.add(t);
+    }
+    return out;
+  }, [walletMembership]);
+  // root_hex → ticker, used to resolve each listing's target pool
+  // ticker on the fly without re-fetching per row.
+  const rootToTicker = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const p of pools ?? []) m[p.merkle_root_hex] = p.ticker;
+    return m;
+  }, [pools]);
+
+  // Apply client-side filters. The BE-side `pool` filter narrows the
+  // initial fetch; these run on top of that result.
+  const filteredListings = useMemo(() => {
+    if (!listings) return null;
+    return listings.filter((l) => {
+      const targetTicker = rootToTicker[l.accepted_merkle_root];
+      if (!targetTicker) return true; // listing's pool unknown to FE — keep
+      if (excludedTickers.has(targetTicker)) return false;
+      if (onlyFulfillable && !myMatchableTickers.has(targetTicker)) return false;
+      return true;
+    });
+  }, [listings, rootToTicker, excludedTickers, onlyFulfillable, myMatchableTickers]);
+
+  const toggleExcluded = (ticker: string) => {
+    setExcludedTickers((prev) => {
+      const next = new Set(prev);
+      if (next.has(ticker)) next.delete(ticker);
+      else next.add(ticker);
+      return next;
+    });
+  };
+
+  // "I can fulfill" toggle is only useful with a connected wallet.
+  const fulfillableDisabled = !addressBech32 || !walletMembership;
 
   return (
     <div className="space-y-6">
@@ -84,33 +155,120 @@ export function ListingsBoard() {
         ))}
       </div>
 
+      {/* Seller-mode filters: explicit, both compose with the pool filter. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs uppercase tracking-widest text-zinc-500">
+          filters:
+        </span>
+        <label
+          className={
+            "flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs " +
+            (onlyFulfillable
+              ? "border-amber-700/60 bg-amber-950/30 text-amber-200"
+              : "border-zinc-800 text-zinc-400 hover:border-zinc-600") +
+            (fulfillableDisabled ? " cursor-not-allowed opacity-50" : "")
+          }
+          title={
+            fulfillableDisabled
+              ? "connect your wallet to enable"
+              : "show only listings whose target pool matches one of your NFTs"
+          }
+        >
+          <input
+            type="checkbox"
+            checked={onlyFulfillable}
+            disabled={fulfillableDisabled}
+            onChange={(e) => setOnlyFulfillable(e.target.checked)}
+            className="h-3 w-3 accent-amber-500"
+          />
+          only listings I can fulfill
+        </label>
+        <MultiSelectPopover
+          label="exclude pools"
+          options={(pools ?? []).map((p) => ({ value: p.ticker, label: p.ticker }))}
+          selected={excludedTickers}
+          onToggle={toggleExcluded}
+          onClear={() => setExcludedTickers(new Set())}
+        />
+      </div>
+
+      {/* Excluded chip strip — appears only when something is excluded. */}
+      {excludedTickers.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] uppercase tracking-widest text-zinc-600">
+            excluded:
+          </span>
+          {[...excludedTickers].sort().map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => toggleExcluded(t)}
+              className="rounded-sm bg-zinc-900 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300 hover:bg-zinc-800"
+              title={`remove ${t} from excluded`}
+            >
+              {t} <span className="text-zinc-500">×</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {isPending && <p className="text-sm text-zinc-500">looking for listings…</p>}
       {isError && (
         <p className="text-sm text-red-400" role="alert">
           couldn&apos;t load listings: {error.message}
         </p>
       )}
-      {listings && listings.length === 0 && (
-        <EmptyState filterTicker={filterTicker} />
+      {filteredListings && filteredListings.length === 0 && (
+        <EmptyState
+          filterTicker={filterTicker}
+          onlyFulfillable={onlyFulfillable}
+          excludedCount={excludedTickers.size}
+          serverEmpty={(listings ?? []).length === 0}
+        />
       )}
-      {listings && listings.length > 0 && (
-        <ListingsList listings={listings} pools={pools ?? []} />
+      {filteredListings && filteredListings.length > 0 && (
+        <ListingsList listings={filteredListings} pools={pools ?? []} />
       )}
     </div>
   );
 }
 
-function EmptyState({ filterTicker }: { filterTicker: string | null }) {
+function EmptyState({
+  filterTicker,
+  onlyFulfillable,
+  excludedCount,
+  serverEmpty,
+}: {
+  filterTicker: string | null;
+  onlyFulfillable: boolean;
+  excludedCount: number;
+  /** True when the BE returned 0 listings (vs. filters narrowed to 0). */
+  serverEmpty: boolean;
+}) {
+  // Pick the explanation that best matches WHY the list is empty so the
+  // user knows whether to relax filters or create a listing themselves.
+  const filtersActive = onlyFulfillable || excludedCount > 0;
+  const headline = serverEmpty
+    ? filterTicker
+      ? `no open listings targeting ${filterTicker}`
+      : "no open listings yet"
+    : filtersActive
+      ? "no listings match your filters"
+      : filterTicker
+        ? `no open listings targeting ${filterTicker}`
+        : "no open listings yet";
+
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/30 p-6 text-sm text-zinc-400">
-      <p className="font-medium text-zinc-200">
-        {filterTicker
-          ? `no open listings targeting ${filterTicker}`
-          : "no open listings yet"}
-      </p>
+      <p className="font-medium text-zinc-200">{headline}</p>
       <p className="mt-1 text-zinc-500">
-        be the first to{" "}
-        <Link href="/" className="text-zinc-300 underline-offset-2 hover:underline">
+        {filtersActive && !serverEmpty
+          ? "relax the filters above, or "
+          : "be the first to "}
+        <Link
+          href="/p2p/new"
+          className="text-zinc-300 underline-offset-2 hover:underline"
+        >
           create one
         </Link>
         .
