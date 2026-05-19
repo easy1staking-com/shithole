@@ -210,13 +210,24 @@ describe("buildWantedDatum", () => {
 /* ============================================================ */
 
 describe("buildFulfillRedeemer", () => {
+  /**
+   * ProofItem on-wire shape: Constr alt [Constr 0 [bytes]] — the inner
+   * Constr 0 is the {@code Root} record wrapper from the
+   * {@code aiken_merkle_tree} library. A naive {@code Constr alt [bytes]}
+   * (without the Root wrapper) WILL fail validator decode at runtime;
+   * these tests pin against the right shape.
+   */
+  function rootOf(hashHex: string): Data.Data {
+    return Data.constr(0n, [Data.bytearray(hashHex)]);
+  }
+
   it("encodes Some(treasury_output_index) and a Left proof step", () => {
     const actual = buildFulfillRedeemer({
       merkleProof: [{ side: "left", hashHex: SIBLING_A }],
       treasuryOutputIndex: 1,
     });
     const expected = Data.constr(0n, [
-      Data.list([Data.constr(0n, [Data.bytearray(SIBLING_A)])]),
+      Data.list([Data.constr(0n, [rootOf(SIBLING_A)])]),
       Data.constr(0n, [Data.int(1n)]),
     ]);
     expect(asHex(actual)).toBe(asHex(expected));
@@ -228,7 +239,7 @@ describe("buildFulfillRedeemer", () => {
       treasuryOutputIndex: null,
     });
     const expected = Data.constr(0n, [
-      Data.list([Data.constr(1n, [Data.bytearray(SIBLING_A)])]),
+      Data.list([Data.constr(1n, [rootOf(SIBLING_A)])]),
       Data.constr(1n, []),
     ]);
     expect(asHex(actual)).toBe(asHex(expected));
@@ -244,8 +255,8 @@ describe("buildFulfillRedeemer", () => {
     });
     const expected = Data.constr(0n, [
       Data.list([
-        Data.constr(1n, [Data.bytearray(SIBLING_A)]),
-        Data.constr(0n, [Data.bytearray(SIBLING_B)]),
+        Data.constr(1n, [rootOf(SIBLING_A)]),
+        Data.constr(0n, [rootOf(SIBLING_B)]),
       ]),
       Data.constr(0n, [Data.int(0n)]),
     ]);

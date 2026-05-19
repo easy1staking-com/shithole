@@ -19,8 +19,15 @@
  *                         constructor-name collision in types.ak)
  *
  *   ProofItem<a> (from aiken_merkle_tree)
- *     Left  (Constr 0) [hash: ByteArray]
- *     Right (Constr 1) [hash: ByteArray]
+ *     Left  (Constr 0) [Root]
+ *     Right (Constr 1) [Root]
+ *   Root (record, single field):
+ *     Constr 0 [inner: ByteArray]
+ *   So a proof step ON THE WIRE is:
+ *     Constr alt [Constr 0 [ByteArray]]
+ *   — NOT Constr alt [ByteArray]. The contract tests didn't catch this
+ *   because they generate proofs via mt.get_proof which already wraps the
+ *   bytes in the Root record.
  *
  * The on-chain validator decodes these via Aiken's `expect` machinery, so
  * byte-exact correctness is load-bearing. Every public function here is
@@ -164,16 +171,24 @@ export function buildWantedDatum(input: WantedDatumInput): Data.Data {
  * Build the seller's Fulfill redeemer:
  *   Constr 0 [List<ProofItem>, Option<Int>]
  *
- * <p>Each {@link ProofItem} encodes to {@code Constr 0|1 [bytes]} per the
- * aiken_merkle_tree library. {@code treasuryOutputIndex} of {@code null}
- * encodes as None; an int encodes as Some(idx). The validator's W7/W7'
- * branch picks the right path.
+ * <p>Each {@link ProofItem} encodes to {@code Constr 0|1 [Constr 0 [bytes]]}
+ * per the aiken_merkle_tree library — the bytes are wrapped in a {@code Root}
+ * record (single-field record = Constr 0 with one field) before the outer
+ * Left/Right constructor. The contract tests didn't catch the wrong shape
+ * because they generate proofs via {@code mt.get_proof}, which already
+ * produces the correct Root wrapping.
+ *
+ * <p>{@code treasuryOutputIndex} of {@code null} encodes as None;
+ * an int encodes as Some(idx). The validator's W7/W7' branch picks the
+ * right path.
  */
 export function buildFulfillRedeemer(input: FulfillRedeemerInput): Data.Data {
   const proofData: Data.Data[] = input.merkleProof.map((step) => {
     assertHexLen(step.hashHex, 32, "merkleProof[].hashHex");
     const tag = step.side === "left" ? 0n : 1n;
-    return Data.constr(tag, [Data.bytearray(step.hashHex.toLowerCase())]);
+    // Root { inner: ByteArray } — a record with one field = Constr 0 [bytes].
+    const root = Data.constr(0n, [Data.bytearray(step.hashHex.toLowerCase())]);
+    return Data.constr(tag, [root]);
   });
   const proofList = Data.list(proofData);
 

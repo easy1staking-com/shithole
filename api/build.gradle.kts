@@ -139,6 +139,14 @@ tasks.register<JavaExec>("preprodSwap") {
     standardInput = System.`in`
 }
 
+tasks.register<JavaExec>("preprodFulfillP2p") {
+    group = "preprod tools"
+    description = "v3 fulfill diagnostic — picks an active listing from the BE, finds a matching NFT in the wallet, verifies the merkle proof locally, builds the Fulfill tx via QuickTx with Ogmios eval + pre/post-balance dumps. Set FULFILL_DRY_RUN=true to skip submit."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.PreprodFulfillP2pTool")
+    standardInput = System.`in`
+}
+
 // ---------------------------------------------------------------------------
 // P2P (v3 wanted_listing) tools.
 // ---------------------------------------------------------------------------
