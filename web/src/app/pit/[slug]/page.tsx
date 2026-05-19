@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 
@@ -419,6 +420,19 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
         {collection.data && (
           <>
             <PitHeader collection={collection.data} />
+
+            {/* v3 alt-action: skip the random pit grind and target a
+             *  specific delegator pool instead. Quiet single line so it
+             *  doesn't compete with the main swap affordance. */}
+            <p className="text-center text-xs text-zinc-500">
+              or skip the random grind:{" "}
+              <Link
+                href={`/p2p/new?collection=${encodeURIComponent(slug)}`}
+                className="text-zinc-300 underline-offset-2 hover:underline"
+              >
+                find another idiot to take it →
+              </Link>
+            </p>
 
             <div className="relative">
               {listings.isLoading && (
