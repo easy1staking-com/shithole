@@ -134,6 +134,33 @@ export default function AboutPage() {
         </div>
       </section>
 
+      {/* P2P — the v3 mechanic */}
+      <section className="space-y-3 text-zinc-300">
+        <h2 className="text-xl font-semibold text-zinc-100">
+          the p2p side — find another idiot directly
+        </h2>
+        <p>
+          The pit gives you <em>random</em> worthlessness back. The p2p
+          side lets you be picky: you lock one of your NFTs together with
+          an ADA deposit at a script, declaring that you&apos;ll accept
+          any NFT from delegators of a specific Cardano stake pool. Anyone
+          holding a qualifying NFT — including, transparently, a bot we
+          run — can take the deal and the contract atomically swaps the
+          two. If nobody takes it, you reclaim. Nothing expires on its
+          own.
+        </p>
+        <p className="text-sm text-zinc-400">
+          The &quot;deposit&quot; isn&apos;t what you spend — about 1.4
+          ADA flows back to your wallet attached to the incoming NFT.
+          The create-listing flow shows the live breakdown.{" "}
+          <Link href="/terms" className="underline hover:text-zinc-100">
+            terms &amp; conditions
+          </Link>{" "}
+          has the full risk picture, including the bot and how the
+          curated pool list works.
+        </p>
+      </section>
+
       {/* Fees */}
       <section className="space-y-3 text-zinc-300">
         <h2 className="text-xl font-semibold text-zinc-100">fees</h2>

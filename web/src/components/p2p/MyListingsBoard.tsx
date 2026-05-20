@@ -228,6 +228,13 @@ export function MyListingsBoard() {
 
   return (
     <div className="space-y-3 pb-24">
+      {/* Reclaim is opt-in, never automatic — call it out once at the top
+          of the board so users know to come back if they change their
+          mind. T&C covers the full version. */}
+      <p className="text-[11px] text-zinc-500">
+        nothing expires on its own. these stay open until someone fills
+        them or you reclaim.
+      </p>
       {/* Header bar with select-all + count */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <label className="inline-flex items-center gap-2 text-zinc-400">

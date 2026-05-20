@@ -486,6 +486,16 @@ function ListingSummary({
         <Row label="target pool" value={targetPoolTicker ?? "unknown"} mono />
         <Row label="buyer" value={`${listing.buyer_pkh.slice(0, 12)}…`} mono />
       </dl>
+      {/* Inline risk disclosure for the seller side. The swap is atomic
+          and final; once you sign you've given up the deposited NFT.
+          The buyer above may also be our auto-fulfiller bot — that's
+          fine, but disclose it. */}
+      <p className="pt-2 text-[11px] leading-snug text-zinc-500">
+        the swap is atomic and final — no refunds, no take-backs. the
+        listed offer may have been posted by another user or by our
+        auto-fulfiller bot; the contract rules are identical either
+        way.
+      </p>
     </section>
   );
 }

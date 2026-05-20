@@ -231,7 +231,7 @@ function FlowForCollection({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-1">
+      <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">
           find another idiot
         </h1>
@@ -242,6 +242,18 @@ function FlowForCollection({ slug }: { slug: string }) {
           </span>{" "}
           to a delegator who actually wants its traits. you pay them; they
           take it.
+        </p>
+        {/* Inline risk disclosure — the user is about to lock NFT + ADA at
+            a script open to anyone (including the project bot). T&C covers
+            it in full; this is the in-flow nudge. */}
+        <p className="text-[11px] text-zinc-500">
+          posting locks the NFT + your deposit at a script. anyone with a
+          matching NFT (including our bot) can take the swap. no escrow,
+          no chargebacks. you can reclaim anytime — see{" "}
+          <Link href="/terms" className="underline-offset-2 hover:underline hover:text-zinc-300">
+            terms
+          </Link>
+          .
         </p>
       </header>
 

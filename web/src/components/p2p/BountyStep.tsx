@@ -198,6 +198,12 @@ export function BountyStep({
         )}
       </dl>
 
+      <p className="text-[11px] leading-snug text-zinc-500">
+        once a swap lands, the protocol fee + tx fee + swapper&apos;s take
+        are gone — no refunds. reclaim only works on listings nobody&apos;s
+        taken yet.
+      </p>
+
       <button
         type="button"
         disabled={!aboveFloor || submitting || listingCount === 0}

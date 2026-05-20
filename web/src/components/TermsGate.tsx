@@ -3,8 +3,49 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
+/**
+ * localStorage key holding the user's most recent acceptance record.
+ *
+ * Note: the trailing `-v1` is historical — the key has never been
+ * rotated, and the version we check against is stored *inside* the
+ * JSON record under {@code version}, not in the key suffix. Renaming
+ * the key would orphan existing acceptances; leaving it as-is means
+ * a v1-accepting user's record is read correctly on the next visit,
+ * its {@code version} compared against the current {@link TERMS_VERSION},
+ * and the gate re-shows naturally when the constants disagree.
+ *
+ * In short: don't rename this. The {@link TERMS_VERSION} constant is
+ * the only knob you need to turn for a forced re-acceptance.
+ */
 const STORAGE_KEY = "shithole:terms-v1";
-const TERMS_VERSION = 1;
+/**
+ * Bumping this re-shows the gate to every previously-consenting user on
+ * their next visit (we compare against {@link AcceptedRecord.version}
+ * stored in {@link STORAGE_KEY}).
+ *
+ * Bump procedure for a material T&C change:
+ *   1. Edit {@code web/src/app/terms/page.tsx} with the new copy.
+ *   2. Update the bullet list inside this component to mention any
+ *      *new* high-impact behaviour the user is now consenting to.
+ *   3. Increment {@link TERMS_VERSION} by 1 here.
+ *   4. Ship. On next visit, every user with a stored acceptance whose
+ *      {@code version} is lower than the new one will see the modal.
+ *
+ * Version history:
+ *   - 1 (initial mainnet release): random-swap pits only.
+ *   - 2 (v3 launch, 2026-05-20): added p2p wanted-listing flow + bot
+ *     intermediation. New consent dimensions: locking ADA + NFT at a
+ *     script address open to any counterparty including a project-run
+ *     bot, the "deposit" terminology + math, reclaim-is-user's-job.
+ *
+ * The {@link AcceptedRecord.acceptedAt} timestamp stored in localStorage
+ * is per-user audit metadata — it tells us when *this device* accepted
+ * *this version*. We do not currently mirror acceptances to the BE. If
+ * we ever need server-side proof of acceptance (regulatory ask, dispute
+ * defence), the natural extension is a `POST /api/legal/accept` taking
+ * `{wallet_pkh, version, acceptedAt}` signed CIP-8. Out of scope for v3.
+ */
+const TERMS_VERSION = 2;
 const BYPASS_PARAM = "from=gate";
 
 type AcceptedRecord = {
@@ -16,9 +57,9 @@ type AcceptedRecord = {
  * First-visit T&C consent gate.
  *
  * Renders a hard-block modal over the app until the user acknowledges
- * the terms. Versioned localStorage key (`shithole:terms-v{N}`) lets us
- * force re-acknowledgement on a material T&C change by bumping the
- * version constant — older records won't match and the gate re-shows.
+ * the terms. The {@link TERMS_VERSION} constant gates re-acceptance on
+ * a material T&C change; see the doc comment above the constant for
+ * the bump procedure.
  *
  * The T&C link opens in a new tab so users can read the full terms
  * before agreeing without fighting the modal.
@@ -175,8 +216,18 @@ export function TermsGate() {
               ·
             </span>
             <span>
-              Listing an NFT authorises anyone to swap it. You may never
-              get your original NFT back.
+              Listing an NFT in a pit authorises anyone to swap it. You
+              may never get your original NFT back.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span aria-hidden className="text-zinc-500">
+              ·
+            </span>
+            <span>
+              A p2p offer locks your NFT + ADA at a script open to any
+              counterparty — including a project-run bot. Reclaim is on
+              you; nothing auto-expires.
             </span>
           </li>
           <li className="flex gap-2">
