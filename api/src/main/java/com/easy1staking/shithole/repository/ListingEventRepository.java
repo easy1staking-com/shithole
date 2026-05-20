@@ -2,6 +2,7 @@ package com.easy1staking.shithole.repository;
 
 import com.easy1staking.shithole.entity.ListingEventEntity;
 import com.easy1staking.shithole.entity.ListingEventId;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -85,4 +86,16 @@ public interface ListingEventRepository extends JpaRepository<ListingEventEntity
      * collection-state response + the recommended-M math.
      */
     long countByConfigNftPolicyAndSpentActionIsNull(byte[] configNftPolicy);
+
+    /**
+     * All listing events a wallet participated in — either as the original
+     * lister OR as the swapper (V1_0_6+). Ordered most-recent first by the
+     * row's last-modified slot (spent slot if spent, else created slot).
+     * Powers {@code GET /api/listings/by-pkh/{pkh}} for the unified
+     * wallet-history view.
+     */
+    @Query("select e from ListingEventEntity e "
+            + "where e.listerPkh = :pkh or e.swapperPkh = :pkh "
+            + "order by coalesce(e.spentAtSlot, e.createdAtSlot) desc")
+    List<ListingEventEntity> findAllByPkh(@Param("pkh") byte[] pkh, Pageable pageable);
 }

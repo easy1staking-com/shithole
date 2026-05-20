@@ -109,4 +109,13 @@ public class ListingEventEntity {
     /** {@code 'swap' | 'cancel' | 'recover'} when consumed; {@code null} while active. */
     @Column(name = "spent_action", length = 16)
     private String spentAction;
+
+    /**
+     * Payment-key hash of the wallet that swapped INTO this listing,
+     * stamped on the predecessor row when a Swap spends it.
+     * {@code null} on active rows, on cancel/recover rows, and on rows
+     * the indexer couldn't unambiguously attribute.
+     */
+    @Column(name = "swapper_pkh")
+    private byte[] swapperPkh;
 }

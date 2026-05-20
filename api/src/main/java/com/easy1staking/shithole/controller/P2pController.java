@@ -252,7 +252,29 @@ public class P2pController {
                         : e.getSpentAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
                 .spentByTxHash(e.getSpentByTxHash() == null ? null
                         : HEX.formatHex(e.getSpentByTxHash()))
+                .fulfillerPkh(e.getFulfillerPkh() == null ? null
+                        : HEX.formatHex(e.getFulfillerPkh()))
                 .build();
+    }
+
+    /**
+     * All wanted-listings a wallet participated in — as buyer OR as
+     * fulfiller. Powers the FE's {@code /me/history} feed (p2p side).
+     */
+    @GetMapping(value = "/p2p/listings/by-pkh/{pkhHex}",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<P2pListingDto>> listingsByPkh(
+            @PathVariable("pkhHex") String pkhHex,
+            @RequestParam(value = "size", defaultValue = "100") int size,
+            @RequestParam(value = "page", defaultValue = "0") int page) {
+        Optional<byte[]> pkhOpt = parseHexExact(pkhHex, 28);
+        if (pkhOpt.isEmpty()) return ResponseEntity.badRequest().build();
+        int safeSize = Math.max(1, Math.min(200, size));
+        int safePage = Math.max(0, page);
+        var pageable = PageRequest.of(safePage, safeSize);
+        List<WantedListingEventEntity> rows =
+                wantedListingEventRepository.findAllByPkh(pkhOpt.get(), pageable);
+        return ResponseEntity.ok(rows.stream().map(P2pController::toListingDto).toList());
     }
 
     /**

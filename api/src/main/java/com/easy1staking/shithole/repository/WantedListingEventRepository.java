@@ -77,4 +77,16 @@ public interface WantedListingEventRepository
             Pageable pageable);
 
     long countByConfigNftPolicyAndSpentActionIsNull(byte[] configNftPolicy);
+
+    /**
+     * All wanted-listing events a wallet participated in — either as the
+     * original buyer OR as the fulfiller (V1_0_6+). Ordered most-recent
+     * first by the row's last-modified slot (spent slot if spent, else
+     * created slot). Powers {@code GET /api/p2p/listings/by-pkh/{pkh}}
+     * for the unified wallet-history view.
+     */
+    @Query("select e from WantedListingEventEntity e "
+            + "where e.buyerPkh = :pkh or e.fulfillerPkh = :pkh "
+            + "order by coalesce(e.spentAtSlot, e.createdAtSlot) desc")
+    List<WantedListingEventEntity> findAllByPkh(@Param("pkh") byte[] pkh, Pageable pageable);
 }

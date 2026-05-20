@@ -11,13 +11,16 @@ import {
   fetchCollection,
   fetchCurated,
   fetchListings,
+  fetchListingsByPkh,
   fetchNftMetadata,
   fetchP2pListings,
   fetchP2pListingsByBuyer,
+  fetchP2pListingsByPkh,
   fetchPoolByRoot,
   fetchPoolByTicker,
   fetchPools,
   fetchProof,
+  type ByPkhQuery,
   type ListingsQuery,
   type P2pListingsByBuyerQuery,
   type P2pListingsQuery,
@@ -26,6 +29,7 @@ import type {
   AssetPoolMembership,
   CollectionState,
   CuratedCollection,
+  ListingEvent,
   ListingsResponse,
   NftMetadata,
   P2pListing,
@@ -68,6 +72,20 @@ export const queryKeys = {
       query.includeSpent ?? false,
       query.page ?? 0,
       query.size ?? 50,
+    ] as const,
+  listingsByPkh: (pkhHex: string, query: ByPkhQuery) =>
+    [
+      "listingsByPkh",
+      pkhHex.toLowerCase(),
+      query.page ?? 0,
+      query.size ?? 100,
+    ] as const,
+  p2pListingsByPkh: (pkhHex: string, query: ByPkhQuery) =>
+    [
+      "p2pListingsByPkh",
+      pkhHex.toLowerCase(),
+      query.page ?? 0,
+      query.size ?? 100,
     ] as const,
 };
 
@@ -222,6 +240,42 @@ export function useP2pListingsByBuyer(
     queryFn: () => fetchP2pListingsByBuyer(buyerPkhHex!, query),
     enabled: Boolean(buyerPkhHex),
     staleTime: 10_000,
+    ...options,
+  });
+}
+
+/**
+ * Pit listing-events a wallet participated in — as lister OR swapper.
+ * Drives the pit side of /me/history.
+ */
+export function useListingsByPkh(
+  pkhHex: string | null,
+  query: ByPkhQuery = {},
+  options?: QueryOptions<ListingEvent[]>,
+): UseQueryResult<ListingEvent[], Error> {
+  return useQuery({
+    queryKey: queryKeys.listingsByPkh(pkhHex ?? "", query),
+    queryFn: () => fetchListingsByPkh(pkhHex!, query),
+    enabled: Boolean(pkhHex),
+    staleTime: 15_000,
+    ...options,
+  });
+}
+
+/**
+ * P2p listings a wallet participated in — as buyer OR fulfiller.
+ * Drives the p2p side of /me/history.
+ */
+export function useP2pListingsByPkh(
+  pkhHex: string | null,
+  query: ByPkhQuery = {},
+  options?: QueryOptions<P2pListing[]>,
+): UseQueryResult<P2pListing[], Error> {
+  return useQuery({
+    queryKey: queryKeys.p2pListingsByPkh(pkhHex ?? "", query),
+    queryFn: () => fetchP2pListingsByPkh(pkhHex!, query),
+    enabled: Boolean(pkhHex),
+    staleTime: 15_000,
     ...options,
   });
 }

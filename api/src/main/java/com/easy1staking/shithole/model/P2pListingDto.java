@@ -29,5 +29,6 @@ public record P2pListingDto(
         @JsonProperty("spent_action") String spentAction,
         @JsonProperty("spent_at_slot") Long spentAtSlot,
         @JsonProperty("spent_at") String spentAt,
-        @JsonProperty("spent_by_tx_hash") String spentByTxHash) {
+        @JsonProperty("spent_by_tx_hash") String spentByTxHash,
+        @JsonProperty("fulfiller_pkh") String fulfillerPkh) {
 }

@@ -1,13 +1,22 @@
 package com.easy1staking.shithole.indexer;
 
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.bloxbean.cardano.yaci.core.model.Redeemer;
+import com.bloxbean.cardano.yaci.core.model.TransactionInput;
+import com.bloxbean.cardano.yaci.helper.model.Transaction;
 import com.bloxbean.cardano.yaci.store.common.domain.AddressUtxo;
 import com.bloxbean.cardano.yaci.store.common.domain.Amt;
 import com.bloxbean.cardano.yaci.store.common.domain.TxInput;
 import com.bloxbean.cardano.yaci.store.events.EventMetadata;
+import com.bloxbean.cardano.yaci.store.events.TransactionEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.AddressUtxoEvent;
 import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.bloxbean.cardano.yaci.store.utxo.domain.UtxoRollbackEvent;
+import com.easy1staking.shithole.blueprint.generated.shithole.types.model.ListingRedeemer;
+import com.easy1staking.shithole.blueprint.generated.shithole.types.model.converter.ListingRedeemerConverter;
+import com.easy1staking.shithole.blueprint.generated.shithole.types.model.listingredeemer.Cancel;
+import com.easy1staking.shithole.blueprint.generated.shithole.types.model.listingredeemer.Recover;
+import com.easy1staking.shithole.blueprint.generated.shithole.types.model.listingredeemer.Swap;
 import com.easy1staking.shithole.entity.ListingEventEntity;
 import com.easy1staking.shithole.entity.ListingEventId;
 import com.easy1staking.shithole.indexer.WatchAddressRegistry.WatchedCollection;
@@ -26,10 +35,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Populates the {@code listing_events} lineage table per
@@ -66,15 +77,21 @@ public class ListingEventsIndexer {
 
     /**
      * Sentinel for a spend that we know is terminal (no successor at the same
-     * address in the same tx) but haven't yet classified as cancel vs recover
-     * by inspecting the redeemer. Must fit within the {@code VARCHAR(16)}
-     * {@code spent_action} column (see V1_0_1).
+     * address in the same tx) but we couldn't pin to a known counterparty
+     * (lister cancel or admin recover) via output inspection. Must fit
+     * within the {@code VARCHAR(16)} {@code spent_action} column (see V1_0_1).
+     *
+     * <p>v1 marked every terminal spend as this sentinel. v2 (V1_0_6) refines
+     * to {@code 'cancel'} or {@code 'recover'} when the heuristic in
+     * {@link #applyCancelOrRecover} pins down the counterparty; falls back
+     * to the sentinel when ambiguous.
      */
     static final String SPENT_UNKNOWN = "spent_unknown";
 
     private final WatchAddressRegistry registry;
     private final ListingDatumDecoder datumDecoder;
     private final ListingEventRepository listingEventRepository;
+    private final ListingRedeemerConverter listingRedeemerConverter = new ListingRedeemerConverter();
 
     /**
      * One transaction per block event so partial application can't leave the
@@ -201,6 +218,13 @@ public class ListingEventsIndexer {
             return;
         }
 
+        // Pre-compute the set of script + treasury addresses for the
+        // counterparty classifier. Everything else in the outputs is fair
+        // game as a possible counterparty (= swapper for swap rows, lister
+        // for cancel rows, admin for recover rows).
+        Set<String> skipAddresses = new HashSet<>(registry.all());
+        skipAddresses.addAll(registry.allTreasuryAddresses());
+
         // ---- 3. Per-address reconciliation. Swap = co-tx spend+create at the
         // same address; we pair them up. Pairing strategy: zip in order. If
         // the indexer ever sees a tx with multiple spends + multiple creates
@@ -218,7 +242,7 @@ public class ListingEventsIndexer {
 
             int pairCount = Math.min(creates.size(), spends.size());
             for (int i = 0; i < pairCount; i++) {
-                applySwap(spends.get(i), creates.get(i), txHashBytes, txHash, slot, at);
+                applySwap(spends.get(i), creates.get(i), outputs, skipAddresses, txHashBytes, slot, at);
             }
             for (int i = pairCount; i < creates.size(); i++) {
                 applyGenesis(creates.get(i), txHashBytes, slot, at);
@@ -239,7 +263,7 @@ public class ListingEventsIndexer {
             // If the address has been consumed by pairing above the list is
             // already empty; otherwise these are terminal.
             for (ListingEventEntity row : remaining) {
-                applyCancelOrRecover(row, txHashBytes, slot, at);
+                applyCancelOrRecover(row, outputs, skipAddresses, txHashBytes, slot, at);
             }
         }
     }
@@ -278,7 +302,8 @@ public class ListingEventsIndexer {
     }
 
     private void applySwap(ListingEventEntity prev, PendingCreate pc,
-                           byte[] txHashBytes, String txHashHex,
+                           List<AddressUtxo> txOutputs, Set<String> skipAddresses,
+                           byte[] txHashBytes,
                            long slot, OffsetDateTime at) {
         AddressUtxo out = pc.out();
         byte[] outTxBytes = hexToBytesSafe(out.getTxHash());
@@ -310,32 +335,97 @@ public class ListingEventsIndexer {
             listingEventRepository.save(successor);
         }
 
+        // The swapper is whoever owns the non-script, non-treasury outputs of
+        // this tx — typically the wallet that submitted the swap. Strict
+        // mode: only stamp when exactly one distinct payment credential
+        // remains after skipping script + treasury outputs. Ambiguous tx
+        // (split between two wallets, batchers, etc.) → NULL.
+        byte[] swapperPkh = pickCounterpartyPkh(txOutputs, skipAddresses);
+
         prev.setSpentAction("swap");
         prev.setSpentAtSlot(slot);
         prev.setSpentAt(at);
         prev.setSpentByTxHash(txHashBytes);
+        prev.setSwapperPkh(swapperPkh);
         listingEventRepository.save(prev);
 
-        log.info("listing_events swap prev={}#{} succ={}#{} slug={}",
+        log.info("listing_events swap prev={}#{} succ={}#{} slug={} swapper={}",
                 hex(prev.getTxHash()), prev.getOutputIndex(),
-                hex(outTxBytes), outIdx, pc.watched().slug());
+                hex(outTxBytes), outIdx, pc.watched().slug(),
+                swapperPkh == null ? "<unknown>" : hex(swapperPkh));
     }
 
-    private void applyCancelOrRecover(ListingEventEntity prev, byte[] txHashBytes,
+    private void applyCancelOrRecover(ListingEventEntity prev,
+                                      List<AddressUtxo> txOutputs, Set<String> skipAddresses,
+                                      byte[] txHashBytes,
                                       long slot, OffsetDateTime at) {
-        // Brief task 3: classifying cancel vs recover requires reading the
-        // redeemer, which yaci-store's AddressUtxoEvent doesn't expose. For
-        // now we tag both with the same sentinel; a follow-up listener on a
-        // redeemer-bearing event (or a join against yaci-store's `redeemer`
-        // table) will refine this into 'cancel' or 'recover'. Schema reserves
-        // 16 chars for spent_action so the sentinel must fit.
-        prev.setSpentAction(SPENT_UNKNOWN);
+        // Classification heuristic (no redeemer access in AddressUtxoEvent):
+        //   - any non-script/treasury output whose payment cred == listerPkh
+        //     → 'cancel'. (Cancel sends ADA + NFT back to the lister.)
+        //   - else any output whose payment cred == config.adminPkh
+        //     → 'recover'. (Admin Rescue path.)
+        //   - else → spent_unknown.
+        // This is best-effort; ambiguous txes fall through to the sentinel.
+        String listerPkhHex = HexUtil.encodeHexString(prev.getListerPkh()).toLowerCase(Locale.ROOT);
+        WatchedCollection wc = findWatchedByConfigPolicy(prev.getConfigNftPolicy());
+        String adminPkhHex = wc == null || wc.adminPkhHex() == null
+                ? null : wc.adminPkhHex().toLowerCase(Locale.ROOT);
+
+        String action = SPENT_UNKNOWN;
+        boolean sawAdmin = false;
+        if (txOutputs != null) {
+            for (AddressUtxo out : txOutputs) {
+                if (out == null) continue;
+                if (skipAddresses.contains(out.getOwnerAddr())) continue;
+                String cred = out.getOwnerPaymentCredential();
+                if (cred == null) continue;
+                String credLc = cred.toLowerCase(Locale.ROOT);
+                if (credLc.equals(listerPkhHex)) {
+                    action = "cancel";
+                    break;
+                }
+                if (adminPkhHex != null && credLc.equals(adminPkhHex)) {
+                    sawAdmin = true;
+                }
+            }
+        }
+        if (SPENT_UNKNOWN.equals(action) && sawAdmin) {
+            action = "recover";
+        }
+
+        prev.setSpentAction(action);
         prev.setSpentAtSlot(slot);
         prev.setSpentAt(at);
         prev.setSpentByTxHash(txHashBytes);
         listingEventRepository.save(prev);
-        log.info("listing_events cancel/recover prev={}#{}",
-                hex(prev.getTxHash()), prev.getOutputIndex());
+        log.info("listing_events {} prev={}#{}",
+                action, hex(prev.getTxHash()), prev.getOutputIndex());
+    }
+
+    /**
+     * Pick the single payment-credential hex string shared by all non-skip
+     * outputs in the tx. Returns {@code null} if zero or >1 distinct
+     * credentials remain — i.e., refuses to attribute on ambiguity.
+     *
+     * <p>Skip set = watched script addresses + treasury addresses (per
+     * collection). Caller-supplied so we compute it once per tx.
+     */
+    private byte[] pickCounterpartyPkh(List<AddressUtxo> txOutputs, Set<String> skipAddresses) {
+        if (txOutputs == null || txOutputs.isEmpty()) return null;
+        String found = null;
+        for (AddressUtxo out : txOutputs) {
+            if (out == null) continue;
+            if (out.getOwnerAddr() != null && skipAddresses.contains(out.getOwnerAddr())) continue;
+            String cred = out.getOwnerPaymentCredential();
+            if (cred == null || cred.isBlank()) continue;
+            String credLc = cred.toLowerCase(Locale.ROOT);
+            if (found == null) {
+                found = credLc;
+            } else if (!found.equals(credLc)) {
+                return null; // ambiguous
+            }
+        }
+        return found == null ? null : hexToBytesSafe(found);
     }
 
     /**
@@ -500,5 +590,84 @@ public class ListingEventsIndexer {
                                  byte[] nftUnit,
                                  BigInteger lovelace,
                                  WatchedCollection watched) {
+    }
+
+    /* ------------------------------------------------------------------
+     * Redeemer-driven refinement of spent_action.
+     *
+     * AddressUtxoEvent above handles lineage (genesis + swap pairing +
+     * cancel/recover heuristic). This handler reads the actual Spend
+     * redeemer from the witness set and overrides spent_action with the
+     * authoritative value. Refines:
+     *   - heuristic 'spent_unknown' → 'cancel' or 'recover' or 'swap'
+     *   - heuristic mis-classification → corrected
+     *
+     * Per Conway/Plutus V3, redeemers reference inputs by their position
+     * in the SORTED inputs set (lex by tx_hash, then output_index). We
+     * sort yaci's Set<TransactionInput> canonically before matching.
+     * ------------------------------------------------------------------ */
+
+    @EventListener
+    @Transactional
+    public void onTransactionEvent(TransactionEvent event) {
+        if (event == null || event.getTransactions() == null) return;
+        if (registry.size() == 0) return;
+
+        for (Transaction tx : event.getTransactions()) {
+            try {
+                refineSpendsFromRedeemer(tx);
+            } catch (RuntimeException e) {
+                log.error("listing_events (redeemer): error on tx {}: {}",
+                        tx == null ? "<null>" : tx.getTxHash(), e.getMessage(), e);
+            }
+        }
+    }
+
+    private void refineSpendsFromRedeemer(Transaction tx) {
+        if (tx == null || tx.getBody() == null || tx.getWitnesses() == null) return;
+        if (tx.getBody().getInputs() == null || tx.getBody().getInputs().isEmpty()) return;
+        if (tx.getWitnesses().getRedeemers() == null
+                || tx.getWitnesses().getRedeemers().isEmpty()) return;
+
+        List<TransactionInput> sorted = SpendRedeemerExtractor.sortInputs(tx.getBody().getInputs());
+
+        for (TransactionInput in : sorted) {
+            if (in == null || in.getTransactionId() == null) continue;
+            byte[] prevTxHash = hexToBytesSafe(in.getTransactionId());
+            if (prevTxHash == null) continue;
+            Optional<ListingEventEntity> rowOpt = listingEventRepository
+                    .findById(new ListingEventId(prevTxHash, in.getIndex()));
+            if (rowOpt.isEmpty()) continue;
+            ListingEventEntity row = rowOpt.get();
+
+            int sortedIdx = SpendRedeemerExtractor.indexOfInput(sorted, in.getTransactionId(), in.getIndex());
+            Optional<Redeemer> redeemerOpt = SpendRedeemerExtractor.spendRedeemerAt(tx.getWitnesses(), sortedIdx);
+            if (redeemerOpt.isEmpty()) continue;
+            Redeemer r = redeemerOpt.get();
+            if (r.getData() == null || r.getData().getCbor() == null) continue;
+
+            String action;
+            try {
+                ListingRedeemer red = listingRedeemerConverter.deserialize(r.getData().getCbor());
+                if (red instanceof Swap) action = "swap";
+                else if (red instanceof Cancel) action = "cancel";
+                else if (red instanceof Recover) action = "recover";
+                else action = SPENT_UNKNOWN;
+            } catch (RuntimeException e) {
+                // Not a listing redeemer (other script in this tx) — skip.
+                log.debug("listing_events (redeemer): non-listing redeemer at {}#{}: {}",
+                        in.getTransactionId(), in.getIndex(), e.getMessage());
+                continue;
+            }
+
+            String previous = row.getSpentAction();
+            if (action.equals(previous)) continue;
+
+            row.setSpentAction(action);
+            listingEventRepository.save(row);
+            log.info("listing_events (redeemer): refined {}#{} {} -> {}",
+                    in.getTransactionId(), in.getIndex(),
+                    previous == null ? "<none>" : previous, action);
+        }
     }
 }
