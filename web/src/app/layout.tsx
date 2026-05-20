@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { AppHeader } from "@/components/AppHeader";
 import { Footer } from "@/components/Footer";
+import { HistoryDrawer } from "@/components/me/HistoryDrawer";
 import { TermsGate } from "@/components/TermsGate";
 import MaintenancePage from "./maintenance/page";
 import { isMaintenanceMode } from "@/lib/maintenance";
@@ -86,6 +87,7 @@ export default function RootLayout({
                   bar — they can keep using their existing py-* rhythm. */}
               <div className="flex-1 pt-14">{children}</div>
               <Footer />
+              <HistoryDrawer />
               <TermsGate />
             </>
           )}

@@ -3,46 +3,34 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { useListingsByPkh, useP2pListingsByPkh } from "@/lib/api/hooks";
 import {
-  mergeChronological,
-  synthesizeP2pEvents,
-  synthesizePitEvents,
-  type WalletHistoryEvent,
-} from "@/lib/me/historyEvents";
-import { formatAbsolute, formatRelative } from "@/lib/util/formatDate";
-import { getNetworkName } from "@/lib/wallet/network";
+  HistoryEmptyState,
+  HistoryRow,
+  HistoryTabStrip,
+  parseHistoryFilter,
+  useHistoryFeed,
+  type HistoryFilter,
+} from "@/components/me/historyShared";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
-type Filter = "all" | "pit" | "p2p";
-
-function parseFilter(raw: string | null): Filter {
-  if (raw === "pit" || raw === "p2p") return raw;
-  return "all";
-}
-
 /**
- * /me/history main view. Disconnected → CTA. Connected → two parallel
- * fetches against `/api/listings/by-pkh/{pkh}` and
- * `/api/p2p/listings/by-pkh/{pkh}`, then FE-side event synthesis +
- * merge + tab filter.
+ * /me/history main view. Disconnected → CTA. Connected → unified feed
+ * via {@link useHistoryFeed}, tab-filtered, URL-mirrored.
  */
 export function HistoryBoard() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const initialFilter = parseFilter(searchParams.get("type"));
-  const [filter, setFilter] = useState<Filter>(initialFilter);
+  const initialFilter = parseHistoryFilter(searchParams.get("type"));
+  const [filter, setFilter] = useState<HistoryFilter>(initialFilter);
 
   const paymentKeyHashHex = useWalletStore((s) => s.paymentKeyHashHex);
-
-  const pit = useListingsByPkh(paymentKeyHashHex);
-  const p2p = useP2pListingsByPkh(paymentKeyHashHex);
+  const { events, loading, errored } = useHistoryFeed(paymentKeyHashHex);
 
   // Mirror filter → URL so the back button + share work. Avoid scroll
   // jump on tab clicks.
   useEffect(() => {
-    const current = parseFilter(searchParams.get("type"));
+    const current = parseHistoryFilter(searchParams.get("type"));
     if (current === filter) return;
     const params = new URLSearchParams(searchParams.toString());
     if (filter === "all") {
@@ -53,17 +41,6 @@ export function HistoryBoard() {
     const query = params.toString();
     router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   }, [filter, pathname, router, searchParams]);
-
-  const events = useMemo<WalletHistoryEvent[]>(() => {
-    if (!paymentKeyHashHex) return [];
-    const pitEvents = pit.data
-      ? synthesizePitEvents(pit.data, paymentKeyHashHex)
-      : [];
-    const p2pEvents = p2p.data
-      ? synthesizeP2pEvents(p2p.data, paymentKeyHashHex)
-      : [];
-    return mergeChronological(pitEvents, p2pEvents);
-  }, [paymentKeyHashHex, pit.data, p2p.data]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return events;
@@ -78,12 +55,9 @@ export function HistoryBoard() {
     );
   }
 
-  const loading = pit.isPending || p2p.isPending;
-  const errored = pit.isError || p2p.isError;
-
   return (
     <div className="space-y-6">
-      <TabStrip filter={filter} setFilter={setFilter} />
+      <HistoryTabStrip filter={filter} setFilter={setFilter} />
 
       {errored && (
         <div className="rounded-md border border-red-800/60 bg-red-950/30 p-4 text-sm text-red-300">
@@ -94,7 +68,7 @@ export function HistoryBoard() {
       {loading ? (
         <p className="text-sm text-zinc-500">scraping the chain…</p>
       ) : filtered.length === 0 ? (
-        <EmptyState filter={filter} />
+        <HistoryEmptyState filter={filter} />
       ) : (
         <ul className="space-y-2">
           {filtered.map((e) => (
@@ -104,214 +78,4 @@ export function HistoryBoard() {
       )}
     </div>
   );
-}
-
-function TabStrip({
-  filter,
-  setFilter,
-}: {
-  filter: Filter;
-  setFilter: (f: Filter) => void;
-}) {
-  const tabs: { id: Filter; label: string }[] = [
-    { id: "all", label: "all" },
-    { id: "pit", label: "pit" },
-    { id: "p2p", label: "p2p" },
-  ];
-  return (
-    <div
-      role="tablist"
-      aria-label="history filter"
-      className="inline-flex rounded-md border border-zinc-800 bg-zinc-900/40 p-0.5"
-    >
-      {tabs.map((t) => {
-        const active = filter === t.id;
-        return (
-          <button
-            key={t.id}
-            role="tab"
-            type="button"
-            aria-selected={active}
-            onClick={() => setFilter(t.id)}
-            className={
-              "rounded-sm px-3 py-1 text-xs uppercase tracking-widest transition-colors " +
-              (active
-                ? "bg-amber-700/80 text-amber-50"
-                : "text-zinc-400 hover:text-zinc-200")
-            }
-          >
-            {t.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function EmptyState({ filter }: { filter: Filter }) {
-  const what =
-    filter === "pit"
-      ? "no pit activity yet."
-      : filter === "p2p"
-        ? "no p2p activity yet."
-        : "no chain activity on this wallet yet.";
-  return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-6 text-sm text-zinc-400">
-      {what} go list, swap, or make an offer — it&apos;ll show up here.
-    </div>
-  );
-}
-
-function HistoryRow({ event }: { event: WalletHistoryEvent }) {
-  const net = getNetworkName();
-  const sub = net === "mainnet" ? "" : `${net}.`;
-  const explorerUrl = `https://${sub}cardanoscan.io/transaction/${event.txHash}`;
-  const assetName = decodeAssetName(event.nftUnit);
-  const lovelaceAda = (event.lovelace / 1_000_000).toFixed(2);
-
-  return (
-    <li className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/40 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <SourceBadge source={event.source} />
-        <KindChip kind={event.kind} role={event.role} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-zinc-200">{assetName}</p>
-          <p className="text-xs text-zinc-500">
-            <a
-              href={explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-zinc-300"
-            >
-              {event.txHash.slice(0, 8)}…{event.txHash.slice(-6)} ↗
-            </a>
-            <span className="mx-2 text-zinc-700">·</span>
-            {lovelaceAda} ADA
-          </p>
-        </div>
-      </div>
-      <time
-        dateTime={event.at}
-        title={formatAbsolute(event.at)}
-        className="shrink-0 text-xs tabular-nums text-zinc-500"
-      >
-        {formatRelative(event.at)}
-      </time>
-    </li>
-  );
-}
-
-function SourceBadge({ source }: { source: "pit" | "p2p" }) {
-  return (
-    <span
-      aria-label={`source ${source}`}
-      className={
-        "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest " +
-        (source === "pit"
-          ? "bg-zinc-800 text-zinc-300"
-          : "bg-amber-900/40 text-amber-300")
-      }
-    >
-      {source}
-    </span>
-  );
-}
-
-function KindChip({
-  kind,
-  role,
-}: {
-  kind: WalletHistoryEvent["kind"];
-  role: WalletHistoryEvent["role"];
-}) {
-  const label = chipLabel(kind, role);
-  const cls = chipClass(kind);
-  return (
-    <span
-      className={
-        "shrink-0 rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider " +
-        cls
-      }
-    >
-      {label}
-    </span>
-  );
-}
-
-function chipLabel(
-  kind: WalletHistoryEvent["kind"],
-  role: WalletHistoryEvent["role"],
-): string {
-  switch (kind) {
-    case "listed":
-      return "you listed";
-    case "swapped":
-      return role === "lister" ? "your listing swapped" : "you swapped in";
-    case "cancelled":
-      return "you cancelled";
-    case "recovered":
-      return "admin recovered";
-    case "spent_unknown_pit":
-      return "listing ended";
-    case "posted":
-      return "you posted";
-    case "fulfilled":
-      return role === "buyer" ? "your offer filled" : "you fulfilled";
-    case "reclaimed":
-      return "you reclaimed";
-    case "rescued":
-      return "admin rescued";
-    case "spent_unknown_p2p":
-      return "offer ended";
-    default:
-      return kind;
-  }
-}
-
-function chipClass(kind: WalletHistoryEvent["kind"]): string {
-  switch (kind) {
-    case "listed":
-    case "posted":
-      return "bg-emerald-900/40 text-emerald-300";
-    case "swapped":
-    case "fulfilled":
-      return "bg-sky-900/40 text-sky-300";
-    case "cancelled":
-    case "reclaimed":
-      return "bg-zinc-800 text-zinc-300";
-    case "recovered":
-    case "rescued":
-      return "bg-rose-900/40 text-rose-300";
-    default:
-      return "bg-zinc-800 text-zinc-400";
-  }
-}
-
-/**
- * Decode the asset_name portion of a unit (policy_id || asset_name) as
- * ASCII when printable, else as a short hex fingerprint. Mirrors the
- * helper in FulfillForm.
- */
-function decodeAssetName(unitHex: string): string {
-  const nameHex = unitHex.slice(56);
-  if (!nameHex) return "(no name)";
-  try {
-    const bytes = new Uint8Array(
-      nameHex.match(/.{2}/g)!.map((b) => parseInt(b, 16)),
-    );
-    let printable = "";
-    for (const b of bytes) {
-      if (b < 0x20 || b > 0x7e) {
-        printable = "";
-        break;
-      }
-      printable += String.fromCharCode(b);
-    }
-    if (printable) return printable;
-  } catch {
-    // fall through
-  }
-  return nameHex.length > 16
-    ? `${nameHex.slice(0, 8)}…${nameHex.slice(-6)}`
-    : nameHex;
 }
