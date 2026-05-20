@@ -22,8 +22,13 @@ const geistMono = Geist_Mono({
 // canonical, etc.). X silently drops relative image URLs, so this MUST
 // resolve to an absolute https URL by the time it hits the rendered HTML.
 // Next 16 uses metadataBase to do that resolution for us.
+//
+// Use the canonical www host: the apex `shithole.app` 307-redirects to
+// `www.shithole.app`, and Twitter/X's card scraper does NOT follow
+// redirects on og:image / twitter:image — it just gives up and renders
+// no card. Hard-coding the post-redirect URL avoids that.
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://shithole.app";
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.shithole.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
