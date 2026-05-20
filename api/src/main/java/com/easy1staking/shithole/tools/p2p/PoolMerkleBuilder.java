@@ -193,7 +193,15 @@ public final class PoolMerkleBuilder {
 
                 PoolCuration cur = out.computeIfAbsent(ticker, t -> new PoolCuration());
                 for (String cat : categoryField.split(",")) {
-                    String category = cat.trim().toLowerCase(Locale.ROOT);
+                    // Normalise: lowercase + strip spaces. The CSV uses
+                    // camelCase ("earDecoration") while the JSONL uses
+                    // spaced title case ("Ear Decoration"); both must
+                    // collapse to the same canonical token. Lowercasing
+                    // alone (the pre-fix behaviour) silently dropped every
+                    // (NFT, pool) match that hinged on a multi-word
+                    // category — see the matching normalise on the JSONL
+                    // side below at ~line 303.
+                    String category = canonicaliseCategory(cat);
                     if (category.isEmpty()) continue;
                     cur.accepted.add(new TraitFilter(category, traitName));
                 }
@@ -259,6 +267,22 @@ public final class PoolMerkleBuilder {
      * pool ids this is exactly the 28-byte blake2b_224 hash with no
      * additional version byte.
      */
+    /**
+     * Canonical form for trait-category strings. Lowercases AND strips
+     * spaces so the CSV's {@code earDecoration} and the JSONL's
+     * {@code Ear Decoration} both collapse to {@code eardecoration}.
+     *
+     * <p>Without the space-strip, multi-word categories silently
+     * dropped (NFT, pool) matches: CSV had no space, JSONL had a
+     * space, intersections came up empty. Single-word categories
+     * (background, fur, eyes, mouth, frame, hat, glasses, neck) were
+     * unaffected because they agree after lowercasing alone.
+     */
+    static String canonicaliseCategory(String raw) {
+        if (raw == null) return "";
+        return raw.trim().toLowerCase(Locale.ROOT).replace(" ", "");
+    }
+
     static String decodePoolIdHex(String bech32) {
         if (bech32 == null || bech32.isBlank()) return null;
         Bech32.Bech32Data decoded = Bech32.decode(bech32.trim());
@@ -299,8 +323,13 @@ public final class PoolMerkleBuilder {
                 traits.fieldNames().forEachRemaining(category -> {
                     String value = traits.get(category).asText(null);
                     if (value != null) {
+                        // Same canonical form as the CSV side (see above).
+                        // Without this, multi-word JSONL categories like
+                        // "Ear Decoration" stayed as "ear decoration" with
+                        // a space, never matching the CSV's
+                        // "earDecoration" → "eardecoration".
                         nftTraits.add(new TraitFilter(
-                                category.toLowerCase(Locale.ROOT), value));
+                                canonicaliseCategory(category), value));
                     }
                 });
 
