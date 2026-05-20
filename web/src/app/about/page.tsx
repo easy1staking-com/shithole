@@ -135,20 +135,20 @@ export default function AboutPage() {
       </section>
 
       {/* P2P — the v3 mechanic */}
-      <section className="space-y-3 text-zinc-300">
+      <section className="space-y-4 text-zinc-300">
         <h2 className="text-xl font-semibold text-zinc-100">
           the p2p side — find another idiot directly
         </h2>
         <p>
           The pit gives you <em>random</em> worthlessness back. The p2p
-          side lets you be picky: you lock one of your NFTs together with
-          an ADA deposit at a script, declaring that you&apos;ll accept
-          any NFT from delegators of a specific Cardano stake pool.
-          Anyone holding a qualifying NFT — human or automated — can
-          take the deal and the contract atomically swaps the two. If
-          nobody takes it, you reclaim. Nothing expires on its own.
+          side lets you be picky: you lock one of your NFTs together
+          with an ADA deposit at a script, declaring that you&apos;ll
+          accept any NFT from delegators of a specific Cardano stake
+          pool. Anyone holding a qualifying NFT — human or automated —
+          can take the deal and the contract atomically swaps the two.
+          If nobody takes it, you reclaim. Nothing expires on its own.
         </p>
-        <p className="text-sm text-zinc-400">
+        <p className="text-zinc-400">
           The &quot;deposit&quot; isn&apos;t what you spend — about 1.4
           ADA flows back to your wallet attached to the incoming NFT.
           The create-listing flow shows the live breakdown.{" "}
@@ -158,6 +158,77 @@ export default function AboutPage() {
           has the full risk picture, including how the curated pool
           list works.
         </p>
+
+        <h3 className="pt-3 text-base font-semibold text-zinc-100">
+          how to use p2p
+        </h3>
+        <p className="text-zinc-400">
+          Everything lives behind the{" "}
+          <strong className="text-zinc-100">p2p ▾</strong> menu in the
+          top nav.
+        </p>
+        <ul className="list-disc space-y-3 pl-5">
+          <li>
+            <strong className="text-zinc-100">post an offer</strong> —{" "}
+            <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-sm">
+              p2p ▾ → make offer
+            </code>{" "}
+            (or{" "}
+            <Link href="/p2p/new" className="underline hover:text-zinc-100">
+              /p2p/new
+            </Link>
+            ). Pick the pool whose NFT you want to receive, pick one or
+            more of your wallet&apos;s NFTs to offer in exchange, set
+            your deposit, sign. Your NFT + ADA lock at a permissionless
+            script address. The receipt shows your effective cost — the
+            chunk of the deposit that doesn&apos;t come back to you.
+          </li>
+          <li>
+            <strong className="text-zinc-100">swap into someone
+            else&apos;s offer</strong> —{" "}
+            <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-sm">
+              p2p ▾ → open offers
+            </code>{" "}
+            (or{" "}
+            <Link href="/p2p" className="underline hover:text-zinc-100">
+              /p2p
+            </Link>
+            ). Browse every active listing other people have posted.
+            Toggle <em>only listings I can fulfill</em> to narrow to the
+            ones your wallet&apos;s NFTs actually qualify for. Tap a
+            card, pick which of your NFTs to deposit, sign. You walk
+            away with the buyer&apos;s offered NFT plus the bulk of
+            their deposit (the deposit minus the protocol fee, the
+            network tx fee, and the min-utxo on your delivery output).
+          </li>
+          <li>
+            <strong className="text-zinc-100">find your own listings</strong>{" "}
+            —{" "}
+            <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-sm">
+              p2p ▾ → your offers
+            </code>{" "}
+            (or{" "}
+            <Link href="/me/p2p" className="underline hover:text-zinc-100">
+              /me/p2p
+            </Link>
+            ). Lists every wanted-listing you&apos;ve created that&apos;s
+            still open on chain. Spent (filled or reclaimed) listings
+            drop off automatically once the indexer sees them.
+          </li>
+          <li>
+            <strong className="text-zinc-100">reclaim</strong> — on{" "}
+            <Link href="/me/p2p" className="underline hover:text-zinc-100">
+              /me/p2p
+            </Link>
+            , tick the listings you no longer want filled, click{" "}
+            <em>reclaim N</em>. One transaction returns your NFT(s) and
+            locked ADA. Multiple listings against the same collection
+            are batched into a single tx — one signature, one network
+            fee, all back in your wallet. Nothing auto-expires; if you
+            don&apos;t reclaim, the listing stays open forever (or until
+            someone fills it).
+          </li>
+        </ul>
       </section>
 
       {/* Fees */}
