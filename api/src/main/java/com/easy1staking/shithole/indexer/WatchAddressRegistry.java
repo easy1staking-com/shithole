@@ -5,7 +5,9 @@ import com.bloxbean.cardano.client.address.AddressProvider;
 import com.bloxbean.cardano.client.address.Credential;
 import com.bloxbean.cardano.client.common.model.Network;
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.easy1staking.shithole.entity.ConfigEntity;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
+import com.easy1staking.shithole.repository.ConfigRepository;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import com.easy1staking.shithole.service.WantedListingScriptAddressDeriver;
 import jakarta.annotation.PostConstruct;
@@ -51,6 +53,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WatchAddressRegistry {
 
     private final CuratedCollectionRepository curatedCollectionRepository;
+    private final ConfigRepository configRepository;
     private final Network appNetwork;
     private final WantedListingScriptAddressDeriver wantedListingScriptAddressDeriver;
 
@@ -115,13 +118,29 @@ public class WatchAddressRegistry {
             }
             String configAddr = deriveConfigScriptAddress(row.getConfigNftPolicy());
             String wantedAddr = deriveWantedListingAddress(row.getConfigNftPolicy());
+            String treasuryAddr = null;
+            String adminPkh = null;
+            try {
+                ConfigEntity config = configRepository.findById(row.getConfigNftPolicy()).orElse(null);
+                if (config != null) {
+                    treasuryAddr = config.getTreasuryAddrBech32();
+                    adminPkh = config.getAdminPkh();
+                }
+            } catch (RuntimeException e) {
+                // Config row missing or DB hiccup — fall through with nulls.
+                // The indexer's counterparty classifier treats nulls as "no
+                // signal" rather than "treasury matches everything".
+                log.debug("Config lookup failed for policy {}: {}", row.getConfigNftPolicy(), e.getMessage());
+            }
             WatchedCollection wc = new WatchedCollection(
                     row.getSlug(),
                     row.getConfigNftPolicy(),
                     row.getCollectionPolicyId(),
                     addr,
                     configAddr,
-                    wantedAddr);
+                    wantedAddr,
+                    treasuryAddr,
+                    adminPkh);
             next.put(addr, wc);
             if (configAddr != null) nextByConfig.put(configAddr, wc);
             if (wantedAddr != null) nextByWanted.put(wantedAddr, wc);
@@ -181,13 +200,27 @@ public class WatchAddressRegistry {
         }
         String configAddr = deriveConfigScriptAddress(event.getConfigNftPolicy());
         String wantedAddr = deriveWantedListingAddress(event.getConfigNftPolicy());
+        String treasuryAddr = null;
+        String adminPkh = null;
+        try {
+            ConfigEntity config = configRepository.findById(event.getConfigNftPolicy()).orElse(null);
+            if (config != null) {
+                treasuryAddr = config.getTreasuryAddrBech32();
+                adminPkh = config.getAdminPkh();
+            }
+        } catch (RuntimeException e) {
+            log.debug("Config lookup failed for policy {} on register: {}",
+                    event.getConfigNftPolicy(), e.getMessage());
+        }
         WatchedCollection wc = new WatchedCollection(
                 event.getSlug(),
                 event.getConfigNftPolicy(),
                 event.getCollectionPolicyId(),
                 event.getListingScriptAddress(),
                 configAddr,
-                wantedAddr);
+                wantedAddr,
+                treasuryAddr,
+                adminPkh);
         watched.updateAndGet(prev -> {
             Map<String, WatchedCollection> next = new HashMap<>(prev);
             next.put(event.getListingScriptAddress(), wc);
@@ -245,15 +278,30 @@ public class WatchAddressRegistry {
         return watched.get().size();
     }
 
+    /**
+     * Set of all known treasury bech32 addresses, across every watched
+     * collection. Used by the indexers' counterparty classifier to skip
+     * treasury-bound outputs when picking the swapper / fulfiller pkh.
+     */
+    public Set<String> allTreasuryAddresses() {
+        return watched.get().values().stream()
+                .map(WatchedCollection::treasuryAddressBech32)
+                .filter(s -> s != null && !s.isBlank())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
     /** Snapshot of the curated row needed for indexing. Immutable.
-     *  {@code configScriptAddress} / {@code wantedListingScriptAddress} may
-     *  be null if their derivation failed at reconcile time. */
+     *  {@code configScriptAddress} / {@code wantedListingScriptAddress} /
+     *  {@code treasuryAddressBech32} / {@code adminPkhHex} may be null if
+     *  their derivation or DB lookup failed at reconcile time. */
     public record WatchedCollection(
             String slug,
             String configNftPolicy,
             String collectionPolicyId,
             String listingScriptAddress,
             String configScriptAddress,
-            String wantedListingScriptAddress) {
+            String wantedListingScriptAddress,
+            String treasuryAddressBech32,
+            String adminPkhHex) {
     }
 }

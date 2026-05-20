@@ -179,91 +179,93 @@ export function TermsGate() {
       />
       <div
         ref={dialogRef}
-        className="relative z-10 w-full max-w-lg rounded-lg border border-zinc-800 bg-zinc-950 p-6 shadow-2xl sm:p-8"
+        className="relative z-10 flex max-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl"
       >
-        <div className="flex items-center gap-3 pb-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/logo-v8-pixel-poop.svg"
-            alt=""
-            width={32}
-            height={32}
-            className="h-8 w-8"
-            aria-hidden
-          />
-          <h2
-            id="terms-gate-title"
-            className="font-mono text-xl font-semibold text-zinc-100"
-          >
-            Read this first
-          </h2>
+        <div className="overflow-y-auto p-6 sm:p-8">
+          <div className="flex items-center gap-3 pb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/logo-v8-pixel-poop.svg"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8"
+              aria-hidden
+            />
+            <h2
+              id="terms-gate-title"
+              className="font-mono text-xl font-semibold text-zinc-100"
+            >
+              Read this first
+            </h2>
+          </div>
+
+          <p id="terms-gate-body" className="text-base text-zinc-300">
+            By using Shithole, you agree to the following. Shithole moves
+            real assets on the Cardano mainnet:
+          </p>
+
+          <ul className="mt-4 space-y-2 text-base text-zinc-300">
+            <li className="flex gap-2">
+              <span aria-hidden className="text-zinc-500">
+                ·
+              </span>
+              <span>Use at your own risk. You may lose funds.</span>
+            </li>
+            <li className="flex gap-2">
+              <span aria-hidden className="text-zinc-500">
+                ·
+              </span>
+              <span>
+                Listing an NFT in a pit authorises anyone to swap it. You
+                may never get your original NFT back.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span aria-hidden className="text-zinc-500">
+                ·
+              </span>
+              <span>
+                A p2p offer locks your NFT + ADA at a script open to any
+                counterparty — human or automated. Reclaim is on you;
+                nothing auto-expires.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span aria-hidden className="text-zinc-500">
+                ·
+              </span>
+              <span>
+                Smart contracts can have bugs. Funds may be permanently
+                locked with no recovery.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span aria-hidden className="text-zinc-500">
+                ·
+              </span>
+              <span>
+                We don&apos;t track you, but every swap lives on-chain
+                forever.
+              </span>
+            </li>
+          </ul>
+
+          <p className="mt-4 text-sm text-zinc-400">
+            The full version lives in the{" "}
+            <a
+              href={`/terms?${BYPASS_PARAM}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-zinc-100"
+            >
+              terms &amp; conditions ↗
+            </a>
+            .
+          </p>
         </div>
 
-        <p id="terms-gate-body" className="text-base text-zinc-300">
-          By using Shithole, you agree to the following. Shithole moves
-          real assets on the Cardano mainnet:
-        </p>
-
-        <ul className="mt-4 space-y-2 text-base text-zinc-300">
-          <li className="flex gap-2">
-            <span aria-hidden className="text-zinc-500">
-              ·
-            </span>
-            <span>Use at your own risk. You may lose funds.</span>
-          </li>
-          <li className="flex gap-2">
-            <span aria-hidden className="text-zinc-500">
-              ·
-            </span>
-            <span>
-              Listing an NFT in a pit authorises anyone to swap it. You
-              may never get your original NFT back.
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span aria-hidden className="text-zinc-500">
-              ·
-            </span>
-            <span>
-              A p2p offer locks your NFT + ADA at a script open to any
-              counterparty — human or automated. Reclaim is on you;
-              nothing auto-expires.
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span aria-hidden className="text-zinc-500">
-              ·
-            </span>
-            <span>
-              Smart contracts can have bugs. Funds may be permanently
-              locked with no recovery.
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span aria-hidden className="text-zinc-500">
-              ·
-            </span>
-            <span>
-              We don&apos;t track you, but every swap lives on-chain
-              forever.
-            </span>
-          </li>
-        </ul>
-
-        <p className="mt-4 text-sm text-zinc-400">
-          The full version lives in the{" "}
-          <a
-            href={`/terms?${BYPASS_PARAM}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-zinc-100"
-          >
-            terms &amp; conditions ↗
-          </a>
-          .
-        </p>
-
-        <div className="mt-6">
+        <div className="shrink-0 border-t border-zinc-800 bg-zinc-950 p-4 sm:p-6">
           <button
             ref={acceptButtonRef}
             type="button"

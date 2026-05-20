@@ -61,6 +61,7 @@ export function AppHeader() {
               items={[
                 { label: "the pits", href: "/" },
                 { label: "your stash", href: "/me" },
+                { label: "your history", href: "/me/history?type=pit" },
               ]}
             />
             <NavMenu
@@ -69,6 +70,7 @@ export function AppHeader() {
                 { label: "open offers", href: "/p2p" },
                 { label: "your offers", href: "/me/p2p" },
                 { label: "make offer", href: "/p2p/new" },
+                { label: "your history", href: "/me/history?type=p2p" },
               ]}
             />
           </nav>

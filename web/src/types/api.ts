@@ -238,4 +238,41 @@ export type P2pListing = {
   spent_at_slot?: number | null;
   spent_at?: string | null;
   spent_by_tx_hash?: string | null;
+  /** Payment-key hash of the wallet that fulfilled this listing (V1_0_6+). */
+  fulfiller_pkh?: string | null;
+};
+
+/* ------------------------------------------------------------------ */
+/* GET /api/listings/by-pkh/{pkh}                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A full {@code listing_events} row — both active and historical — as
+ * served by the wallet-history endpoint. Carries lineage info, lovelace,
+ * and the spent_* terminal columns plus {@code swapper_pkh} (V1_0_6+)
+ * so the FE can synthesise both a "listed" and a follow-up "swapped /
+ * cancelled / recovered" event from a single row.
+ *
+ * <p>Distinct from {@link Listing} (live-only browse shape with
+ * accrued_lovelace + update_ref) — this is the lineage row as-is.
+ */
+export type ListingEvent = {
+  tx_hash: string;
+  output_index: number;
+  initial_tx_hash: string;
+  initial_output_index: number;
+  swap_index: number;
+  config_nft_policy: string;
+  lister_pkh: string;
+  nft_unit: string;
+  lovelace: number;
+  created_at_slot: number;
+  created_at: string;
+  spent_at_slot?: number | null;
+  spent_at?: string | null;
+  spent_by_tx_hash?: string | null;
+  /** 'swap' | 'cancel' | 'recover' | 'spent_unknown' when consumed; null = active. */
+  spent_action?: string | null;
+  /** Payment-key hash of the swapper (V1_0_6+); stamped on the predecessor on a swap. */
+  swapper_pkh?: string | null;
 };

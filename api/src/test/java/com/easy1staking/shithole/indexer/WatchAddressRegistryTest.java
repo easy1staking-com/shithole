@@ -2,6 +2,7 @@ package com.easy1staking.shithole.indexer;
 
 import com.bloxbean.cardano.client.common.model.Networks;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
+import com.easy1staking.shithole.repository.ConfigRepository;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import com.easy1staking.shithole.service.WantedListingScriptAddressDeriver;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -28,6 +30,9 @@ class WatchAddressRegistryTest {
     private CuratedCollectionRepository repo;
 
     @Mock
+    private ConfigRepository configRepo;
+
+    @Mock
     private WantedListingScriptAddressDeriver wantedDeriver;
 
     private WatchAddressRegistry registry;
@@ -38,7 +43,11 @@ class WatchAddressRegistryTest {
         // tests don't trigger reconcile/registration paths that would call it.
         lenient().when(wantedDeriver.deriveAddress(anyString()))
                 .thenReturn("addr_test1w_wanted_dummy");
-        registry = new WatchAddressRegistry(repo, Networks.preprod(), wantedDeriver);
+        // Default: no config row known. Treasury / admin pkh come back null;
+        // the registry still publishes the WatchedCollection — those fields
+        // are non-load-bearing for "is this address watched" semantics.
+        lenient().when(configRepo.findById(anyString())).thenReturn(Optional.empty());
+        registry = new WatchAddressRegistry(repo, configRepo, Networks.preprod(), wantedDeriver);
     }
 
     @Test

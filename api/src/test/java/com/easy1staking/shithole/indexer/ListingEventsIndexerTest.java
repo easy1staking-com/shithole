@@ -14,6 +14,7 @@ import com.bloxbean.cardano.yaci.store.utxo.domain.TxInputOutput;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
 import com.easy1staking.shithole.entity.ListingEventEntity;
 import com.easy1staking.shithole.entity.ListingEventId;
+import com.easy1staking.shithole.repository.ConfigRepository;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import com.easy1staking.shithole.repository.ListingEventRepository;
 import com.easy1staking.shithole.service.WantedListingScriptAddressDeriver;
@@ -54,6 +55,7 @@ class ListingEventsIndexerTest {
     private static final byte[] OTHER_PKH = bytes28((byte) 0x99);
 
     @Mock private CuratedCollectionRepository curatedRepo;
+    @Mock private ConfigRepository configRepo;
     @Mock private ListingEventRepository listingRepo;
     @Mock private WantedListingScriptAddressDeriver wantedDeriver;
 
@@ -76,7 +78,12 @@ class ListingEventsIndexerTest {
         // indexer tests but the registry calls into it during reconcile().
         lenient().when(wantedDeriver.deriveAddress(org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn("addr_test1w_wanted_dummy");
-        registry = new WatchAddressRegistry(curatedRepo, Networks.preprod(), wantedDeriver);
+        // Config lookup is best-effort — empty Optional just means we don't
+        // know the treasury / admin pkh for this slug; the indexer still
+        // runs, the classifier just produces nulls / spent_unknown.
+        lenient().when(configRepo.findById(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.empty());
+        registry = new WatchAddressRegistry(curatedRepo, configRepo, Networks.preprod(), wantedDeriver);
         registry.reconcile(); // load synchronously
 
         decoder = new ListingDatumDecoder();
@@ -360,7 +367,7 @@ class ListingEventsIndexerTest {
         CuratedCollectionRepository emptyRepo = org.mockito.Mockito.mock(CuratedCollectionRepository.class);
         when(emptyRepo.findAll()).thenReturn(List.of());
         WatchAddressRegistry emptyRegistry =
-                new WatchAddressRegistry(emptyRepo, Networks.preprod(), wantedDeriver);
+                new WatchAddressRegistry(emptyRepo, configRepo, Networks.preprod(), wantedDeriver);
         emptyRegistry.reconcile();
         assertThat(emptyRegistry.size()).isZero();
 
@@ -381,6 +388,160 @@ class ListingEventsIndexerTest {
 
         assertThat(store).isEmpty();
         verify(listingRepo, never()).findActiveByTxHashAndOutputIndex(any(), any());
+    }
+
+    // ------------------------------------------------------------------
+    // V1_0_6 counterparty extraction + cancel/recover classification
+    // ------------------------------------------------------------------
+
+    @Test
+    void swapStampsSwapperPkhOnPredecessorFromWalletOutput() {
+        // Seed a live genesis row.
+        String prevTxHex = hex32((byte) 0x21);
+        byte[] prevTxBytes = HexUtil.decodeHexString(prevTxHex);
+        store.put(new ListingEventId(prevTxBytes, 0), liveListingRow(prevTxBytes));
+
+        // Swap tx: spends prev; emits a new listing UTxO at the watched
+        // address + a wallet output back to the swapper.
+        String swapTxHex = hex32((byte) 0x22);
+        AddressUtxo successorAtScript = newListingOutput(
+                swapTxHex, 0,
+                WATCHED_ADDR,
+                buildListingDatumHex(LISTER_PKH, bytes28((byte) 0xaa)),
+                "asset02",
+                BigInteger.valueOf(3_000_000L));
+        // The swapper output — goes to a non-watched wallet, with the
+        // SWAPPER_PKH as the resolved payment credential.
+        AddressUtxo swapperOut = AddressUtxo.builder()
+                .txHash(swapTxHex)
+                .outputIndex(1)
+                .ownerAddr("addr_test1q_swapper")
+                .ownerPaymentCredential(HexUtil.encodeHexString(OTHER_PKH))
+                .lovelaceAmount(BigInteger.valueOf(2_000_000L))
+                .build();
+        TxInput spending = TxInput.builder().txHash(prevTxHex).outputIndex(0).build();
+        TxInputOutput tx = TxInputOutput.builder()
+                .txHash(swapTxHex)
+                .inputs(List.of(spending))
+                .outputs(List.of(successorAtScript, swapperOut))
+                .build();
+
+        indexer.onAddressUtxoEvent(eventFor(tx, 210L));
+
+        ListingEventEntity prevAfter = store.get(new ListingEventId(prevTxBytes, 0));
+        assertThat(prevAfter.getSpentAction()).isEqualTo("swap");
+        assertThat(prevAfter.getSwapperPkh()).isNotNull();
+        assertThat(prevAfter.getSwapperPkh()).containsExactly(OTHER_PKH);
+
+        // Successor row's swapper_pkh is NOT set — the swap event lives on
+        // the predecessor.
+        ListingEventEntity succ = store.get(new ListingEventId(HexUtil.decodeHexString(swapTxHex), 0));
+        assertThat(succ).isNotNull();
+        assertThat(succ.getSwapperPkh()).isNull();
+    }
+
+    @Test
+    void swapLeavesSwapperPkhNullWhenAmbiguous() {
+        // Two distinct wallet outputs ≠ one clean counterparty → strict null.
+        String prevTxHex = hex32((byte) 0x23);
+        byte[] prevTxBytes = HexUtil.decodeHexString(prevTxHex);
+        store.put(new ListingEventId(prevTxBytes, 0), liveListingRow(prevTxBytes));
+
+        String swapTxHex = hex32((byte) 0x24);
+        AddressUtxo successorAtScript = newListingOutput(
+                swapTxHex, 0, WATCHED_ADDR,
+                buildListingDatumHex(LISTER_PKH, bytes28((byte) 0xbb)),
+                "asset03", BigInteger.valueOf(3_000_000L));
+        AddressUtxo walletA = AddressUtxo.builder()
+                .txHash(swapTxHex).outputIndex(1).ownerAddr("addr_a")
+                .ownerPaymentCredential(HexUtil.encodeHexString(bytes28((byte) 0x55)))
+                .lovelaceAmount(BigInteger.valueOf(1_000_000L)).build();
+        AddressUtxo walletB = AddressUtxo.builder()
+                .txHash(swapTxHex).outputIndex(2).ownerAddr("addr_b")
+                .ownerPaymentCredential(HexUtil.encodeHexString(bytes28((byte) 0x66)))
+                .lovelaceAmount(BigInteger.valueOf(1_000_000L)).build();
+        TxInput spending = TxInput.builder().txHash(prevTxHex).outputIndex(0).build();
+        TxInputOutput tx = TxInputOutput.builder()
+                .txHash(swapTxHex)
+                .inputs(List.of(spending))
+                .outputs(List.of(successorAtScript, walletA, walletB))
+                .build();
+
+        indexer.onAddressUtxoEvent(eventFor(tx, 220L));
+
+        ListingEventEntity prevAfter = store.get(new ListingEventId(prevTxBytes, 0));
+        assertThat(prevAfter.getSpentAction()).isEqualTo("swap");
+        assertThat(prevAfter.getSwapperPkh()).isNull();
+    }
+
+    @Test
+    void cancelClassifiesAsCancelWhenOutputGoesToListerPkh() {
+        // Cancel tx emits one wallet output whose payment credential equals
+        // the row's lister_pkh → 'cancel'.
+        String prevTxHex = hex32((byte) 0x25);
+        byte[] prevTxBytes = HexUtil.decodeHexString(prevTxHex);
+        store.put(new ListingEventId(prevTxBytes, 0), liveListingRow(prevTxBytes));
+
+        String cancelTxHex = hex32((byte) 0x26);
+        TxInput spending = TxInput.builder().txHash(prevTxHex).outputIndex(0).build();
+        AddressUtxo listerOut = AddressUtxo.builder()
+                .txHash(cancelTxHex).outputIndex(0).ownerAddr("addr_test1q_lister")
+                .ownerPaymentCredential(HexUtil.encodeHexString(LISTER_PKH))
+                .lovelaceAmount(BigInteger.valueOf(2_000_000L)).build();
+        TxInputOutput tx = TxInputOutput.builder()
+                .txHash(cancelTxHex)
+                .inputs(List.of(spending))
+                .outputs(List.of(listerOut))
+                .build();
+
+        indexer.onAddressUtxoEvent(eventFor(tx, 230L));
+
+        ListingEventEntity prevAfter = store.get(new ListingEventId(prevTxBytes, 0));
+        assertThat(prevAfter.getSpentAction()).isEqualTo("cancel");
+        assertThat(prevAfter.getSwapperPkh()).isNull();
+    }
+
+    @Test
+    void cancelFallsBackToSpentUnknownWhenNoMatchingOutput() {
+        // Cancel tx whose only output goes to a wallet that's neither the
+        // lister nor the admin → spent_unknown.
+        String prevTxHex = hex32((byte) 0x27);
+        byte[] prevTxBytes = HexUtil.decodeHexString(prevTxHex);
+        store.put(new ListingEventId(prevTxBytes, 0), liveListingRow(prevTxBytes));
+
+        String cancelTxHex = hex32((byte) 0x28);
+        TxInput spending = TxInput.builder().txHash(prevTxHex).outputIndex(0).build();
+        AddressUtxo strangerOut = AddressUtxo.builder()
+                .txHash(cancelTxHex).outputIndex(0).ownerAddr("addr_test1q_stranger")
+                .ownerPaymentCredential(HexUtil.encodeHexString(bytes28((byte) 0xee)))
+                .lovelaceAmount(BigInteger.valueOf(2_000_000L)).build();
+        TxInputOutput tx = TxInputOutput.builder()
+                .txHash(cancelTxHex)
+                .inputs(List.of(spending))
+                .outputs(List.of(strangerOut))
+                .build();
+
+        indexer.onAddressUtxoEvent(eventFor(tx, 240L));
+
+        ListingEventEntity prevAfter = store.get(new ListingEventId(prevTxBytes, 0));
+        assertThat(prevAfter.getSpentAction()).isEqualTo(ListingEventsIndexer.SPENT_UNKNOWN);
+    }
+
+    /** Build a live listing row matching CONFIG_POLICY + LISTER_PKH at outputIndex 0. */
+    private static ListingEventEntity liveListingRow(byte[] prevTxBytes) {
+        return ListingEventEntity.builder()
+                .txHash(prevTxBytes)
+                .outputIndex(0)
+                .initialTxHash(prevTxBytes)
+                .initialOutputIndex(0)
+                .swapIndex(0)
+                .configNftPolicy(HexUtil.decodeHexString(CONFIG_POLICY))
+                .listerPkh(LISTER_PKH)
+                .nftUnit(HexUtil.decodeHexString(COLLECTION_POLICY + hexAsset("asset01")))
+                .lovelace(2_000_000L)
+                .createdAtSlot(50L)
+                .createdAt(java.time.OffsetDateTime.now())
+                .build();
     }
 
     // ------------------------------------------------------------------

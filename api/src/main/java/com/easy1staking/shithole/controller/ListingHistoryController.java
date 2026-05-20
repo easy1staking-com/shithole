@@ -2,17 +2,20 @@ package com.easy1staking.shithole.controller;
 
 import com.bloxbean.cardano.client.util.HexUtil;
 import com.easy1staking.shithole.entity.ListingEventEntity;
+import com.easy1staking.shithole.model.ListingEventDto;
 import com.easy1staking.shithole.model.ListingHistoryDto;
 import com.easy1staking.shithole.model.ListingHistoryEventDto;
 import com.easy1staking.shithole.model.OutRefDto;
 import com.easy1staking.shithole.repository.ListingEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.format.DateTimeFormatter;
@@ -67,6 +70,11 @@ public class ListingHistoryController {
      */
     private static final Pattern INITIAL_OUTREF_PATTERN =
             Pattern.compile("^(?<tx>[0-9a-f]{64})_(?<idx>0|[1-9][0-9]{0,9})$");
+
+    /** 28-byte payment-key hash as lowercase hex. */
+    private static final Pattern PKH_HEX_PATTERN = Pattern.compile("^[0-9a-f]{56}$");
+    private static final int MAX_PAGE_SIZE = 200;
+    private static final int DEFAULT_PAGE_SIZE = 100;
 
     private final ListingEventRepository listingEventRepository;
 
@@ -150,6 +158,58 @@ public class ListingHistoryController {
                 .timestamp(last.getSpentAt() == null ? null
                         : last.getSpentAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
                 .action(last.getSpentAction())
+                .build();
+    }
+
+    /**
+     * All listing events a wallet participated in — as the original lister
+     * OR as a swapper that consumed someone else's listing. Drives the FE's
+     * {@code /me/history} feed (combined with the parallel
+     * {@code /api/p2p/listings/by-pkh/{pkh}} for the p2p side).
+     *
+     * <p>Response is paginated, capped at {@value #MAX_PAGE_SIZE}, ordered
+     * by most-recent activity (spend slot if spent, else created slot).
+     */
+    @GetMapping(value = "/listings/by-pkh/{pkhHex}",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<ListingEventDto>> listingsByPkh(
+            @PathVariable("pkhHex") String pkhHex,
+            @RequestParam(value = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
+            @RequestParam(value = "page", defaultValue = "0") int page) {
+        if (pkhHex == null || !PKH_HEX_PATTERN.matcher(pkhHex.toLowerCase()).matches()) {
+            return ResponseEntity.badRequest().build();
+        }
+        int safeSize = Math.max(1, Math.min(MAX_PAGE_SIZE, size));
+        int safePage = Math.max(0, page);
+        byte[] pkh = HexUtil.decodeHexString(pkhHex.toLowerCase());
+
+        List<ListingEventEntity> rows =
+                listingEventRepository.findAllByPkh(pkh, PageRequest.of(safePage, safeSize));
+        return ResponseEntity.ok(rows.stream().map(ListingHistoryController::toEventDto).toList());
+    }
+
+    static ListingEventDto toEventDto(ListingEventEntity e) {
+        return ListingEventDto.builder()
+                .txHash(HexUtil.encodeHexString(e.getTxHash()))
+                .outputIndex(e.getOutputIndex())
+                .initialTxHash(HexUtil.encodeHexString(e.getInitialTxHash()))
+                .initialOutputIndex(e.getInitialOutputIndex())
+                .swapIndex(e.getSwapIndex())
+                .configNftPolicy(HexUtil.encodeHexString(e.getConfigNftPolicy()))
+                .listerPkh(HexUtil.encodeHexString(e.getListerPkh()))
+                .nftUnit(HexUtil.encodeHexString(e.getNftUnit()))
+                .lovelace(e.getLovelace())
+                .createdAtSlot(e.getCreatedAtSlot())
+                .createdAt(e.getCreatedAt() == null ? null
+                        : e.getCreatedAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                .spentAtSlot(e.getSpentAtSlot())
+                .spentAt(e.getSpentAt() == null ? null
+                        : e.getSpentAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+                .spentByTxHash(e.getSpentByTxHash() == null ? null
+                        : HexUtil.encodeHexString(e.getSpentByTxHash()))
+                .spentAction(e.getSpentAction())
+                .swapperPkh(e.getSwapperPkh() == null ? null
+                        : HexUtil.encodeHexString(e.getSwapperPkh()))
                 .build();
     }
 }

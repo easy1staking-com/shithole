@@ -13,6 +13,7 @@ import type {
   AssetPoolMembership,
   CollectionState,
   CuratedCollection,
+  ListingEvent,
   ListingsResponse,
   NftMetadata,
   P2pListing,
@@ -274,6 +275,43 @@ export function fetchP2pListingsByBuyer(
   qs.set("page", String(query.page ?? 0));
   return getJson<P2pListing[]>(
     `/api/p2p/listings/by-buyer/${encodeURIComponent(buyerPkhHex)}?${qs.toString()}`,
+  );
+}
+
+export type ByPkhQuery = {
+  size?: number;
+  page?: number;
+};
+
+/**
+ * All pit listing-events a wallet participated in (as lister OR swapper).
+ * Drives the pit side of /me/history.
+ */
+export function fetchListingsByPkh(
+  pkhHex: string,
+  query: ByPkhQuery = {},
+): Promise<ListingEvent[]> {
+  const qs = new URLSearchParams();
+  qs.set("size", String(query.size ?? 100));
+  qs.set("page", String(query.page ?? 0));
+  return getJson<ListingEvent[]>(
+    `/api/listings/by-pkh/${encodeURIComponent(pkhHex)}?${qs.toString()}`,
+  );
+}
+
+/**
+ * All p2p wanted-listings a wallet participated in (as buyer OR fulfiller).
+ * Drives the p2p side of /me/history.
+ */
+export function fetchP2pListingsByPkh(
+  pkhHex: string,
+  query: ByPkhQuery = {},
+): Promise<P2pListing[]> {
+  const qs = new URLSearchParams();
+  qs.set("size", String(query.size ?? 100));
+  qs.set("page", String(query.page ?? 0));
+  return getJson<P2pListing[]>(
+    `/api/p2p/listings/by-pkh/${encodeURIComponent(pkhHex)}?${qs.toString()}`,
   );
 }
 

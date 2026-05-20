@@ -87,4 +87,14 @@ public class WantedListingEventEntity {
     /** {@code fulfill | reclaim | rescue | spent_unknown}; null = active. */
     @Column(name = "spent_action", length = 16)
     private String spentAction;
+
+    /**
+     * Payment-key hash of the wallet that fulfilled this listing.
+     * Stamped when a Fulfill spends the wanted-listing UTxO and the
+     * indexer can pin a single non-buyer, non-script counterparty in
+     * the spend tx's outputs. {@code null} on active rows, on
+     * reclaim/rescue rows, and on rows the indexer couldn't classify.
+     */
+    @Column(name = "fulfiller_pkh")
+    private byte[] fulfillerPkh;
 }
