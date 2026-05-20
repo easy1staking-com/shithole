@@ -131,6 +131,37 @@ shithole:
     pools-resource: ${SHITHOLE_P2P_POOLS_RESOURCE:classpath:p2p/pools.json.gz}
     fail-on-missing-resource: ${SHITHOLE_P2P_FAIL_ON_MISSING:true}
 
+    # Autonomous P2P matcher bot. Off by default; opt-in by setting the env
+    # var and supplying SHITHOLE_MATCHER_MNEMONIC (boot fails fast if
+    # enabled but the mnemonic is missing). See api/docs/P2P_MATCHER.md.
+    matcher:
+      enabled: ${SHITHOLE_P2P_MATCHER_ENABLED:false}
+      mnemonic: ${SHITHOLE_MATCHER_MNEMONIC:}   # NEVER commit
+      collateral-ada: ${SHITHOLE_MATCHER_COLLATERAL_ADA:5}
+      ogmios-url: ${OGMIOS_URL:}
+
+    # Autonomous P2P auto-fulfill bot. Sibling loop to the matcher; shares
+    # the SAME hot wallet (SHITHOLE_MATCHER_MNEMONIC) and the same per-block
+    # trigger. Picks a single Fulfill per matched listing using the bot's
+    # current NFT inventory (no auto-restock). See
+    # api/docs/P2P_MATCHER.md §Auto-fulfill loop. Off by default; if enabled
+    # without the matcher's mnemonic being set, boot fails fast.
+    auto-fulfill:
+      enabled: ${SHITHOLE_P2P_AUTO_FULFILL_ENABLED:false}
+      max-per-block: ${SHITHOLE_P2P_AUTO_FULFILL_MAX_PER_BLOCK:3}
+      ogmios-url: ${OGMIOS_URL:}
+
+    # Shared bot guardrails (apply to BOTH matcher + auto-fulfill).
+    bot:
+      # When true, additionally reject candidates whose CONSERVATIVE
+      # estimated net (assumes 1.5 ADA buyer-output, 1.5 ADA treasury,
+      # 0.8-1.5 ADA tx fee) is non-positive. Default false: the on-chain
+      # contract floor (protocol_fee + min_seller_compensation = 2 ADA)
+      # is sufficient — above it, the validator guarantees tx balances.
+      # Enable on mainnet only if you want extra headroom against fee
+      # volatility.
+      strict-profit-check: ${SHITHOLE_P2P_BOT_STRICT_PROFIT:false}
+
   # Bootstrap-only: paths to packaged JSON fixtures used by controllers
   # until DB-backed implementations are wired up.
   fixtures:

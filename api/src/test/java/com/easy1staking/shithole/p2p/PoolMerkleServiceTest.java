@@ -188,4 +188,77 @@ class PoolMerkleServiceTest {
         assertThat(service.getPoolMembership(HEX.formatHex(NAME_A)))
                 .containsExactly("HOSKY");
     }
+
+    /* ============================================================ */
+    /* isMember / isMatchableBoth — matcher-facing predicates       */
+    /* ============================================================ */
+
+    @Test
+    void isMember_trueForKnownLeaf() {
+        List<byte[]> items = List.of(NAME_A, NAME_B, NAME_C);
+        byte[] root = service.computeRoot(items);
+        service.cacheTree(root, items);
+
+        assertThat(service.isMember(root, NAME_A)).isTrue();
+        assertThat(service.isMember(root, NAME_B)).isTrue();
+        assertThat(service.isMember(root, NAME_C)).isTrue();
+    }
+
+    @Test
+    void isMember_falseForUnknownLeaf() {
+        List<byte[]> items = List.of(NAME_A, NAME_B);
+        byte[] root = service.computeRoot(items);
+        service.cacheTree(root, items);
+
+        // NAME_C isn't in the tree.
+        assertThat(service.isMember(root, NAME_C)).isFalse();
+    }
+
+    @Test
+    void isMember_falseForUnknownRoot() {
+        // Repo lookup returns empty for an unknown root.
+        when(repo.findById(new byte[32])).thenReturn(Optional.empty());
+        assertThat(service.isMember(new byte[32], NAME_A)).isFalse();
+    }
+
+    @Test
+    void isMatchableBoth_trueWhenBothDirectionsAreMembers() {
+        // Two trees:
+        //   rootA accepts NAME_B
+        //   rootB accepts NAME_A
+        // Pair {offered_A=NAME_A, offered_B=NAME_B} matches both ways.
+        byte[] rootA = service.computeRoot(List.of(NAME_B));
+        byte[] rootB = service.computeRoot(List.of(NAME_A));
+        service.cacheTree(rootA, List.of(NAME_B));
+        service.cacheTree(rootB, List.of(NAME_A));
+
+        assertThat(service.isMatchableBoth(rootA, NAME_B, rootB, NAME_A)).isTrue();
+    }
+
+    @Test
+    void isMatchableBoth_falseWhenOnlyOneDirectionMatches() {
+        // rootA accepts NAME_B, but rootB does NOT accept NAME_A
+        // (rootB's only leaf is NAME_C, not NAME_A).
+        byte[] rootA = service.computeRoot(List.of(NAME_B));
+        byte[] rootB = service.computeRoot(List.of(NAME_C));
+        service.cacheTree(rootA, List.of(NAME_B));
+        service.cacheTree(rootB, List.of(NAME_C));
+
+        assertThat(service.isMatchableBoth(rootA, NAME_B, rootB, NAME_A)).isFalse();
+        // Swapping direction also false (it's the OTHER pair that doesn't
+        // satisfy, but the predicate is symmetric in its boolean output).
+        assertThat(service.isMatchableBoth(rootB, NAME_A, rootA, NAME_B)).isFalse();
+    }
+
+    @Test
+    void isMatchableBoth_falseWhenNeitherDirectionMatches() {
+        // Two unrelated trees with no overlap.
+        byte[] rootA = service.computeRoot(List.of(NAME_A));
+        byte[] rootB = service.computeRoot(List.of(NAME_B));
+        service.cacheTree(rootA, List.of(NAME_A));
+        service.cacheTree(rootB, List.of(NAME_B));
+
+        // Pair {offered_A=NAME_C, offered_B=NAME_C} matches nothing.
+        assertThat(service.isMatchableBoth(rootA, NAME_C, rootB, NAME_C)).isFalse();
+    }
 }

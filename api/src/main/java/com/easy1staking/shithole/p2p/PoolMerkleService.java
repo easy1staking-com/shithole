@@ -168,6 +168,33 @@ public class PoolMerkleService {
                 merkleRoot, assetName, io.vavr.collection.List.ofAll(proof), IDENTITY_SERIALISER);
     }
 
+    /**
+     * Cheap "is this asset_name a member of this tree?" check. Returns
+     * {@code true} iff the tree for {@code merkleRoot} contains
+     * {@code assetName} as a leaf. {@code false} when either the root is
+     * unknown or the leaf is absent. No proof object is materialised in the
+     * false branch — used by the matcher's 2-cycle scan, which only needs
+     * the boolean.
+     */
+    public boolean isMember(byte[] merkleRoot, byte[] assetName) {
+        return treeForRoot(merkleRoot)
+                .flatMap(tree -> MerkleTree.getProof(tree, assetName, IDENTITY_SERIALISER))
+                .isPresent();
+    }
+
+    /**
+     * True iff both directions of a 2-cycle match are satisfiable: leaf
+     * {@code assetNameY} is in the tree for {@code rootA} (so A is
+     * fulfillable by Y) AND leaf {@code assetNameX} is in the tree for
+     * {@code rootB} (so B is fulfillable by X). Convenience predicate for
+     * the matcher's pair filter.
+     */
+    public boolean isMatchableBoth(
+            byte[] rootA, byte[] assetNameY,
+            byte[] rootB, byte[] assetNameX) {
+        return isMember(rootA, assetNameY) && isMember(rootB, assetNameX);
+    }
+
     private MerkleElement<byte[]> rebuildAndCache(PoolMerkleRootEntity row) {
         List<byte[]> assetNames = row.getAssetNamesHex().stream()
                 .map(HEX::parseHex)
