@@ -199,12 +199,12 @@ export function TermsGate() {
           </h2>
         </div>
 
-        <p id="terms-gate-body" className="text-sm text-zinc-300">
+        <p id="terms-gate-body" className="text-base text-zinc-300">
           By using Shithole, you agree to the following. Shithole moves
           real assets on the Cardano mainnet:
         </p>
 
-        <ul className="mt-4 space-y-2 text-sm text-zinc-300">
+        <ul className="mt-4 space-y-2 text-base text-zinc-300">
           <li className="flex gap-2">
             <span aria-hidden className="text-zinc-500">
               ·
@@ -250,7 +250,7 @@ export function TermsGate() {
           </li>
         </ul>
 
-        <p className="mt-4 text-xs text-zinc-400">
+        <p className="mt-4 text-sm text-zinc-400">
           The full version lives in the{" "}
           <a
             href={`/terms?${BYPASS_PARAM}`}
@@ -268,7 +268,7 @@ export function TermsGate() {
             ref={acceptButtonRef}
             type="button"
             onClick={accept}
-            className="w-full rounded-md bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-900 transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 focus:ring-offset-zinc-950"
+            className="w-full rounded-md bg-zinc-100 px-4 py-2.5 text-base font-semibold text-zinc-900 transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 focus:ring-offset-zinc-950"
           >
             I understand and agree
           </button>
