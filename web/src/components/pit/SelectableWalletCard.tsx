@@ -20,11 +20,17 @@ export function SelectableWalletCard({
   accent,
   selected,
   onToggle,
+  disabled = false,
+  disabledTitle,
 }: {
   nft: WalletCollectionNft;
   accent: string;
   selected: boolean;
   onToggle: (nft: WalletCollectionNft) => void;
+  /** When true, the card is non-interactive and visually muted. */
+  disabled?: boolean;
+  /** Tooltip override when disabled — explains *why* it's disabled. */
+  disabledTitle?: string;
 }) {
   const meta = useNftMetadata(nft.unit);
   const name = meta.data?.name ?? utf8OrHex(nft.assetNameHex);
@@ -33,18 +39,29 @@ export function SelectableWalletCard({
   return (
     <motion.button
       type="button"
-      onClick={() => onToggle(nft)}
-      whileTap={{ scale: 0.97 }}
+      onClick={() => {
+        if (disabled) return;
+        onToggle(nft);
+      }}
+      whileTap={disabled ? undefined : { scale: 0.97 }}
       animate={{ scale: selected ? 1.04 : 1 }}
       transition={{ type: "spring", stiffness: 380, damping: 26 }}
-      className="relative overflow-hidden rounded-md border bg-zinc-900 text-left"
+      className={
+        "relative overflow-hidden rounded-md border bg-zinc-900 text-left " +
+        (disabled ? "cursor-not-allowed opacity-40" : "")
+      }
       style={{
         borderColor: selected ? accent : "#3f3f46",
         boxShadow: selected ? `0 8px 24px ${accent}66` : undefined,
       }}
       aria-pressed={selected}
+      aria-disabled={disabled}
       aria-label={`${selected ? "deselect" : "select"} ${name}`}
-      title={`${name}\ntap to ${selected ? "deselect" : "select"}`}
+      title={
+        disabled
+          ? (disabledTitle ?? `${name}\nnot available`)
+          : `${name}\ntap to ${selected ? "deselect" : "select"}`
+      }
     >
       <div className="aspect-square bg-zinc-950">
         {imageUrl ? (

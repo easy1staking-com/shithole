@@ -153,3 +153,89 @@ export type NftMetadata = {
   traits: NftTrait[];
   description: string | null;
 };
+
+/* ------------------------------------------------------------------ */
+/* v3 wanted-listing — pool-merkle endpoints                           */
+/* (BE: P2pController; SPEC §11 wanted-listings)                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Summary of one curated stake pool's currently-active merkle root. The
+ * FE renders these in the pool picker on the wanted-listing creation flow.
+ *
+ * `ticker` is the stable label (HOSKY, A3C, ...) across re-curations.
+ * `pool_id_hex` is the 28-byte bech32-decoded stake pool hash, or null
+ * for community-tracked pools that haven't published one yet.
+ * `merkle_root_hex` is the 32-byte sha2_256 root the buyer commits to
+ * when creating a wanted listing (the on-chain `accepted_merkle_root`).
+ */
+export type Pool = {
+  ticker: string;
+  pool_id_hex: string | null;
+  merkle_root_hex: string;
+  total_assets: number;
+  is_active: boolean;
+};
+
+/**
+ * One step in a merkle membership proof. `side` is "left" or "right" — the
+ * sibling's position relative to the running hash at this level. `hash_hex`
+ * is the 32-byte sibling sha2_256 hash. Forwarded verbatim into a Fulfill
+ * redeemer's `merkle_proof` field; the on-chain validator does the verify.
+ *
+ * Shape mirrors `aiken_merkle_tree/mt.ProofItem` and the matching
+ * `org.cardanofoundation:merkle-tree-java` `ProofItem.Left|Right`.
+ */
+export type ProofStep = {
+  side: "left" | "right";
+  hash_hex: string;
+};
+
+/**
+ * A complete membership proof — the chain of `ProofStep`s a seller submits
+ * with a `Fulfill` redeemer to prove their deposit NFT's asset_name is in
+ * the buyer's `accepted_merkle_root` set. An empty `proof` array is valid
+ * for a 1-leaf tree (rare in practice — pool sets are large).
+ */
+export type Proof = {
+  merkle_root_hex: string;
+  asset_name_hex: string;
+  proof: ProofStep[];
+};
+
+/**
+ * Batch pool-membership response from
+ * `POST /api/p2p/asset-pool-membership`. Maps each requested asset_name
+ * (lowercase hex) to the list of currently-active pool tickers whose
+ * merkle tree accepts it. Empty list means the NFT isn't in any pool —
+ * those are the "trade away" candidates in the create flow.
+ */
+export type AssetPoolMembership = Record<string, string[]>;
+
+/**
+ * One v3 wanted-listing row as served by `GET /api/p2p/listings` and
+ * `GET /api/p2p/listings/by-buyer/{buyer_pkh}`. All identifiers are
+ * lowercase hex unless suffixed `_bech32`.
+ *
+ * <p>{@code spent_action} is null while the listing is active. A null
+ * + no {@code spent_*} timestamps means the UTxO is still on-chain and
+ * fulfillable. Any other value (currently always {@code spent_unknown})
+ * means it was consumed.
+ */
+export type P2pListing = {
+  tx_hash: string;
+  output_index: number;
+  config_nft_policy: string;
+  buyer_pkh: string;
+  buyer_address_bech32: string;
+  accepted_merkle_root: string;
+  /** policy_id (28 bytes) + asset_name (0..32 bytes), concatenated hex. */
+  offered_nft_unit: string;
+  lovelace: number;
+  created_at_slot: number;
+  created_at: string;
+  spent_action?: string | null;
+  spent_at_slot?: number | null;
+  spent_at?: string | null;
+  spent_by_tx_hash?: string | null;
+};

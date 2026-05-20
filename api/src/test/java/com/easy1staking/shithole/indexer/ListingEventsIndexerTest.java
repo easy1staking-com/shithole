@@ -1,5 +1,6 @@
 package com.easy1staking.shithole.indexer;
 
+import com.bloxbean.cardano.client.common.model.Networks;
 import com.bloxbean.cardano.client.plutus.spec.BytesPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ConstrPlutusData;
 import com.bloxbean.cardano.client.plutus.spec.ListPlutusData;
@@ -15,6 +16,7 @@ import com.easy1staking.shithole.entity.ListingEventEntity;
 import com.easy1staking.shithole.entity.ListingEventId;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import com.easy1staking.shithole.repository.ListingEventRepository;
+import com.easy1staking.shithole.service.WantedListingScriptAddressDeriver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +55,7 @@ class ListingEventsIndexerTest {
 
     @Mock private CuratedCollectionRepository curatedRepo;
     @Mock private ListingEventRepository listingRepo;
+    @Mock private WantedListingScriptAddressDeriver wantedDeriver;
 
     private WatchAddressRegistry registry;
     private ListingDatumDecoder decoder;
@@ -69,7 +72,11 @@ class ListingEventsIndexerTest {
                 .listingScriptAddress(WATCHED_ADDR)
                 .build();
         when(curatedRepo.findAll()).thenReturn(List.of(cc));
-        registry = new WatchAddressRegistry(curatedRepo);
+        // Stub the v3 wanted-listing address deriver — not exercised by v2
+        // indexer tests but the registry calls into it during reconcile().
+        lenient().when(wantedDeriver.deriveAddress(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn("addr_test1w_wanted_dummy");
+        registry = new WatchAddressRegistry(curatedRepo, Networks.preprod(), wantedDeriver);
         registry.reconcile(); // load synchronously
 
         decoder = new ListingDatumDecoder();
@@ -352,7 +359,8 @@ class ListingEventsIndexerTest {
         // means the indexer is wired but does nothing.
         CuratedCollectionRepository emptyRepo = org.mockito.Mockito.mock(CuratedCollectionRepository.class);
         when(emptyRepo.findAll()).thenReturn(List.of());
-        WatchAddressRegistry emptyRegistry = new WatchAddressRegistry(emptyRepo);
+        WatchAddressRegistry emptyRegistry =
+                new WatchAddressRegistry(emptyRepo, Networks.preprod(), wantedDeriver);
         emptyRegistry.reconcile();
         assertThat(emptyRegistry.size()).isZero();
 

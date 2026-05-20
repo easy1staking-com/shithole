@@ -16,7 +16,6 @@ import {
 import { DEFAULT_LISTING_LOVELACE } from "@/lib/tx/list";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { fetchUtxoByOutRef } from "@/lib/tx/swap";
-import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
@@ -191,7 +190,6 @@ export default function MePage() {
           >
             ← back
           </Link>
-          <WalletConnectButton />
         </div>
         <div className="mt-3 flex items-center gap-2">
           <h1 className="text-3xl font-semibold text-zinc-100">
@@ -224,8 +222,7 @@ export default function MePage() {
 
       {!addressBech32 && (
         <div className="flex flex-col items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-400">
-          <p>connect a wallet to see your listings.</p>
-          <WalletConnectButton />
+          <p>connect a wallet via the chip in the top-right ↗ to see your listings.</p>
         </div>
       )}
 

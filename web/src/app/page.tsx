@@ -2,37 +2,18 @@
 
 import Link from "next/link";
 
+import { P2pCard } from "@/components/p2p/P2pCard";
 import { useCurated } from "@/lib/api/hooks";
 
 export default function HomePage() {
   const { data, isLoading, error } = useCurated();
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-6 py-16">
-      <header className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/logo-v8-pixel-poop.svg"
-              alt=""
-              width={48}
-              height={48}
-              className="h-12 w-12"
-              aria-hidden
-            />
-            <h1 className="font-mono text-4xl font-semibold tracking-tight">s#!thole</h1>
-          </div>
-          <Link
-            href="/me"
-            className="text-xs uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
-          >
-            your s#!t →
-          </Link>
-        </div>
+    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-10 px-6 py-16">
+      <header>
         <p className="text-sm text-zinc-400">
           Wormhole carries value across chains. S#!thole carries worthlessness in circles
-          within one collection. Pick a pit.
+          within one collection. Pick a pit, or trade direct.
         </p>
       </header>
 
@@ -48,6 +29,68 @@ export default function HomePage() {
       )}
 
       {data && data.length > 0 && (
+        <>
+          <section className="space-y-3">
+            <SectionHeader
+              title="pits"
+              subtitle="drop your s#!t in, take whatever random thing surfaces."
+            />
+            <PitGrid data={data} />
+          </section>
+          <section className="space-y-3">
+            <SectionHeader
+              title="p2p"
+              subtitle="trade direct — find a delegator who wants your specific traits."
+            />
+            <P2pGrid data={data} />
+          </section>
+        </>
+      )}
+    </main>
+  );
+}
+
+function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="space-y-1">
+      <h2 className="font-mono text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+        {title}
+      </h2>
+      <p className="text-sm text-zinc-400">{subtitle}</p>
+    </div>
+  );
+}
+
+function P2pGrid({
+  data,
+}: {
+  data: ReadonlyArray<import("@/types/api").CuratedCollection>;
+}) {
+  // P2P is currently enabled only for Hosky-curated collections, but the
+  // FE doesn't have a "p2p enabled" flag yet. For v3 launch we treat
+  // every curated collection as p2p-enabled — currently 1 (Hosky-preprod).
+  // When more collections opt in, this expands automatically. When some
+  // curated collections opt OUT of p2p, we'll need a BE flag (TODO).
+  return (
+    <ul className="grid grid-cols-1 gap-4">
+      {data
+        .slice()
+        .sort((a, b) => a.display_order - b.display_order)
+        .map((c) => (
+          <li key={c.slug}>
+            <P2pCard collection={c} />
+          </li>
+        ))}
+    </ul>
+  );
+}
+
+function PitGrid({
+  data,
+}: {
+  data: ReadonlyArray<import("@/types/api").CuratedCollection>;
+}) {
+  return (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {data
             .slice()
@@ -132,7 +175,5 @@ export default function HomePage() {
               );
             })}
         </ul>
-      )}
-    </main>
   );
 }

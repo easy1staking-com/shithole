@@ -13,7 +13,14 @@
 
 import { http, HttpResponse } from "msw";
 
-import { collectionBySlug, curated, imageUrlForUnit, listingsBySlug, nftByUnit } from "./fixtureLoader";
+import {
+  collectionBySlug,
+  curated,
+  imageUrlForUnit,
+  listingsBySlug,
+  nftByUnit,
+  pools,
+} from "./fixtureLoader";
 
 export const handlers = [
   http.get("/api/curated", () => {
@@ -97,6 +104,84 @@ export const handlers = [
     );
   }),
 
+  /* ---- v3 wanted-listing — pool-merkle endpoints ------------------- */
+
+  http.get("/api/p2p/pools", () => {
+    return HttpResponse.json(pools.filter((p) => p.is_active));
+  }),
+
+  http.get("/api/p2p/pools/by-root/:root", ({ params }) => {
+    const root = params.root as string;
+    const pool = pools.find((p) => p.merkle_root_hex === root);
+    if (!pool) {
+      return HttpResponse.json({ error: "not_found", root }, { status: 404 });
+    }
+    return HttpResponse.json(pool);
+  }),
+
+  http.get("/api/p2p/pools/:ticker", ({ params }) => {
+    const ticker = params.ticker as string;
+    const pool = pools.find((p) => p.is_active && p.ticker === ticker);
+    if (!pool) {
+      return HttpResponse.json({ error: "not_found", ticker }, { status: 404 });
+    }
+    return HttpResponse.json(pool);
+  }),
+
+  // Proof generation needs real merkle data — the fixture pools.json carries
+  // placeholder roots/asset_names, so we can't synthesise a valid proof
+  // off-chain. Return 404 in mock mode so the UI exercises the empty branch;
+  // switch NEXT_PUBLIC_API_MODE=live for the real flow once the BE seeder
+  // is populated.
+  http.get("/api/p2p/pools/:root/proofs/:assetName", () => {
+    return HttpResponse.json(
+      {
+        error: "not_found",
+        message:
+          "mock-mode MSW serves placeholder pool data; proofs only available against live BE",
+      },
+      { status: 404 },
+    );
+  }),
+
+  /* p2p listings — empty in mock mode (no on-chain data without BE) */
+  http.get("/api/p2p/listings", () => HttpResponse.json([])),
+  http.get("/api/p2p/listings/by-buyer/:buyerPkh", () => HttpResponse.json([])),
+
+  // Batch pool membership — for mock mode, deterministically assign each
+  // asset_name to two arbitrary pools (HOSKY + first active) so the FE
+  // ribbons UI can be exercised without a real BE.
+  http.post("/api/p2p/asset-pool-membership", async ({ request }) => {
+    const body = (await request.json().catch(() => null)) as
+      | { asset_names_hex?: string[] }
+      | null;
+    if (!body || !Array.isArray(body.asset_names_hex)) {
+      return HttpResponse.json({ error: "invalid_request" }, { status: 400 });
+    }
+    const activeTickers = pools
+      .filter((p) => p.is_active)
+      .map((p) => p.ticker);
+    const out: Record<string, string[]> = {};
+    for (const raw of body.asset_names_hex) {
+      const norm = raw.toLowerCase();
+      if (activeTickers.length === 0) {
+        out[norm] = [];
+        continue;
+      }
+      // Pseudo-random but deterministic per asset_name: alternate
+      // single-pool vs multi-pool membership so the UI shows both shapes.
+      const hash = simpleHash(norm);
+      if (hash % 3 === 0) {
+        out[norm] = []; // ~33% unmatched — drives the "select unmatched" button
+      } else if (hash % 3 === 1) {
+        out[norm] = [activeTickers[0]]; // single pool
+      } else {
+        out[norm] = activeTickers.slice(0, Math.min(2, activeTickers.length));
+      }
+    }
+    return HttpResponse.json(out);
+  }),
+
   http.get("/api/nft/:unit/image", async ({ params }) => {
     const unit = params.unit as string;
     const url = imageUrlForUnit(unit);
@@ -121,3 +206,16 @@ export const handlers = [
     });
   }),
 ];
+
+/**
+ * Cheap deterministic hash for mock-mode pool-membership assignment. Maps
+ * a hex string to a small int so different asset_names land in different
+ * "buckets" — used to spread the fake pool-membership distribution.
+ */
+function simpleHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}

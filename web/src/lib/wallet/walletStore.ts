@@ -18,6 +18,17 @@ import {
 
 const LAST_USED_WALLET_KEY = "shithole.lastUsedWallet";
 
+// Dev-only diagnostic logging for the focus listener + refresh path.
+// User reported "auto-reconnect doesn't always work" — these traces
+// let them watch the listener fire in the browser console. Stripped
+// out by Next's prod minifier (NODE_ENV=production).
+const DEBUG_WALLET = process.env.NODE_ENV !== "production";
+function debugWallet(...args: unknown[]) {
+  if (DEBUG_WALLET) console.debug("[wallet]", ...args);
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
 export type WalletState = {
   /** The wallet name (eternl / vespr / lace / …). */
   name: string | null;
@@ -45,18 +56,40 @@ export type WalletActions = {
    * payment-key hash. Persists the wallet name in localStorage on success.
    */
   connect: (name: string) => Promise<void>;
-  disconnect: () => void;
+  /**
+   * Disconnect from the wallet.
+   *
+   * <p>{@code reason="user"} (default) means the user explicitly clicked
+   * the disconnect affordance — clears the "last-used wallet" sticky
+   * record so we don't silently reconnect on next page load.
+   *
+   * <p>{@code reason="auto"} means the focus listener detected the
+   * wallet is no longer authorising us (revoked, closed, etc.) —
+   * preserve the lastUsedWallet record so we CAN silently reconnect if
+   * the user re-approves us in their wallet UI later.
+   */
+  disconnect: (reason?: "user" | "auto") => void;
   /** Set the bech32 / pkh fields after the lucid bridge has decoded them. */
   setDecodedAddress: (bech32: string, paymentKeyHashHex: string) => void;
   /**
    * Re-poll the connected wallet's state (used + change address, network).
-   * If the address changed (user switched account in the wallet UI), update
-   * locally and return true. If the wallet was revoked, disconnect and
-   * return true. Returns false if nothing changed (no-op).
+   * Three paths:
+   * <ol>
+   *   <li>Currently disconnected but {@link lastUsedWalletName} is set
+   *       AND the wallet still reports {@code isEnabled() === true} →
+   *       silently reconnect.</li>
+   *   <li>Currently connected and still authorised → re-poll address +
+   *       networkId; update if changed.</li>
+   *   <li>Currently connected but no longer authorised → auto-disconnect
+   *       (preserving the lastUsedWallet record so a re-approval can
+   *       silently reconnect later).</li>
+   * </ol>
+   * Returns {@code true} if any state changed; {@code false} for no-op.
    *
-   * <p>CIP-30 has no native event hooks for account/wallet changes; we
-   * trigger this on window focus + visibilitychange so the UI catches up
-   * when the user comes back to the tab after switching wallets in Eternl.
+   * <p>CIP-30 has no native event hooks for account/wallet/network
+   * changes; we trigger this on window focus + visibilitychange so the
+   * UI catches up when the user comes back to the tab after fiddling
+   * with their wallet.
    */
   refresh: () => Promise<boolean>;
 };
@@ -121,11 +154,17 @@ export const useWalletStore = create<WalletState & WalletActions>(
       }
     },
 
-    disconnect: () => {
-      try {
-        window.localStorage.removeItem(LAST_USED_WALLET_KEY);
-      } catch {
-        /* ignore */
+    disconnect: (reason = "user") => {
+      // Only clear the "remember this wallet" record when the USER
+      // explicitly clicked disconnect. Auto-detected disconnects (the
+      // focus listener noticed isEnabled()===false) should preserve it
+      // so re-approval in the wallet UI can silently reconnect later.
+      if (reason === "user") {
+        try {
+          window.localStorage.removeItem(LAST_USED_WALLET_KEY);
+        } catch {
+          /* ignore */
+        }
       }
       set({
         name: null,
@@ -144,43 +183,96 @@ export const useWalletStore = create<WalletState & WalletActions>(
       set({ addressBech32: bech32, paymentKeyHashHex }),
 
     refresh: async () => {
-      const { api, addressHex, name } = get();
-      if (!api) return false;
-      try {
-        // First confirm the wallet still has us authorized.
-        if (typeof window !== "undefined" && window.cardano && name) {
-          const entry = window.cardano[name];
-          if (entry && typeof entry.isEnabled === "function") {
-            const stillEnabled = await entry.isEnabled();
-            if (!stillEnabled) {
-              get().disconnect();
-              return true;
-            }
+      if (refreshInFlight) return refreshInFlight;
+
+      const run = (async () => {
+        const { api, addressHex, name } = get();
+        debugWallet("refresh()", { connected: !!api, name });
+
+        // Path 1: disconnected. Try silent reconnect from lastUsedWallet
+        // if the wallet still reports isEnabled()===true (i.e. the user
+        // re-approved us in their wallet UI after we'd auto-disconnected).
+        if (!api) {
+          if (typeof window === "undefined" || !window.cardano) return false;
+          const lastName = lastUsedWalletName();
+          if (!lastName) return false;
+          const entry = window.cardano[lastName];
+          if (!entry || typeof entry.isEnabled !== "function") return false;
+          try {
+            const enabled = await entry.isEnabled();
+            debugWallet("silent-reconnect check", { lastName, enabled });
+            if (!enabled) return false;
+            await get().connect(lastName);
+            return true;
+          } catch (err) {
+            debugWallet("silent-reconnect failed", err);
+            return false;
           }
         }
-        const usedAddresses = await api.getUsedAddresses();
-        const newAddressHex =
-          usedAddresses[0] ?? (await api.getChangeAddress());
-        if (!newAddressHex) {
-          get().disconnect();
+
+        try {
+          // Path 3: confirm we're still authorised before polling state.
+          if (typeof window !== "undefined" && window.cardano && name) {
+            const entry = window.cardano[name];
+            if (entry && typeof entry.isEnabled === "function") {
+              const stillEnabled = await entry.isEnabled();
+              if (!stillEnabled) {
+                debugWallet("wallet revoked → auto-disconnect");
+                // 'auto' preserves lastUsedWallet so the next focus event
+                // can silently reconnect via Path 1 above.
+                get().disconnect("auto");
+                return true;
+              }
+            }
+          }
+          // Path 2: still authorised. Poll address + network in case the
+          // user switched accounts or networks.
+          const usedAddresses = await api.getUsedAddresses();
+          const newAddressHex =
+            usedAddresses[0] ?? (await api.getChangeAddress());
+          if (!newAddressHex) {
+            debugWallet("no addresses → auto-disconnect");
+            get().disconnect("auto");
+            return true;
+          }
+          if (newAddressHex === addressHex) return false;
+          // Address changed. Re-poll networkId too — a network switch in
+          // the wallet UI changes BOTH the address (network bit) and
+          // networkId; the old code only updated the address, leaving a
+          // stale networkId in the store. Re-decode bech32+pkh lazily by
+          // clearing them so the WalletConnectButton's effect recomputes.
+          let newNetworkId: number | null = null;
+          try {
+            newNetworkId = await api.getNetworkId();
+          } catch {
+            /* keep old networkId if the wallet doesn't expose it cleanly */
+          }
+          debugWallet("address changed", {
+            oldNetworkId: get().networkId,
+            newNetworkId,
+          });
+          set({
+            addressHex: newAddressHex,
+            addressBech32: null,
+            paymentKeyHashHex: null,
+            networkId: newNetworkId ?? get().networkId,
+          });
+          return true;
+        } catch (err) {
+          // Wallet API throwing during isEnabled / getUsedAddresses
+          // typically means the user revoked us; treat as auto-disconnect
+          // so we can silently reconnect on re-approval.
+          debugWallet("refresh threw → auto-disconnect", err);
+          get().disconnect("auto");
           return true;
         }
-        if (newAddressHex === addressHex) return false;
-        // Address changed (user switched account). Re-decode lazily;
-        // for now clear bech32+pkh so WalletConnectButton's effect
-        // recomputes via decodeCip30Address.
-        set({
-          addressHex: newAddressHex,
-          addressBech32: null,
-          paymentKeyHashHex: null,
-        });
-        return true;
-      } catch {
-        // Wallet API throwing during isEnabled / getUsedAddresses
-        // typically means the user revoked us; treat as disconnect.
-        get().disconnect();
-        return true;
-      }
+      })();
+
+      const tracked = run.finally(() => {
+        if (refreshInFlight === tracked) refreshInFlight = null;
+      });
+      refreshInFlight = tracked;
+      return tracked;
     },
   }),
 );
@@ -198,20 +290,26 @@ export function installWalletFocusListeners(): () => void {
   if (typeof window === "undefined") return () => {};
   if (listenersInstalled) return () => {};
   listenersInstalled = true;
-  const trigger = () => {
+  debugWallet("focus listeners installed");
+  const onFocus = () => {
+    debugWallet("window focus → refresh");
     // Inline use to avoid React-hook constraints — this runs from
     // a DOM event handler outside the React tree.
     void useWalletStore.getState().refresh();
   };
   const onVisibility = () => {
-    if (document.visibilityState === "visible") trigger();
+    if (document.visibilityState === "visible") {
+      debugWallet("visibilitychange → visible → refresh");
+      void useWalletStore.getState().refresh();
+    }
   };
-  window.addEventListener("focus", trigger);
+  window.addEventListener("focus", onFocus);
   document.addEventListener("visibilitychange", onVisibility);
   return () => {
-    window.removeEventListener("focus", trigger);
+    window.removeEventListener("focus", onFocus);
     document.removeEventListener("visibilitychange", onVisibility);
     listenersInstalled = false;
+    debugWallet("focus listeners removed");
   };
 }
 

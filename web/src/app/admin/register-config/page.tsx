@@ -13,7 +13,6 @@ import {
   buildCanonicalPayloadHex,
   buildCanonicalPayloadString,
 } from "@/lib/cip8/canonicalPayload";
-import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 import {
   getBlockfrostProjectId,
   getNetworkName,
@@ -392,34 +391,31 @@ export default function RegisterConfigPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-mono text-3xl font-semibold tracking-tight">
-            register a pit
-          </h1>
-          <p className="text-sm text-zinc-400">
-            Deploy a config UTxO for a dead collection, then register it
-            with the curator. The signature ties the registration to the
-            on-chain admin key — only the admin can do this.
-          </p>
-          <p className="mt-1 text-xs text-zinc-500">
-            network: <span className="font-mono">{network}</span>
-            {!projectId && (
-              <span className="ml-2 text-amber-400">
-                (NEXT_PUBLIC_BLOCKFROST_PROJECT_ID not set — wallet
-                connect works but tx submission will fail)
-              </span>
-            )}
-          </p>
-          {networkMismatch && (
-            <p className="mt-1 text-xs text-red-400">
-              wallet is on {networkId === 1 ? "mainnet" : "testnet"} but app is
-              configured for {network} — switch the wallet network before
-              submitting; the deploy tx will fail otherwise.
-            </p>
+      <header>
+        <h1 className="font-mono text-3xl font-semibold tracking-tight">
+          register a pit
+        </h1>
+        <p className="text-sm text-zinc-400">
+          Deploy a config UTxO for a dead collection, then register it
+          with the curator. The signature ties the registration to the
+          on-chain admin key — only the admin can do this.
+        </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          network: <span className="font-mono">{network}</span>
+          {!projectId && (
+            <span className="ml-2 text-amber-400">
+              (NEXT_PUBLIC_BLOCKFROST_PROJECT_ID not set — wallet
+              connect works but tx submission will fail)
+            </span>
           )}
-        </div>
-        <WalletConnectButton />
+        </p>
+        {networkMismatch && (
+          <p className="mt-1 text-xs text-red-400">
+            wallet is on {networkId === 1 ? "mainnet" : "testnet"} but app is
+            configured for {network} — switch the wallet network before
+            submitting; the deploy tx will fail otherwise.
+          </p>
+        )}
       </header>
 
       <form onSubmit={onSubmit} className="space-y-6">

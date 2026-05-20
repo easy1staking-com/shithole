@@ -10,10 +10,14 @@
  */
 
 import type {
+  AssetPoolMembership,
   CollectionState,
   CuratedCollection,
   ListingsResponse,
   NftMetadata,
+  P2pListing,
+  Pool,
+  Proof,
 } from "@/types/api";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
@@ -171,4 +175,124 @@ export function registerConfig(
   body: ConfigRegistrationRequest,
 ): Promise<ConfigRegistrationResponse> {
   return postJson<ConfigRegistrationResponse>("/api/configs", body);
+}
+
+/* ------------------------------------------------------------------ */
+/* v3 wanted-listing — pool-merkle endpoints                           */
+/* ------------------------------------------------------------------ */
+
+/** List currently-active curated pools. Empty array is valid (pre-curation). */
+export function fetchPools(): Promise<Pool[]> {
+  return getJson<Pool[]>("/api/p2p/pools");
+}
+
+/** Single active pool by ticker, or null on 404. */
+export async function fetchPoolByTicker(ticker: string): Promise<Pool | null> {
+  try {
+    return await getJson<Pool>(`/api/p2p/pools/${encodeURIComponent(ticker)}`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/**
+ * Reverse lookup: which pool produced this merkle root? Works for
+ * historical (no-longer-active) roots too — used to label a wanted listing
+ * whose datum carries a now-superseded root. Returns null on 404.
+ */
+export async function fetchPoolByRoot(merkleRootHex: string): Promise<Pool | null> {
+  try {
+    return await getJson<Pool>(
+      `/api/p2p/pools/by-root/${encodeURIComponent(merkleRootHex)}`,
+    );
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/**
+ * Batch lookup — for each asset_name_hex, return the active pools' tickers
+ * that accept it. Empty list means the NFT isn't in any current pool's
+ * tree. Drives the FE wallet picker's pool ribbons + "select unmatched".
+ *
+ * <p>Response is keyed by lowercase hex even if the request used uppercase.
+ */
+export function fetchAssetPoolMembership(
+  assetNamesHex: string[],
+): Promise<AssetPoolMembership> {
+  return postJson<AssetPoolMembership>("/api/p2p/asset-pool-membership", {
+    asset_names_hex: assetNamesHex,
+  });
+}
+
+export type P2pListingsQuery = {
+  /** Filter by collection's config_nft_policy hex. */
+  config?: string;
+  /** Filter by accepted_merkle_root(s) — wallet's matchable pools. */
+  roots?: string[];
+  size?: number;
+  page?: number;
+};
+
+/**
+ * Active wanted-listings, newest first. Apply at most one filter at a
+ * time (BE picks the more-specific path when both are provided — config
+ * is ignored if `roots` is non-empty).
+ */
+export function fetchP2pListings(
+  query: P2pListingsQuery = {},
+): Promise<P2pListing[]> {
+  const qs = new URLSearchParams();
+  if (query.config) qs.set("config", query.config);
+  if (query.roots && query.roots.length > 0) {
+    for (const r of query.roots) qs.append("root", r);
+  }
+  qs.set("size", String(query.size ?? 50));
+  qs.set("page", String(query.page ?? 0));
+  return getJson<P2pListing[]>(`/api/p2p/listings?${qs.toString()}`);
+}
+
+export type P2pListingsByBuyerQuery = {
+  includeSpent?: boolean;
+  size?: number;
+  page?: number;
+};
+
+/**
+ * Listings created by a specific buyer pkh. Default returns active only.
+ * Drives the /me/p2p "your listings" view.
+ */
+export function fetchP2pListingsByBuyer(
+  buyerPkhHex: string,
+  query: P2pListingsByBuyerQuery = {},
+): Promise<P2pListing[]> {
+  const qs = new URLSearchParams();
+  if (query.includeSpent) qs.set("includeSpent", "true");
+  qs.set("size", String(query.size ?? 50));
+  qs.set("page", String(query.page ?? 0));
+  return getJson<P2pListing[]>(
+    `/api/p2p/listings/by-buyer/${encodeURIComponent(buyerPkhHex)}?${qs.toString()}`,
+  );
+}
+
+/**
+ * Membership proof for `assetNameHex` against `merkleRootHex`. Returns null
+ * if the root is unknown or the asset_name is not a leaf of that tree —
+ * callers should treat both as "this seller can't fulfill against this
+ * listing" rather than a hard error.
+ */
+export async function fetchProof(
+  merkleRootHex: string,
+  assetNameHex: string,
+): Promise<Proof | null> {
+  try {
+    return await getJson<Proof>(
+      `/api/p2p/pools/${encodeURIComponent(merkleRootHex)}/proofs/${encodeURIComponent(assetNameHex)}`,
+    );
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
 }
