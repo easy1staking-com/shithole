@@ -190,15 +190,19 @@ public class P2pAutoFulfillerTxBuilder {
                 .from(botAddress);
 
         // ---- 9. evaluator + submit -------------------------------------------
-        if (ogmiosUrl == null || ogmiosUrl.isBlank()) {
-            return BuildResult.failure(
-                    "shithole.p2p.auto-fulfill.ogmios-url (or .matcher.ogmios-url, or OGMIOS_URL) "
-                            + "is required when auto-fulfiller is enabled");
+        // Evaluator selection: Ogmios when configured (preprod luxury —
+        // surfaces Aiken trace stacks on script failure), otherwise fall
+        // back to the injected BackendService (Blockfrost). Mainnet
+        // default is Blockfrost (smaller infra footprint, no Ogmios
+        // sidecar). See P2pMatcherTxBuilder for the full rationale.
+        com.bloxbean.cardano.client.api.TransactionEvaluator evaluator;
+        if (ogmiosUrl != null && !ogmiosUrl.isBlank()) {
+            var ogmiosBackend = new com.bloxbean.cardano.client.backend.ogmios.http
+                    .OgmiosBackendService(ogmiosUrl);
+            evaluator = (cbor, inputUtxos) -> ogmiosBackend.getTransactionService().evaluateTx(cbor);
+        } else {
+            evaluator = (cbor, inputUtxos) -> backendService.getTransactionService().evaluateTx(cbor);
         }
-        var ogmiosBackend = new com.bloxbean.cardano.client.backend.ogmios.http
-                .OgmiosBackendService(ogmiosUrl);
-        com.bloxbean.cardano.client.api.TransactionEvaluator evaluator =
-                (cbor, inputUtxos) -> ogmiosBackend.getTransactionService().evaluateTx(cbor);
 
         QuickTxBuilder qtxBuilder = new QuickTxBuilder(backendService);
         var ctx = qtxBuilder.compose(tx)

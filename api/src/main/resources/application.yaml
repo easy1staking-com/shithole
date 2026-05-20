@@ -137,7 +137,6 @@ shithole:
     matcher:
       enabled: ${SHITHOLE_P2P_MATCHER_ENABLED:false}
       mnemonic: ${SHITHOLE_MATCHER_MNEMONIC:}   # NEVER commit
-      collateral-ada: ${SHITHOLE_MATCHER_COLLATERAL_ADA:5}
       ogmios-url: ${OGMIOS_URL:}
 
     # Autonomous P2P auto-fulfill bot. Sibling loop to the matcher; shares
@@ -148,7 +147,16 @@ shithole:
     # without the matcher's mnemonic being set, boot fails fast.
     auto-fulfill:
       enabled: ${SHITHOLE_P2P_AUTO_FULFILL_ENABLED:false}
-      max-per-block: ${SHITHOLE_P2P_AUTO_FULFILL_MAX_PER_BLOCK:3}
+      # Default 1: the auto-fulfill coordinator submits sequentially in
+      # a tight loop; same-block submissions race on the bot's wallet
+      # UTxO state (CCL queries the post-confirm UTxO set for tx N+1
+      # but Blockfrost/Ogmios evaluator caches lag behind, producing
+      # "Error while evaluating script cost"). Bumping > 1 currently
+      # bleeds tx fees on the 2nd+ candidate in a multi-candidate scan.
+      # Proper fix is to await each tx's chain settlement before the
+      # next submission within the same scan call (matcher already does
+      # this via CCL.completeAndWait); until then, 1 is the safe default.
+      max-per-block: ${SHITHOLE_P2P_AUTO_FULFILL_MAX_PER_BLOCK:1}
       ogmios-url: ${OGMIOS_URL:}
 
     # Shared bot guardrails (apply to BOTH matcher + auto-fulfill).

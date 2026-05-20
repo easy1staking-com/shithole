@@ -214,14 +214,21 @@ public class P2pMatcherTxBuilder {
                 .from(botAddress);
 
         // ---- 9. evaluator + submit -------------------------------------------
-        if (ogmiosUrl == null || ogmiosUrl.isBlank()) {
-            return BuildResult.failure(
-                    "shithole.p2p.matcher.ogmios-url (or OGMIOS_URL env) is required when matcher is enabled");
+        // Evaluator selection: Ogmios when configured (preprod luxury —
+        // includes Aiken trace stacks on script failure), otherwise fall
+        // back to the injected BackendService (Blockfrost). Blockfrost
+        // had Conway-CBOR issues at v2 swap time; if those are fixed we
+        // can drop Ogmios on mainnet entirely and rely on the same
+        // BackendService that powers the rest of the BE. Mainnet default
+        // is Blockfrost (smaller infra footprint, no extra sidecar).
+        com.bloxbean.cardano.client.api.TransactionEvaluator evaluator;
+        if (ogmiosUrl != null && !ogmiosUrl.isBlank()) {
+            var ogmiosBackend = new com.bloxbean.cardano.client.backend.ogmios.http
+                    .OgmiosBackendService(ogmiosUrl);
+            evaluator = (cbor, inputUtxos) -> ogmiosBackend.getTransactionService().evaluateTx(cbor);
+        } else {
+            evaluator = (cbor, inputUtxos) -> backendService.getTransactionService().evaluateTx(cbor);
         }
-        var ogmiosBackend = new com.bloxbean.cardano.client.backend.ogmios.http
-                .OgmiosBackendService(ogmiosUrl);
-        com.bloxbean.cardano.client.api.TransactionEvaluator evaluator =
-                (cbor, inputUtxos) -> ogmiosBackend.getTransactionService().evaluateTx(cbor);
 
         QuickTxBuilder qtxBuilder = new QuickTxBuilder(backendService);
         var ctx = qtxBuilder.compose(tx)
