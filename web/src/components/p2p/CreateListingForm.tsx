@@ -235,9 +235,9 @@ function FlowForCollection({ slug }: { slug: string }) {
         <h1 className="text-2xl font-semibold tracking-tight">
           find another idiot
         </h1>
-        <p className="text-sm text-zinc-400">
+        <p className="text-base text-zinc-300">
           offload your{" "}
-          <span className="font-medium text-zinc-200">
+          <span className="font-medium text-zinc-100">
             {collection.data.display_name}
           </span>{" "}
           to a delegator who actually wants its traits. you pay them; they
@@ -246,7 +246,7 @@ function FlowForCollection({ slug }: { slug: string }) {
         {/* Inline risk disclosure — the user is about to lock NFT + ADA
             at a permissionless script. T&C covers the full picture;
             this is the in-flow nudge. */}
-        <p className="text-[11px] text-zinc-500">
+        <p className="text-sm text-zinc-500">
           posting locks the NFT + your deposit at a script. anyone with a
           matching NFT — human or automated — can take the swap. no
           escrow, no chargebacks. you can reclaim anytime — see{" "}
@@ -257,7 +257,14 @@ function FlowForCollection({ slug }: { slug: string }) {
         </p>
       </header>
 
-      <Step number={1} title="which pool's idiots?" complete={!!selectedPool}>
+      <Step
+        number={1}
+        title="which pool's NFT do you want?"
+        complete={!!selectedPool}
+      >
+        <p className="-mt-1 text-sm text-zinc-500">
+          the idiots delegating there are the only ones who can swap with you.
+        </p>
         <PoolPicker
           selectedTicker={selectedPool?.ticker ?? null}
           onSelect={handleSelectPool}
