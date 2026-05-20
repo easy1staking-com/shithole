@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { ListingsBoard } from "@/components/p2p/ListingsBoard";
 
@@ -17,7 +18,9 @@ export default function P2pBrowsePage() {
           make offer →
         </Link>
       </nav>
-      <ListingsBoard />
+      <Suspense fallback={<p className="text-sm text-zinc-500">looking for listings…</p>}>
+        <ListingsBoard />
+      </Suspense>
     </main>
   );
 }

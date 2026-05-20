@@ -27,6 +27,8 @@ function debugWallet(...args: unknown[]) {
   if (DEBUG_WALLET) console.debug("[wallet]", ...args);
 }
 
+let refreshInFlight: Promise<boolean> | null = null;
+
 export type WalletState = {
   /** The wallet name (eternl / vespr / lace / …). */
   name: string | null;
@@ -181,86 +183,96 @@ export const useWalletStore = create<WalletState & WalletActions>(
       set({ addressBech32: bech32, paymentKeyHashHex }),
 
     refresh: async () => {
-      const { api, addressHex, name } = get();
-      debugWallet("refresh()", { connected: !!api, name });
+      if (refreshInFlight) return refreshInFlight;
 
-      // Path 1: disconnected. Try silent reconnect from lastUsedWallet
-      // if the wallet still reports isEnabled()===true (i.e. the user
-      // re-approved us in their wallet UI after we'd auto-disconnected).
-      if (!api) {
-        if (typeof window === "undefined" || !window.cardano) return false;
-        const lastName = lastUsedWalletName();
-        if (!lastName) return false;
-        const entry = window.cardano[lastName];
-        if (!entry || typeof entry.isEnabled !== "function") return false;
-        try {
-          const enabled = await entry.isEnabled();
-          debugWallet("silent-reconnect check", { lastName, enabled });
-          if (!enabled) return false;
-          await get().connect(lastName);
-          return true;
-        } catch (err) {
-          debugWallet("silent-reconnect failed", err);
-          return false;
-        }
-      }
+      const run = (async () => {
+        const { api, addressHex, name } = get();
+        debugWallet("refresh()", { connected: !!api, name });
 
-      try {
-        // Path 3: confirm we're still authorised before polling state.
-        if (typeof window !== "undefined" && window.cardano && name) {
-          const entry = window.cardano[name];
-          if (entry && typeof entry.isEnabled === "function") {
-            const stillEnabled = await entry.isEnabled();
-            if (!stillEnabled) {
-              debugWallet("wallet revoked → auto-disconnect");
-              // 'auto' preserves lastUsedWallet so the next focus event
-              // can silently reconnect via Path 1 above.
-              get().disconnect("auto");
-              return true;
-            }
+        // Path 1: disconnected. Try silent reconnect from lastUsedWallet
+        // if the wallet still reports isEnabled()===true (i.e. the user
+        // re-approved us in their wallet UI after we'd auto-disconnected).
+        if (!api) {
+          if (typeof window === "undefined" || !window.cardano) return false;
+          const lastName = lastUsedWalletName();
+          if (!lastName) return false;
+          const entry = window.cardano[lastName];
+          if (!entry || typeof entry.isEnabled !== "function") return false;
+          try {
+            const enabled = await entry.isEnabled();
+            debugWallet("silent-reconnect check", { lastName, enabled });
+            if (!enabled) return false;
+            await get().connect(lastName);
+            return true;
+          } catch (err) {
+            debugWallet("silent-reconnect failed", err);
+            return false;
           }
         }
-        // Path 2: still authorised. Poll address + network in case the
-        // user switched accounts or networks.
-        const usedAddresses = await api.getUsedAddresses();
-        const newAddressHex =
-          usedAddresses[0] ?? (await api.getChangeAddress());
-        if (!newAddressHex) {
-          debugWallet("no addresses → auto-disconnect");
+
+        try {
+          // Path 3: confirm we're still authorised before polling state.
+          if (typeof window !== "undefined" && window.cardano && name) {
+            const entry = window.cardano[name];
+            if (entry && typeof entry.isEnabled === "function") {
+              const stillEnabled = await entry.isEnabled();
+              if (!stillEnabled) {
+                debugWallet("wallet revoked → auto-disconnect");
+                // 'auto' preserves lastUsedWallet so the next focus event
+                // can silently reconnect via Path 1 above.
+                get().disconnect("auto");
+                return true;
+              }
+            }
+          }
+          // Path 2: still authorised. Poll address + network in case the
+          // user switched accounts or networks.
+          const usedAddresses = await api.getUsedAddresses();
+          const newAddressHex =
+            usedAddresses[0] ?? (await api.getChangeAddress());
+          if (!newAddressHex) {
+            debugWallet("no addresses → auto-disconnect");
+            get().disconnect("auto");
+            return true;
+          }
+          if (newAddressHex === addressHex) return false;
+          // Address changed. Re-poll networkId too — a network switch in
+          // the wallet UI changes BOTH the address (network bit) and
+          // networkId; the old code only updated the address, leaving a
+          // stale networkId in the store. Re-decode bech32+pkh lazily by
+          // clearing them so the WalletConnectButton's effect recomputes.
+          let newNetworkId: number | null = null;
+          try {
+            newNetworkId = await api.getNetworkId();
+          } catch {
+            /* keep old networkId if the wallet doesn't expose it cleanly */
+          }
+          debugWallet("address changed", {
+            oldNetworkId: get().networkId,
+            newNetworkId,
+          });
+          set({
+            addressHex: newAddressHex,
+            addressBech32: null,
+            paymentKeyHashHex: null,
+            networkId: newNetworkId ?? get().networkId,
+          });
+          return true;
+        } catch (err) {
+          // Wallet API throwing during isEnabled / getUsedAddresses
+          // typically means the user revoked us; treat as auto-disconnect
+          // so we can silently reconnect on re-approval.
+          debugWallet("refresh threw → auto-disconnect", err);
           get().disconnect("auto");
           return true;
         }
-        if (newAddressHex === addressHex) return false;
-        // Address changed. Re-poll networkId too — a network switch in
-        // the wallet UI changes BOTH the address (network bit) and
-        // networkId; the old code only updated the address, leaving a
-        // stale networkId in the store. Re-decode bech32+pkh lazily by
-        // clearing them so the WalletConnectButton's effect recomputes.
-        let newNetworkId: number | null = null;
-        try {
-          newNetworkId = await api.getNetworkId();
-        } catch {
-          /* keep old networkId if the wallet doesn't expose it cleanly */
-        }
-        debugWallet("address changed", {
-          oldNetworkId: get().networkId,
-          newNetworkId,
-        });
-        set({
-          addressHex: newAddressHex,
-          addressBech32: null,
-          paymentKeyHashHex: null,
-          networkId: newNetworkId ?? get().networkId,
-        });
-        return true;
-      } catch (err) {
-        // Wallet API throwing during isEnabled / getUsedAddresses
-        // typically means the user revoked us; treat as auto-disconnect
-        // so we can silently reconnect on re-approval.
-        debugWallet("refresh threw → auto-disconnect", err);
-        get().disconnect("auto");
-        return true;
-      }
+      })();
+
+      const tracked = run.finally(() => {
+        if (refreshInFlight === tracked) refreshInFlight = null;
+      });
+      refreshInFlight = tracked;
+      return tracked;
     },
   }),
 );

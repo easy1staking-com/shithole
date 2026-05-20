@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ConfirmationChip } from "@/components/ConfirmationChip";
 import { useP2pListingsByBuyer } from "@/lib/api/hooks";
@@ -57,6 +57,17 @@ export function MyListingsBoard() {
   const [reclaimedKeys, setReclaimedKeys] = useState<Set<string>>(
     () => new Set(),
   );
+  const mountedRef = useRef(true);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (resetTimerRef.current !== null) {
+        clearTimeout(resetTimerRef.current);
+      }
+    };
+  }, []);
 
   // Drop selection entries whose listing has disappeared (refetched data,
   // optimistic reclaim, etc.) — keeps the count + "select all" toggle
@@ -120,6 +131,7 @@ export function MyListingsBoard() {
         const [policy, listings] = groups[i];
         const label = `reclaiming ${listings.length} listing${listings.length === 1 ? "" : "s"}`;
         // Phase 1: build + submit the tx (~1-2s).
+        if (!mountedRef.current) return;
         setBulkState({ kind: "submitting", current: i + 1, total, label });
         const utxos = await Promise.all(
           listings.map((l) =>
@@ -133,32 +145,47 @@ export function MyListingsBoard() {
           buyerPkhHex: paymentKeyHashHex,
         });
         // Phase 2: wait for chain inclusion (~30-60s on preprod).
+        if (!mountedRef.current) return;
         setBulkState({ kind: "confirming", current: i + 1, total, label });
         await awaitTxConfirmation(client, r.txHash);
         // Optimistically hide the reclaimed listings so the user sees the
         // rows disappear before the BE indexer notices.
         const keys = new Set(listings.map(listingKey));
-        setReclaimedKeys((prev) => new Set([...prev, ...keys]));
+        if (!mountedRef.current) return;
+        const currentDataKeys = new Set((data ?? []).map(listingKey));
+        setReclaimedKeys((prev) => {
+          const next = new Set<string>();
+          for (const key of prev) {
+            if (currentDataKeys.has(key)) next.add(key);
+          }
+          for (const key of keys) next.add(key);
+          return next;
+        });
       }
       // Cross-cutting cache invalidation — the indexer needs a moment.
       queryClient.invalidateQueries({ queryKey: ["p2pListings"] });
       queryClient.invalidateQueries({ queryKey: ["p2pListingsByBuyer"] });
       queryClient.invalidateQueries({ queryKey: ["walletCollection"] });
+      if (!mountedRef.current) return;
       setSelected(new Set());
       // Brief "confirmed" chip before sliding back to idle. Lingers ~4s
       // so the user gets visual closure without the bar nagging forever.
       setBulkState({ kind: "confirmed", count: totalListings });
-      setTimeout(() => {
+      resetTimerRef.current = setTimeout(() => {
+        resetTimerRef.current = null;
+        if (!mountedRef.current) return;
         setBulkState((s) => (s.kind === "confirmed" ? { kind: "idle" } : s));
       }, 4000);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("bulk reclaim failed:", message);
+      if (!mountedRef.current) return;
       setBulkState({ kind: "error", message: message.slice(0, 300) });
     }
   }, [
     api,
     paymentKeyHashHex,
+    data,
     liveListings,
     effectiveSelected,
     queryClient,

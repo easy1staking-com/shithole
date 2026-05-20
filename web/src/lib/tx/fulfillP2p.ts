@@ -25,6 +25,7 @@ import type { EvolutionClient } from "./evolutionClient";
 import { buildFulfillRedeemer } from "./p2p";
 import { hexToBytes, serialiseOutputReference } from "@/lib/pit/bucketMath";
 import type { Network } from "./swap";
+import { txOutputAddressBech32 } from "./swap";
 import { inlineDatum, toAddress, toAssets, txHashHex } from "./txAdapters";
 import type { UTxO } from "./utxo";
 
@@ -126,6 +127,14 @@ export async function submitFulfillP2p(
   const built = await builder
     .attachScript({ script: applied.validator })
     .build();
+
+  const tx = await built.toTransaction();
+  assertFulfillOutputOrder(tx.body.outputs, {
+    buyerBech32Address: input.buyerBech32Address,
+    treasuryAddrBech32:
+      treasuryOutputIndex === null ? null : input.treasuryAddrBech32,
+  });
+
   const signed = await built.sign();
   const txHash = txHashHex(await signed.submit());
 
@@ -154,4 +163,34 @@ function bytesToHex(b: Uint8Array): string {
   let s = "";
   for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, "0");
   return s;
+}
+
+function assertFulfillOutputOrder(
+  outputs: ReadonlyArray<unknown>,
+  expected: { buyerBech32Address: string; treasuryAddrBech32: string | null },
+): void {
+  if (outputs.length < 1) {
+    throw new Error(
+      "assembled p2p fulfill tx has 0 outputs; expected buyer output at index 0",
+    );
+  }
+  const addr0 = txOutputAddressBech32(outputs[0]);
+  if (addr0 !== expected.buyerBech32Address) {
+    throw new Error(
+      `p2p fulfill output[0] is ${addr0}, expected buyer ${expected.buyerBech32Address}`,
+    );
+  }
+  if (expected.treasuryAddrBech32 !== null) {
+    if (outputs.length < 2) {
+      throw new Error(
+        `assembled p2p fulfill tx has only ${outputs.length} output(s); expected buyer + treasury`,
+      );
+    }
+    const addr1 = txOutputAddressBech32(outputs[1]);
+    if (addr1 !== expected.treasuryAddrBech32) {
+      throw new Error(
+        `p2p fulfill output[1] is ${addr1}, expected treasury ${expected.treasuryAddrBech32}`,
+      );
+    }
+  }
 }

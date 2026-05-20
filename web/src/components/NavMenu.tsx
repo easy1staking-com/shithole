@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 /**
  * Small navigation dropdown — button + popover with link list. Used in
@@ -26,6 +26,7 @@ export function NavMenu({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const menuId = useId();
 
   // Close on outside click + ESC. Closing on link-click is handled by
   // an onClick on each <Link> (route-change effect tripped a setState-
@@ -59,7 +60,8 @@ export function NavMenu({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-haspopup="menu"
+        aria-haspopup="true"
+        aria-controls={open ? menuId : undefined}
         className={
           "rounded-md px-2 py-1 font-mono text-sm lowercase transition-colors " +
           (isActive ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200")
@@ -71,8 +73,8 @@ export function NavMenu({
         </span>
       </button>
       {open && (
-        <div
-          role="menu"
+        <ul
+          id={menuId}
           className="absolute left-0 z-20 mt-1 min-w-44 rounded-md border border-zinc-800 bg-zinc-950 p-1 shadow-lg"
         >
           {items.map((it) => {
@@ -81,23 +83,23 @@ export function NavMenu({
                 ? pathname === "/"
                 : pathname === it.href || pathname.startsWith(`${it.href}/`);
             return (
-              <Link
-                key={it.href}
-                href={it.href}
-                role="menuitem"
-                onClick={() => setOpen(false)}
-                className={
-                  "block rounded px-3 py-1.5 text-sm transition-colors " +
-                  (active
-                    ? "bg-zinc-900 text-zinc-100"
-                    : "text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100")
-                }
-              >
-                {it.label}
-              </Link>
+              <li key={it.href}>
+                <Link
+                  href={it.href}
+                  onClick={() => setOpen(false)}
+                  className={
+                    "block rounded px-3 py-1.5 text-sm transition-colors " +
+                    (active
+                      ? "bg-zinc-900 text-zinc-100"
+                      : "text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100")
+                  }
+                >
+                  {it.label}
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

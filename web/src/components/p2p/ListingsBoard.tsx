@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { MultiSelectPopover } from "@/components/p2p/MultiSelectPopover";
@@ -29,6 +30,8 @@ import type { AssetPoolMembership, P2pListing, Pool } from "@/types/api";
  * picked. "All pools" sends no filter (returns global active list).
  */
 export function ListingsBoard() {
+  const searchParams = useSearchParams();
+  const configFilter = searchParams.get("config");
   const { data: pools, isPending: poolsPending } = usePools();
   const [filterTicker, setFilterTicker] = useState<string | null>(null);
   const [onlyFulfillable, setOnlyFulfillable] = useState(false);
@@ -52,7 +55,11 @@ export function ListingsBoard() {
     isPending,
     isError,
     error,
-  } = useP2pListings(filterRoot ? { roots: [filterRoot] } : {});
+  } = useP2pListings(
+    filterRoot
+      ? { config: configFilter ?? undefined, roots: [filterRoot] }
+      : { config: configFilter ?? undefined },
+  );
 
   // ---- "I can fulfill" data plumbing ----
   // For v3 launch p2p is Hosky-only; pick the first curated collection's
