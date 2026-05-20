@@ -129,22 +129,22 @@ export default function TermsPage() {
 
       <section className="space-y-3 text-zinc-300">
         <h2 className="text-xl font-semibold text-zinc-100">
-          your counterparty may be a bot
+          your counterparty could be anyone — human or automated
         </h2>
         <p>
-          To keep the p2p surface lively, the project operates an{" "}
-          <em>auto-fulfiller</em> — a backend process holding a hot wallet
-          that watches for open listings and submits fulfill transactions
-          on its own initiative. If you post a listing, the party that
-          fills it may be another human, or it may be this bot. You have
-          no way to tell up front, and the contract does not distinguish.
+          The contract is permissionless: anyone in the world holding a
+          qualifying NFT can fill your listing at any time. That includes
+          humans, scripts, market-making bots, automated arbitrage
+          processes — anything able to sign a Cardano transaction. The
+          on-chain validator does not distinguish between them; you
+          cannot tell up front who will take your offer, and the same
+          rules apply to all of them.
         </p>
         <p>
-          The bot transacts under the same on-chain rules as any other
-          user: it cannot deviate from the validator. Its presence,
-          configuration, and continued operation are at the project&apos;s
-          sole discretion and may stop, pause, or change behaviour at any
-          time without notice. Do not rely on it.
+          Automated counterparties of any kind may come and go without
+          notice. Do not assume that, because a similar listing was
+          recently filled, yours will be too. Liquidity on a
+          permissionless contract is not a service we provide.
         </p>
       </section>
 
@@ -238,9 +238,8 @@ export default function TermsPage() {
           uptime is best-effort
         </h2>
         <p>
-          The website, the indexer that renders the pits and the open
-          p2p listings, and the auto-fulfiller bot are all run on
-          best-effort by a small team. They may be unavailable, lag, or
+          The website and the indexer that renders the pits and the
+          open p2p listings are run on best-effort by a small team. They may be unavailable, lag, or
           stop entirely. The contracts on chain do not depend on us:
           even if every part of our infrastructure disappears, you can
           still reclaim, swap, or cancel by interacting directly with

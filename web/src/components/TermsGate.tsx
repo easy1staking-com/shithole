@@ -33,10 +33,10 @@ const STORAGE_KEY = "shithole:terms-v1";
  *
  * Version history:
  *   - 1 (initial mainnet release): random-swap pits only.
- *   - 2 (v3 launch, 2026-05-20): added p2p wanted-listing flow + bot
- *     intermediation. New consent dimensions: locking ADA + NFT at a
- *     script address open to any counterparty including a project-run
- *     bot, the "deposit" terminology + math, reclaim-is-user's-job.
+ *   - 2 (v3 launch, 2026-05-20): added p2p wanted-listing flow. New
+ *     consent dimensions: locking ADA + NFT at a permissionless script
+ *     address open to any counterparty (human or automated), the
+ *     "deposit" terminology + math, reclaim-is-user's-job.
  *
  * The {@link AcceptedRecord.acceptedAt} timestamp stored in localStorage
  * is per-user audit metadata — it tells us when *this device* accepted
@@ -226,8 +226,8 @@ export function TermsGate() {
             </span>
             <span>
               A p2p offer locks your NFT + ADA at a script open to any
-              counterparty — including a project-run bot. Reclaim is on
-              you; nothing auto-expires.
+              counterparty — human or automated. Reclaim is on you;
+              nothing auto-expires.
             </span>
           </li>
           <li className="flex gap-2">

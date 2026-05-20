@@ -488,13 +488,11 @@ function ListingSummary({
       </dl>
       {/* Inline risk disclosure for the seller side. The swap is atomic
           and final; once you sign you've given up the deposited NFT.
-          The buyer above may also be our auto-fulfiller bot — that's
-          fine, but disclose it. */}
+          Permissionless contract — counterparty could be anyone. */}
       <p className="pt-2 text-[11px] leading-snug text-zinc-500">
         the swap is atomic and final — no refunds, no take-backs. the
-        listed offer may have been posted by another user or by our
-        auto-fulfiller bot; the contract rules are identical either
-        way.
+        listed offer could have been posted by anyone (human or
+        automated); the contract rules are identical either way.
       </p>
     </section>
   );
