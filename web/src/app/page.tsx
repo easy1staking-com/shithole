@@ -40,7 +40,7 @@ export default function HomePage() {
           <section className="space-y-3">
             <SectionHeader
               title="p2p"
-              subtitle="trade direct — find a delegator who wants your specific traits."
+              subtitle="trade direct — pick the s#!t you actually want, dump the s#!t you don't."
             />
             <P2pGrid data={data} />
           </section>
