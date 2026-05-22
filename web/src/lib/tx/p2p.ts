@@ -89,7 +89,7 @@ export type FulfillRedeemerInput = {
  *     Some(Inline(cred)) → Constr 0 [Constr 0 [cred]]
  *     None               → Constr 1 []
  */
-function addressData(parts: {
+export function addressData(parts: {
   paymentKeyHashHex: Hex;
   paymentCredentialType: "verification_key" | "script";
   stakeCredentialHashHex: Hex | null;

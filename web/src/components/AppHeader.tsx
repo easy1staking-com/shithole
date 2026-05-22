@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { NavMenu } from "@/components/NavMenu";
+import { isMarketplaceEnabled } from "@/lib/market/config";
 import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 
 /**
@@ -73,6 +74,16 @@ export function AppHeader() {
                 { label: "your history", href: "/me/history?type=p2p" },
               ]}
             />
+            {isMarketplaceEnabled() ? (
+              <NavMenu
+                label="market"
+                items={[
+                  { label: "browse", href: "/market" },
+                  { label: "list something", href: "/market/new" },
+                  { label: "dev tools", href: "/market/dev-tools" },
+                ]}
+              />
+            ) : null}
           </nav>
         </div>
         <WalletConnectButton />
