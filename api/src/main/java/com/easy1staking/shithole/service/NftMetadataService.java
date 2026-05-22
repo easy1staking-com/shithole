@@ -271,21 +271,38 @@ public class NftMetadataService {
         if (!(onchain instanceof ObjectNode obj)) return null;
         var traits = objectMapper.createArrayNode();
 
-        // Dialect 1: nested-object container under any of the known keys.
-        // "-----Traits-----" is HOSKY CashGrab's literal key (5 dashes,
-        // "Traits", 5 dashes); the aggregator script at
-        // .local/backfill-hosky-traits.py uses the same fallback chain.
+        // Dialect 1: traits container under any of the known nested keys.
+        // Two sub-shapes can appear:
+        //   (a) flat object  — {Background: "Cyan", Fur: "Original", ...}
+        //   (b) array of single-key dicts — [{Background: "Cyan"}, ...]
+        //       CIP-25 v1's recommended shape; HOSKY CashGrab uses this
+        //       under the literal "-----Traits-----" key.
+        // ".local/backfill-hosky-traits.py" mirrors the same fallback chain.
         for (String key : NESTED_TRAIT_KEYS) {
-            JsonNode nested = obj.get(key);
-            if (nested != null && nested.isObject()) {
-                Iterator<String> names = nested.fieldNames();
+            JsonNode container = obj.get(key);
+            if (container == null) continue;
+            if (container.isObject()) {
+                Iterator<String> names = container.fieldNames();
                 while (names.hasNext()) {
                     String k = names.next();
-                    String txt = textOrJoined(nested.get(k));
+                    String txt = textOrJoined(container.get(k));
                     if (txt == null) continue;
                     ObjectNode pair = objectMapper.createObjectNode();
                     pair.put(k, txt);
                     traits.add(pair);
+                }
+            } else if (container.isArray()) {
+                for (JsonNode entry : container) {
+                    if (!entry.isObject()) continue;
+                    Iterator<String> names = entry.fieldNames();
+                    while (names.hasNext()) {
+                        String k = names.next();
+                        String txt = textOrJoined(entry.get(k));
+                        if (txt == null) continue;
+                        ObjectNode pair = objectMapper.createObjectNode();
+                        pair.put(k, txt);
+                        traits.add(pair);
+                    }
                 }
             }
         }
