@@ -6,6 +6,7 @@ import com.bloxbean.cardano.client.backend.api.BackendService;
 import com.bloxbean.cardano.client.backend.model.Asset;
 import com.easy1staking.shithole.entity.NftMetadataEntity;
 import com.easy1staking.shithole.model.NftMetadataDto;
+import com.easy1staking.shithole.model.TraitWithRarity;
 import com.easy1staking.shithole.repository.NftMetadataRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +24,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+// `Map` retained for parseTraits's transient handling of CIP-25-style
+// single-entry objects.
 
 /**
  * NFT metadata resolution + cache. First sight of a {@code unit} triggers a
@@ -51,6 +54,7 @@ public class NftMetadataService {
     private final NftMetadataRepository repository;
     private final BackendService backendService;
     private final ObjectMapper objectMapper;
+    private final RarityService rarityService;
 
     /**
      * Resolve metadata for {@code unit}. Returns empty if Blockfrost has no
@@ -146,7 +150,7 @@ public class NftMetadataService {
     }
 
     private NftMetadataDto toDto(NftMetadataEntity e) {
-        List<Map<String, String>> traits = parseTraits(e.getTraitsJson());
+        List<TraitWithRarity> traits = parseTraits(e.getTraitsJson(), e.getPolicyId());
         return NftMetadataDto.builder()
                 .unit(e.getUnit())
                 .policyId(e.getPolicyId())
@@ -218,37 +222,93 @@ public class NftMetadataService {
         try { return Long.parseLong(s); } catch (NumberFormatException e) { return null; }
     }
 
-    /** Build a List<{key:value}> JSON for non-standard CIP-25 fields. */
+    /**
+     * Build a List&lt;{key:value}&gt; JSON for non-standard CIP-25 fields, covering
+     * the three dialects we've seen in mainnet metadata:
+     *
+     * <ul>
+     *   <li><b>Nested "traits" object</b> — HOSKY CashGrab and many CNFT
+     *       collections store properties under {@code "traits": {Fur: "...",
+     *       Eyes: "..."}}.</li>
+     *   <li><b>OpenSea-style "attributes" array</b> — {@code [{trait_type: "Fur",
+     *       value: "Original"}, ...]}.</li>
+     *   <li><b>Flat top-level fields</b> — older convention where each trait is a
+     *       top-level field alongside name/image (e.g. {@code {Fur: "Original",
+     *       image: "ipfs://..."}}).</li>
+     * </ul>
+     *
+     * All three dialects are scanned per call; an NFT using two of them at once
+     * is unusual but handled (entries merge into one list).
+     */
     private String extractTraits(JsonNode onchain) {
         if (!(onchain instanceof ObjectNode obj)) return null;
         var traits = objectMapper.createArrayNode();
+
+        // Dialect 1: nested "traits" object.
+        JsonNode nestedTraits = obj.get("traits");
+        if (nestedTraits != null && nestedTraits.isObject()) {
+            Iterator<String> names = nestedTraits.fieldNames();
+            while (names.hasNext()) {
+                String k = names.next();
+                String txt = textOrJoined(nestedTraits.get(k));
+                if (txt == null) continue;
+                ObjectNode pair = objectMapper.createObjectNode();
+                pair.put(k, txt);
+                traits.add(pair);
+            }
+        }
+
+        // Dialect 2: OpenSea-style "attributes" array.
+        JsonNode attrs = obj.get("attributes");
+        if (attrs != null && attrs.isArray()) {
+            for (JsonNode attr : attrs) {
+                JsonNode tt = attr.get("trait_type");
+                if (tt == null || !tt.isTextual()) continue;
+                String txt = textOrJoined(attr.get("value"));
+                if (txt == null) continue;
+                ObjectNode pair = objectMapper.createObjectNode();
+                pair.put(tt.asText(), txt);
+                traits.add(pair);
+            }
+        }
+
+        // Dialect 3: flat top-level fields. Skip the standard CIP-25 fields
+        // (they map to dedicated columns) AND "traits"/"attributes" which we
+        // already drained above to avoid double-counting.
         Iterator<String> names = obj.fieldNames();
         while (names.hasNext()) {
             String k = names.next();
-            // Skip the standard CIP-25 fields — those map to dedicated columns.
             if (k.equals("name") || k.equals("image") || k.equals("mediaType")
-                    || k.equals("description") || k.equals("files")) continue;
-            JsonNode v = obj.get(k);
-            String txt = textOrJoined(v);
+                    || k.equals("description") || k.equals("files")
+                    || k.equals("traits") || k.equals("attributes")) continue;
+            String txt = textOrJoined(obj.get(k));
             if (txt == null) continue;
             ObjectNode pair = objectMapper.createObjectNode();
             pair.put(k, txt);
             traits.add(pair);
         }
+
         return traits.isEmpty() ? null : traits.toString();
     }
 
-    private List<Map<String, String>> parseTraits(String traitsJson) {
+    /**
+     * Parse the cached traits JSON (a {@code List<{key:value}>} produced by
+     * {@link #extractTraits}) into the API response shape. Each entry is enriched
+     * via {@link RarityService#enrich} so callers see collection-wide count/pct
+     * when available — for collections without rarity data the rarity fields
+     * stay null and the FE renders without a rarity chip.
+     */
+    private List<TraitWithRarity> parseTraits(String traitsJson, String policyId) {
         if (traitsJson == null || traitsJson.isBlank()) return new ArrayList<>();
         try {
             JsonNode root = objectMapper.readTree(traitsJson);
-            List<Map<String, String>> out = new ArrayList<>(root.size());
+            List<TraitWithRarity> out = new ArrayList<>(root.size());
             for (JsonNode pair : root) {
                 if (!pair.isObject()) continue;
                 Iterator<Map.Entry<String, JsonNode>> it = pair.fields();
                 if (it.hasNext()) {
                     Map.Entry<String, JsonNode> e = it.next();
-                    out.add(Map.of(e.getKey(), e.getValue().asText()));
+                    out.add(rarityService.enrich(policyId, e.getKey(), e.getValue().asText()));
                 }
             }
             return out;

@@ -8,13 +8,15 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * NFT metadata response. Shape matches FE fixture {@code nft/<unit>.json}.
  *
- * <p>{@code traits} is a list of single-entry maps mirroring the on-chain CIP-25
- * convention {@code [{"Background": "Cyan"}, {"Fur": "Original"}]}.
+ * <p>{@code traits} is a list of {@link TraitWithRarity} entries — each carries
+ * the trait's {@code category} and {@code value} (always populated), plus a
+ * collection-wide {@code count} + {@code pct} when the BE has a rarity table
+ * loaded for the NFT's policy. For collections without rarity data, the
+ * rarity fields are null and the FE renders without the rarity chip.
  */
 @Data
 @NoArgsConstructor
@@ -49,7 +51,7 @@ public class NftMetadataDto {
     @JsonProperty("image_url")
     private String imageUrl;
 
-    private List<Map<String, String>> traits;
+    private List<TraitWithRarity> traits;
 
     private String description;
 }
