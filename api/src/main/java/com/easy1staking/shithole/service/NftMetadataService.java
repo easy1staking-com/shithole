@@ -24,8 +24,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 // `Map` retained for parseTraits's transient handling of CIP-25-style
 // single-entry objects.
+
+// Known dialect keys we've seen in mainnet metadata. "-----Traits-----" is
+// HOSKY CashGrab's literal nested-object key (mirrors the chain of
+// fallbacks the .local/backfill-hosky-traits.py aggregator uses).
 
 /**
  * NFT metadata resolution + cache. First sight of a {@code unit} triggers a
@@ -50,6 +55,28 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class NftMetadataService {
+
+    private static final List<String> NESTED_TRAIT_KEYS = List.of(
+            "-----Traits-----",
+            "traits",
+            "Traits",
+            "properties",
+            "Properties"
+    );
+
+    private static final List<String> ATTRIBUTES_ARRAY_KEYS = List.of(
+            "attributes",
+            "Attributes"
+    );
+
+    private static final Set<String> FLAT_SKIP_KEYS = Set.of(
+            // Standard CIP-25 scalar fields — mapped to dedicated columns.
+            "name", "image", "mediaType", "description", "files",
+            // Already drained by NESTED_TRAIT_KEYS / ATTRIBUTES_ARRAY_KEYS;
+            // skip in the flat-scan pass to avoid double-counting.
+            "-----Traits-----", "traits", "Traits", "properties", "Properties",
+            "attributes", "Attributes"
+    );
 
     private final NftMetadataRepository repository;
     private final BackendService backendService;
@@ -244,43 +271,48 @@ public class NftMetadataService {
         if (!(onchain instanceof ObjectNode obj)) return null;
         var traits = objectMapper.createArrayNode();
 
-        // Dialect 1: nested "traits" object.
-        JsonNode nestedTraits = obj.get("traits");
-        if (nestedTraits != null && nestedTraits.isObject()) {
-            Iterator<String> names = nestedTraits.fieldNames();
-            while (names.hasNext()) {
-                String k = names.next();
-                String txt = textOrJoined(nestedTraits.get(k));
-                if (txt == null) continue;
-                ObjectNode pair = objectMapper.createObjectNode();
-                pair.put(k, txt);
-                traits.add(pair);
+        // Dialect 1: nested-object container under any of the known keys.
+        // "-----Traits-----" is HOSKY CashGrab's literal key (5 dashes,
+        // "Traits", 5 dashes); the aggregator script at
+        // .local/backfill-hosky-traits.py uses the same fallback chain.
+        for (String key : NESTED_TRAIT_KEYS) {
+            JsonNode nested = obj.get(key);
+            if (nested != null && nested.isObject()) {
+                Iterator<String> names = nested.fieldNames();
+                while (names.hasNext()) {
+                    String k = names.next();
+                    String txt = textOrJoined(nested.get(k));
+                    if (txt == null) continue;
+                    ObjectNode pair = objectMapper.createObjectNode();
+                    pair.put(k, txt);
+                    traits.add(pair);
+                }
             }
         }
 
         // Dialect 2: OpenSea-style "attributes" array.
-        JsonNode attrs = obj.get("attributes");
-        if (attrs != null && attrs.isArray()) {
-            for (JsonNode attr : attrs) {
-                JsonNode tt = attr.get("trait_type");
-                if (tt == null || !tt.isTextual()) continue;
-                String txt = textOrJoined(attr.get("value"));
-                if (txt == null) continue;
-                ObjectNode pair = objectMapper.createObjectNode();
-                pair.put(tt.asText(), txt);
-                traits.add(pair);
+        for (String key : ATTRIBUTES_ARRAY_KEYS) {
+            JsonNode attrs = obj.get(key);
+            if (attrs != null && attrs.isArray()) {
+                for (JsonNode attr : attrs) {
+                    JsonNode tt = attr.get("trait_type");
+                    if (tt == null || !tt.isTextual()) continue;
+                    String txt = textOrJoined(attr.get("value"));
+                    if (txt == null) continue;
+                    ObjectNode pair = objectMapper.createObjectNode();
+                    pair.put(tt.asText(), txt);
+                    traits.add(pair);
+                }
             }
         }
 
         // Dialect 3: flat top-level fields. Skip the standard CIP-25 fields
-        // (they map to dedicated columns) AND "traits"/"attributes" which we
-        // already drained above to avoid double-counting.
+        // (they map to dedicated columns) AND any key we already drained as
+        // a nested container above, to avoid double-counting.
         Iterator<String> names = obj.fieldNames();
         while (names.hasNext()) {
             String k = names.next();
-            if (k.equals("name") || k.equals("image") || k.equals("mediaType")
-                    || k.equals("description") || k.equals("files")
-                    || k.equals("traits") || k.equals("attributes")) continue;
+            if (FLAT_SKIP_KEYS.contains(k)) continue;
             String txt = textOrJoined(obj.get(k));
             if (txt == null) continue;
             ObjectNode pair = objectMapper.createObjectNode();
