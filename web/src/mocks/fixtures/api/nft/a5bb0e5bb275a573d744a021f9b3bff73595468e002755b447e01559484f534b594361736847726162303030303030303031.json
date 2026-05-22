@@ -11,25 +11,46 @@
   "image_url": "/mocks/fixtures/hosky/images/HOSKYCashGrab000000001.png",
   "traits": [
     {
-      "Background": "Cyan"
+      "category": "Background",
+      "value": "Cyan",
+      "count": 14436,
+      "pct": 3.4337
     },
     {
-      "Fur": "Original"
+      "category": "Fur",
+      "value": "Original",
+      "count": 151663,
+      "pct": 36.0742
     },
     {
-      "Eyes": "Original"
+      "category": "Eyes",
+      "value": "Original",
+      "count": 159530,
+      "pct": 37.9454
     },
     {
-      "Ear Decoration": "Double Left Rings"
+      "category": "Ear Decoration",
+      "value": "Double Left Rings",
+      "count": 5462,
+      "pct": 1.2992
     },
     {
-      "Neck": "Red Collar Gold Spikes"
+      "category": "Neck",
+      "value": "Red Collar Gold Spikes",
+      "count": 19308,
+      "pct": 4.5926
     },
     {
-      "Mouth": "Original"
+      "category": "Mouth",
+      "value": "Original",
+      "count": 231571,
+      "pct": 55.0809
     },
     {
-      "Frame": "Ikea"
+      "category": "Frame",
+      "value": "Ikea",
+      "count": 20669,
+      "pct": 4.9163
     }
   ],
   "description": null
