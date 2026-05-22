@@ -1,8 +1,10 @@
 use aiken/collection/list
 use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use cardano/address.{Address, Script}
-use cardano/assets.{AssetName, PolicyId, quantity_of}
-use cardano/transaction.{InlineDatum, OutputReference, Transaction, find_input}
+use cardano/assets.{AssetName, PolicyId, Value, quantity_of}
+use cardano/transaction.{
+  InlineDatum, Input, Output, OutputReference, Transaction, find_input,
+}
 use shithole/utils
 
 // ============================================================================
@@ -20,26 +22,49 @@ use shithole/utils
 // fee means the buyer pays 100 total, of which 98 goes to the seller and 2
 // to the protocol jar. Concretely:
 //   1. spends the listing UTxO
-//   2. routes `>= price_qty - ceil(price_qty * 2 / 100)` of
-//      `(price_policy, price_name)` to the seller's declared address,
-//      tagged with `compute_output_tag(own_ref)` so the payment is bound to
-//      THIS specific listing
-//   3. routes `>= ceil(price_qty * 2 / 100)` of the SAME asset to the jar
-//      UTxO, enforced via a jar input/output value-delta check (no need to
-//      read the jar's redeemer; the direct delta is cleaner and
-//      shape-agnostic).
+//   2. routes `>= seller_amount` of `(price_policy, price_name)` to the
+//      seller's declared address, tagged with `compute_output_tag(own_ref)`
+//      so the payment is bound to THIS specific listing
+//   3. credits the jar with at least the listing's expected fee. Across the
+//      whole tx this is enforced as an AGGREGATE check (see below).
 // In the canonical case the buyer's total outlay equals `price_qty`. Both
 // legs are `>=` so an overly generous buyer can top up either side.
 //
-// The 2 % fee is HARDCODED. One marketplace instance per (admin, fee-rate)
-// pair; admin lives on the jar, not here. The jar's `script_hash` is the
-// only compile-time parameter — it derives the jar address used to locate
-// the fee-bearing input and continuing output.
+// ----------------------------------------------------------------------------
+// BULK BUY
 //
-// Class-B double-satisfaction (two listings believing a single jar deposit
-// credits both) is foreclosed by B2: exactly one input at the marketplace
-// address per tx. Without B2, a buyer could batch two listings + one jar
-// deposit and have both validators count the same delta as their fee.
+// The validator supports any number of marketplace listings in a single tx,
+// including listings priced in DIFFERENT (policy, name) pairs. To avoid
+// every spend redundantly walking inputs and decoding every other listing's
+// datum, the aggregate-fee check runs on EXACTLY ONE spend per tx: the
+// "leader". Leader election is by lowest OutRef among marketplace inputs —
+// the Plutus v3 script context delivers `tx.inputs` in canonical (sorted)
+// order, so `list.find(inputs, addr == own_address)` returns the same
+// input no matter which spend is currently running. Each spend asks "is
+// that me?"; exactly one says yes.
+//
+// Per-spend (everyone):
+//   - B1   price_qty > 0
+//   - B3   seller output: address, datum tag, value (strict non-ADA equality
+//          on the price token + `>=` lovelace, fused into one assets.match)
+//   - B4   jar_input at jar_script_hash       \
+//   - B5   jar_output continues at jar address /  enforce hint consistency
+//                                                 across all spends in tx
+// Leader-only (lowest-outref marketplace input):
+//   - B6_agg  for every (policy, name) appearing as a price denomination in
+//             any marketplace input, jar's value-bag delta on that pair
+//             must cover the sum of all listings' expected fees in that
+//             token. Built up as a Value via assets.add, then flatten +
+//             list.all over the entries.
+//
+// Class-A double-sat (two listings collapsing into one seller output) is
+// foreclosed by the tag binding on each seller output — every consumed
+// listing demands a uniquely-tagged payout.
+//
+// Class-B double-sat (two listings claiming the same jar deposit as their
+// own fee) is foreclosed by the aggregate-fee check: the leader sums fees
+// across EVERY marketplace input in the tx and demands jar delta covers
+// the total. Buyers cannot under-pay no matter how they arrange the tx.
 //
 // Datum is `Option<Data>` so a future Rescue path (admin recovery of
 // accidental pay-to-script with NoDatum) can be added without breaking
@@ -78,7 +103,11 @@ pub type MarketDatum {
 
 pub type MarketRedeemer {
   /// Buyer fulfills the listing. Indexes hint O(1) lookup of the jar
-  /// input/output and the seller-payment output.
+  /// input/output and THIS listing's seller-payment output. In a bulk tx
+  /// every Buy redeemer should carry the same `jar_input_index` and
+  /// `jar_output_index` (off-chain consistency — each spend re-checks B4/B5
+  /// against its own redeemer hints); `seller_output_index` differs per
+  /// listing.
   Buy { jar_input_index: Int, jar_output_index: Int, seller_output_index: Int }
   /// Seller withdraws. No output constraints — the seller signed; their
   /// asset, their call.
@@ -121,30 +150,8 @@ validator marketplace(jar_script_hash: ScriptHash) {
 }
 
 // ============================================================================
-// Buy path
+// Per-listing checks (run on EVERY spend in a bulk tx).
 // ============================================================================
-//
-// Invariants (cheap-first; the value-delta hash on B6 is the last thing
-// we do):
-//   B1  price_qty > 0 (sanity; also makes the ceil-fee strictly positive)
-//   B2  exactly one input at THIS marketplace address (Class-B defense)
-//   B3+B7  seller_output @ seller_output_index, in one `assets.match`:
-//            - address == datum.seller_address
-//            - datum   == InlineDatum(compute_output_tag(own_ref))
-//            - non-ADA value: STRICT equality with
-//              {price_policy -> {price_name -> seller_amount}}
-//              where seller_amount = price_qty - ceil(price_qty * 2 / 100)
-//              (no junk tokens permitted; for ADA-priced listings this slot
-//               is empty on both sides)
-//            - lovelace: >= datum.accompanying_lovelace (CNT case) or
-//              >= seller_amount + accompanying_lovelace (ADA case — the
-//              price-token side accumulates onto the lovelace slot via
-//              assets.add, and the assets.match callback enforces `>=`)
-//   B4  jar_input @ jar_input_index:
-//         - payment_credential == Script(jar_script_hash)
-//   B5  jar_output @ jar_output_index:
-//         - address == jar_input.address  (continuing UTxO)
-//   B6  jar value delta on (price_policy, price_name) >= ceil(price_qty * 2 / 100)
 
 fn validate_buy(
   self: Transaction,
@@ -157,32 +164,21 @@ fn validate_buy(
 ) -> Bool {
   let Transaction { inputs, outputs, .. } = self
 
-  // Resolve own input once — used to derive the marketplace address for B2.
   expect Some(own_input) = find_input(inputs, own_ref)
   let own_address = own_input.output.address
 
-  // Fee math, computed once up front. `expected_fee` is the integer ceiling
-  // of 2 % of price_qty; `seller_amount` is what the seller must receive
-  // (price IS inclusive of fee). For price_qty > 0 the fee is always >= 1
-  // and seller_amount may bottom out at 0 for tiny prices (e.g. price = 1
-  // -> fee = 1, seller = 0 — degenerate but not exploitable).
+  // Fee math (per-listing): expected_fee is the integer ceiling of 2 % of
+  // price_qty; seller_amount is what THIS listing's payout owes the seller.
   let expected_fee = ( input_datum.price_qty * 2 + 99 ) / 100
   let seller_amount = input_datum.price_qty - expected_fee
 
-  // B3: seller-payment output via O(1) hint.
+  // ---- B3: seller-payment output for THIS listing ----
+  // O(1) hint, strict non-ADA equality + `>=` lovelace via assets.match.
+  // For ADA-priced listings the price-token side accumulates onto the
+  // lovelace slot — the callback then enforces
+  // `actual >= seller_amount + accompanying_lovelace` in one shot.
   let seller_out = list.expect_at(outputs, seller_output_index)
   let own_tag = utils.compute_output_tag(own_ref)
-  let expected_seller_datum = InlineDatum(own_tag)
-  // B3 + B7 combined: build the expected seller-payment value once and
-  // delegate to `assets.match`. The non-ADA half is enforced as STRICT
-  // equality (seller output must carry exactly `seller_amount` of the
-  // price token and nothing else under any non-ADA policy — no
-  // buyer-injected junk allowed); the ADA half uses `>=` so the buyer can
-  // top up the output above the declared bond. For ADA-priced listings
-  // the price token IS ADA, so `assets.add(value, ada_policy, ada_name,
-  // seller_amount)` accumulates onto the lovelace slot — the callback
-  // then enforces `actual_lovelace >= seller_amount + accompanying_lovelace`
-  // in one shot. Same code path serves both currencies.
   let expected_seller_payment =
     assets.from_lovelace(input_datum.accompanying_lovelace)
       |> assets.add(
@@ -191,8 +187,9 @@ fn validate_buy(
           seller_amount,
         )
   let expected_payment_data: Data = expected_seller_payment
+  expect input_datum.price_qty > 0
   expect seller_out.address == input_datum.seller_address
-  expect seller_out.datum == expected_seller_datum
+  expect seller_out.datum == InlineDatum(own_tag)
   expect
     assets.match(
       seller_out.value,
@@ -202,34 +199,89 @@ fn validate_buy(
       },
     )
 
-  // B4/B5: locate the jar leg via O(1) hints.
+  // ---- B4 + B5: jar leg sanity (per-spend) ----
+  // Each spend resolves its own redeemer's jar hints and asserts they point
+  // at a real jar leg (input at the configured jar script, output continuing
+  // at the same address). Forces the off-chain tx-builder to set consistent
+  // jar_input_index / jar_output_index across every Buy redeemer in the tx.
+  // The aggregate fee check itself is leader-only (below).
   let jar_in = list.expect_at(inputs, jar_input_index)
   let jar_out = list.expect_at(outputs, jar_output_index)
+  expect jar_in.output.address.payment_credential == Script(jar_script_hash)
+  expect jar_out.address == jar_in.output.address
 
-  let actual_fee = quantity_of(
-    jar_out.value,
-    input_datum.price_policy,
-    input_datum.price_name,
-  ) - quantity_of(
-    jar_in.output.value,
-    input_datum.price_policy,
-    input_datum.price_name,
-  )
+  // ---- Leader detection ----
+  // tx.inputs is canonically sorted by OutRef in Plutus v3, so list.find
+  // returns the lowest-outref marketplace input — deterministically the
+  // same input no matter which spend is running. Exactly one spend will
+  // find that this input IS itself.
+  expect Some(first_marketplace) =
+    list.find(inputs, fn(i) { i.output.address == own_address })
 
-  and {
-    // B1: positive price.
-    (input_datum.price_qty > 0)?,
-    // B2: exactly one consumed input at this marketplace address. Forbids
-    // multi-listing batching; pairs with B6's direct delta check to make
-    // jar-deposit theft (Class B) impossible.
-    (list.count(inputs, fn(i) { i.output.address == own_address }) == 1)?,
-    // B4: the fee input is at the configured jar script.
-    (jar_in.output.address.payment_credential == Script(jar_script_hash))?,
-    // B5: jar continues at the same address (admin can't redirect mid-tx).
-    (jar_out.address == jar_in.output.address)?,
-    // B6: jar value delta on (price_policy, price_name) covers the ceiling
-    // 2 % fee. Reading both sides via `quantity_of` (which returns 0 on
-    // missing keys) lets the same code path handle ADA and CNT fees.
-    (actual_fee >= expected_fee)?,
+  if first_marketplace.output_reference == own_ref {
+    // Leader path — run the aggregate fee check once for the whole tx.
+    validate_aggregate_fee(inputs, own_address, jar_in, jar_out)
+  } else {
+    // Non-leader path — trust the leader to verify the aggregate.
+    True
   }
+}
+
+// ============================================================================
+// Leader-only aggregate-fee check.
+//
+// Walk every marketplace input in tx.inputs, decode each datum, and
+// accumulate expected fees grouped by (price_policy, price_name) into a
+// running `Value`. Then for every (policy, name, expected_qty) triple in
+// that value bag, assert the jar's delta on that pair is `>= expected_qty`.
+//
+// `assets.add` merges same-token entries on the fly, so listings priced in
+// the same token contribute additively. Listings priced in different
+// tokens create separate entries, each independently checked against the
+// jar.
+// ============================================================================
+
+fn validate_aggregate_fee(
+  inputs: List<Input>,
+  marketplace_address: Address,
+  jar_in: Input,
+  jar_out: Output,
+) -> Bool {
+  let expected_jar_delta =
+    list.foldr(
+      inputs,
+      assets.zero,
+      fn(input, acc) {
+        if input.output.address == marketplace_address {
+          expect InlineDatum(input_data) = input.output.datum
+          expect md: MarketDatum = input_data
+          let fee = ( md.price_qty * 2 + 99 ) / 100
+          assets.add(acc, md.price_policy, md.price_name, fee)
+        } else {
+          acc
+        }
+      },
+    )
+
+  expected_jar_delta
+    |> jar_delta_covers_each_token(jar_in.output.value, jar_out.value)
+}
+
+/// For every (policy, name, expected_qty) in `expected_delta`, check
+/// `quantity_of(jar_out_value, p, n) - quantity_of(jar_in_value, p, n) >= expected_qty`.
+/// Other tokens present in the jar's value bag are ignored — we only care
+/// that the FEE tokens went up by at least the expected amount.
+fn jar_delta_covers_each_token(
+  expected_delta: Value,
+  jar_in_value: Value,
+  jar_out_value: Value,
+) -> Bool {
+  expected_delta
+    |> assets.flatten
+    |> list.all(
+        fn(triple) {
+          let (p, n, expected_qty) = triple
+          quantity_of(jar_out_value, p, n) - quantity_of(jar_in_value, p, n) >= expected_qty
+        },
+      )
 }

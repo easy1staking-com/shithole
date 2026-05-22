@@ -1,6 +1,6 @@
 use aiken/fuzz
 use cardano/address.{Address, Inline, Script, VerificationKey}
-use cardano/assets.{ada_asset_name, ada_policy_id}
+use cardano/assets.{AssetName, PolicyId, ada_asset_name, ada_policy_id}
 use cardano/transaction.{
   InlineDatum, Input, NoDatum, Output, OutputReference, Transaction,
 }
@@ -479,13 +479,15 @@ test buy_fails_when_price_qty_is_negative() fail {
 }
 
 // ============================================================================
-// B2: exactly one input at the marketplace address (Class-B defense)
+// Bulk buy — aggregate fee enforcement (leader pattern)
 // ============================================================================
 
-test buy_fails_with_two_marketplace_inputs() fail {
-  // Two listings at the marketplace address + ONE jar deposit. Without B2
-  // a buyer could batch both listings and claim the single fee delta
-  // satisfies both invocations.
+test bulk_buy_fails_when_jar_delta_short_for_aggregate() fail {
+  // Two same-token listings (price 100 each, fee 2 each => aggregate 4)
+  // but the jar only got 2 deposited. The leader's aggregate-fee check
+  // catches this: jar delta < SUM of expected fees. Without the leader's
+  // sum-then-check, a buyer could pay for one listing and ride the other
+  // for free (Class B). Both listings A and B fail.
   let own_tag = utils.compute_output_tag(listing_outref())
   let other_tag = utils.compute_output_tag(other_listing_outref())
   let tx = Transaction {
@@ -497,14 +499,15 @@ test buy_fails_with_two_marketplace_inputs() fail {
       cnt_jar_input(),
     ],
     outputs: [
-      // Seller payment for listing A (idx 0)
       cnt_seller_output(own_tag, 98, test_seller_addr()),
-      // Seller payment for listing B (idx 1)
       cnt_seller_output(other_tag, 98, test_seller_addr()),
-      // Single jar deposit (idx 2) — would satisfy both fees absent B2.
+      // Only 2 token of fee deposited — covers ONE listing's fee, not both.
       cnt_jar_output(0, 2),
     ],
   }
+  // Invoke the LEADER (listing A — lowest outref). The aggregate check
+  // sums fees across both listings (= 4) and finds the jar delta (= 2)
+  // insufficient.
   let r = Buy {
     jar_input_index: 3,
     jar_output_index: 2,
@@ -924,6 +927,401 @@ test buy_succeeds_when_seller_output_overbonded() {
     outputs: [overbonded_seller, cnt_jar_output(0, 2)],
   }
   invoke_buy(tx, happy_cnt_buy_redeemer())
+}
+
+// ============================================================================
+// Bulk buy — leader-pattern + per-token aggregate fee check
+// ============================================================================
+//
+// Each bulk test invokes the marketplace spend ONCE PER LISTING with the
+// same Transaction, then ANDs the results. On-chain Plutus runs the spend
+// for every consumed input in parallel; the tx is valid iff EVERY
+// invocation returns True. We simulate that with `&&` here.
+//
+// Convention: listing A's outref is `listing_outref()` (0x...0010);
+// listing B's is `other_listing_outref()` (0x...0020). A has the lower
+// outref so A is always the leader.
+
+// A second token + name for mixed-currency bulk tests.
+const test_alt_policy =
+  #"cafef00dcafef00dcafef00dcafef00dcafef00dcafef00dcafef00d"
+
+const test_alt_name = #"414c54"
+
+// "ALT"
+
+/// Listing input at `oref` carrying the listed NFT + 2 ADA, with a
+/// caller-provided MarketDatum. Lets bulk tests mint listings that differ
+/// in price denomination or other datum fields.
+fn listing_input_with_datum(oref: OutputReference, md: MarketDatum) -> Input {
+  Input {
+    output_reference: oref,
+    output: Output {
+      address: test_marketplace_addr(),
+      value: assets.from_lovelace(2_000_000)
+        |> assets.add(test_listed_policy, test_listed_name, 1),
+      datum: InlineDatum(md),
+      reference_script: None,
+    },
+  }
+}
+
+/// Generic seller-output builder. Replaces `cnt_seller_output` when the
+/// token isn't the canonical PRICE.
+fn seller_output_for_token(
+  tag: ByteArray,
+  p: PolicyId,
+  n: AssetName,
+  qty: Int,
+  lovelace: Int,
+  to: Address,
+) -> Output {
+  Output {
+    address: to,
+    value: assets.from_lovelace(lovelace) |> assets.add(p, n, qty),
+    datum: InlineDatum(tag),
+    reference_script: None,
+  }
+}
+
+/// Invoke the marketplace spend for a specific consumed listing.
+fn invoke_bulk_spend(
+  datum: MarketDatum,
+  own_ref: OutputReference,
+  redeemer: MarketRedeemer,
+  tx: Transaction,
+) -> Bool {
+  let d: Data = datum
+  marketplace.marketplace.spend(
+    test_jar_script_hash,
+    Some(d),
+    redeemer,
+    own_ref,
+    tx,
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 2-listing same-token happy path
+// ---------------------------------------------------------------------------
+
+test bulk_buy_succeeds_two_listings_same_token() {
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let tag_b = utils.compute_output_tag(other_listing_outref())
+  let datum = cnt_datum()
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      // Inputs canonically sorted by outref. A (0x10) < B (0x20).
+      cnt_listing_input(),
+      cnt_listing_input_at(other_listing_outref()),
+      buyer_funding_input(),
+      cnt_jar_input(),
+    ],
+    outputs: [
+      // Seller A (idx 0) and seller B (idx 1) — each tagged to ITS listing.
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      cnt_seller_output(tag_b, 98, test_seller_addr()),
+      // Jar (idx 2): 2 + 2 = 4 PRICE tokens deposited.
+      cnt_jar_output(0, 4),
+    ],
+  }
+  let r_a =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 0 }
+  let r_b =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 1 }
+  let a_ok = invoke_bulk_spend(datum, listing_outref(), r_a, tx)
+  let b_ok = invoke_bulk_spend(datum, other_listing_outref(), r_b, tx)
+  a_ok && b_ok
+}
+
+// ---------------------------------------------------------------------------
+// 2-listing mixed-currency happy path
+// ---------------------------------------------------------------------------
+
+test bulk_buy_succeeds_two_listings_mixed_tokens() {
+  // Listing A: price 100 PRICE -> fee 2, seller 98.
+  // Listing B: price 50 ALT    -> fee 1, seller 49.
+  // Jar must gain >= 2 PRICE AND >= 1 ALT. The aggregate check splits per
+  // (policy, name) and verifies each.
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let tag_b = utils.compute_output_tag(other_listing_outref())
+  let datum_a = cnt_datum()
+  let datum_b =
+    MarketDatum {
+      seller_pkh: test_seller_pkh,
+      seller_address: test_seller_addr(),
+      price_policy: test_alt_policy,
+      price_name: test_alt_name,
+      price_qty: 50,
+      accompanying_lovelace: 1_500_000,
+    }
+  let jar_out_value =
+    assets.from_lovelace(2_000_000)
+      |> assets.add(test_price_policy, test_price_name, 2)
+      |> assets.add(test_alt_policy, test_alt_name, 1)
+  let jar_out =
+    Output {
+      address: test_jar_addr(),
+      value: jar_out_value,
+      datum: InlineDatum(0),
+      reference_script: None,
+    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      cnt_listing_input(),
+      listing_input_with_datum(other_listing_outref(), datum_b),
+      buyer_funding_input(),
+      cnt_jar_input(),
+    ],
+    outputs: [
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      seller_output_for_token(
+        tag_b,
+        test_alt_policy,
+        test_alt_name,
+        49,
+        1_500_000,
+        test_seller_addr(),
+      ),
+      jar_out,
+    ],
+  }
+  let r_a =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 0 }
+  let r_b =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 1 }
+  let a_ok = invoke_bulk_spend(datum_a, listing_outref(), r_a, tx)
+  let b_ok = invoke_bulk_spend(datum_b, other_listing_outref(), r_b, tx)
+  a_ok && b_ok
+}
+
+// ---------------------------------------------------------------------------
+// 3-listing same-token happy path
+// ---------------------------------------------------------------------------
+
+test bulk_buy_succeeds_three_listings_same_token() {
+  let oref_c =
+    OutputReference {
+      transaction_id: #"0000000000000000000000000000000000000000000000000000000000000030",
+      output_index: 0,
+    }
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let tag_b = utils.compute_output_tag(other_listing_outref())
+  let tag_c = utils.compute_output_tag(oref_c)
+  let datum = cnt_datum()
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      cnt_listing_input(),
+      cnt_listing_input_at(other_listing_outref()),
+      cnt_listing_input_at(oref_c),
+      buyer_funding_input(),
+      cnt_jar_input(),
+    ],
+    outputs: [
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      cnt_seller_output(tag_b, 98, test_seller_addr()),
+      cnt_seller_output(tag_c, 98, test_seller_addr()),
+      // Aggregate fee = 2 + 2 + 2 = 6
+      cnt_jar_output(0, 6),
+    ],
+  }
+  let r_a =
+    Buy { jar_input_index: 4, jar_output_index: 3, seller_output_index: 0 }
+  let r_b =
+    Buy { jar_input_index: 4, jar_output_index: 3, seller_output_index: 1 }
+  let r_c =
+    Buy { jar_input_index: 4, jar_output_index: 3, seller_output_index: 2 }
+  let a_ok = invoke_bulk_spend(datum, listing_outref(), r_a, tx)
+  let b_ok = invoke_bulk_spend(datum, other_listing_outref(), r_b, tx)
+  let c_ok = invoke_bulk_spend(datum, oref_c, r_c, tx)
+  a_ok && b_ok && c_ok
+}
+
+// ---------------------------------------------------------------------------
+// Jar overpayment on bulk is still accepted
+// ---------------------------------------------------------------------------
+
+test bulk_buy_succeeds_when_jar_overpaid() {
+  // Aggregate fee required = 4; buyer ships 7. Permitted.
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let tag_b = utils.compute_output_tag(other_listing_outref())
+  let datum = cnt_datum()
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      cnt_listing_input(),
+      cnt_listing_input_at(other_listing_outref()),
+      buyer_funding_input(),
+      cnt_jar_input(),
+    ],
+    outputs: [
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      cnt_seller_output(tag_b, 98, test_seller_addr()),
+      cnt_jar_output(0, 7),
+    ],
+  }
+  let r_a =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 0 }
+  let r_b =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 1 }
+  let a_ok = invoke_bulk_spend(datum, listing_outref(), r_a, tx)
+  let b_ok = invoke_bulk_spend(datum, other_listing_outref(), r_b, tx)
+  a_ok && b_ok
+}
+
+// ---------------------------------------------------------------------------
+// 2-listing mixed-currency, one token's delta is short -> fail
+// ---------------------------------------------------------------------------
+
+test bulk_buy_fails_when_alt_token_delta_short() fail {
+  // PRICE delta covers listing A (2 PRICE), but ALT delta is 0 — listing B
+  // requires 1 ALT. Leader's per-token aggregate check rejects.
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let tag_b = utils.compute_output_tag(other_listing_outref())
+  let datum_a = cnt_datum()
+  let datum_b =
+    MarketDatum {
+      seller_pkh: test_seller_pkh,
+      seller_address: test_seller_addr(),
+      price_policy: test_alt_policy,
+      price_name: test_alt_name,
+      price_qty: 50,
+      accompanying_lovelace: 1_500_000,
+    }
+  let jar_out_value =
+    // Only PRICE deposited; ALT delta = 0.
+    assets.from_lovelace(2_000_000)
+      |> assets.add(test_price_policy, test_price_name, 2)
+  let jar_out =
+    Output {
+      address: test_jar_addr(),
+      value: jar_out_value,
+      datum: InlineDatum(0),
+      reference_script: None,
+    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      cnt_listing_input(),
+      listing_input_with_datum(other_listing_outref(), datum_b),
+      buyer_funding_input(),
+      cnt_jar_input(),
+    ],
+    outputs: [
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      seller_output_for_token(
+        tag_b,
+        test_alt_policy,
+        test_alt_name,
+        49,
+        1_500_000,
+        test_seller_addr(),
+      ),
+      jar_out,
+    ],
+  }
+  // Invoke the LEADER (listing A) — its aggregate check sees ALT delta = 0
+  // and rejects.
+  let r_a =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 0 }
+  invoke_bulk_spend(datum_a, listing_outref(), r_a, tx)
+}
+
+// ---------------------------------------------------------------------------
+// 2-listing, B's seller output underpays -> B's local check fails
+// ---------------------------------------------------------------------------
+
+test bulk_buy_fails_when_listing_b_seller_underpaid() fail {
+  // Listing B's seller output ships 97 instead of 98 — B's per-spend B3
+  // assets.match rejects.
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let tag_b = utils.compute_output_tag(other_listing_outref())
+  let datum = cnt_datum()
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      cnt_listing_input(),
+      cnt_listing_input_at(other_listing_outref()),
+      buyer_funding_input(),
+      cnt_jar_input(),
+    ],
+    outputs: [
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      cnt_seller_output(tag_b, 97, test_seller_addr()),
+      cnt_jar_output(0, 4),
+    ],
+  }
+  let r_b =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 1 }
+  // Invoke B specifically — its local check fails.
+  invoke_bulk_spend(datum, other_listing_outref(), r_b, tx)
+}
+
+// ---------------------------------------------------------------------------
+// 2-listing, B's seller output tagged for the wrong outref -> B fails
+// ---------------------------------------------------------------------------
+
+test bulk_buy_fails_when_listing_b_seller_tag_wrong() fail {
+  // B's seller output is tagged with A's compute_output_tag — anti-double
+  // -sat binding rejects (B's per-spend B3 datum check).
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let datum = cnt_datum()
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      cnt_listing_input(),
+      cnt_listing_input_at(other_listing_outref()),
+      buyer_funding_input(),
+      cnt_jar_input(),
+    ],
+    outputs: [
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      // ↓ tagged with A's tag instead of B's
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      cnt_jar_output(0, 4),
+    ],
+  }
+  let r_b =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 1 }
+  invoke_bulk_spend(datum, other_listing_outref(), r_b, tx)
+}
+
+// ---------------------------------------------------------------------------
+// Non-leader's view: B's spend trusts the leader. Demonstrate that even
+// when listing A's aggregate would fail, B's individual spend may STILL
+// return True (it's just trusting the leader, which gets re-checked
+// separately). This pins the leader-pattern semantics.
+// ---------------------------------------------------------------------------
+
+test bulk_buy_listing_b_alone_passes_even_when_aggregate_short() {
+  // Jar got only 2 of the required 4 -> aggregate would fail at A. But B's
+  // local check (its own seller output) is fine, and B trusts A to do the
+  // aggregate. So invoking ONLY B returns True. (A's spend running on the
+  // same tx would fail and invalidate the tx in production — that's the
+  // leader-detection property at work.)
+  let tag_a = utils.compute_output_tag(listing_outref())
+  let tag_b = utils.compute_output_tag(other_listing_outref())
+  let datum = cnt_datum()
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      cnt_listing_input(),
+      cnt_listing_input_at(other_listing_outref()),
+      buyer_funding_input(),
+      cnt_jar_input(),
+    ],
+    outputs: [
+      cnt_seller_output(tag_a, 98, test_seller_addr()),
+      cnt_seller_output(tag_b, 98, test_seller_addr()),
+      cnt_jar_output(0, 2),
+    ],
+  }
+  let r_b =
+    Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 1 }
+  invoke_bulk_spend(datum, other_listing_outref(), r_b, tx)
 }
 
 // ============================================================================
