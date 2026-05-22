@@ -78,13 +78,10 @@ validator listing(config_nft_policy: PolicyId) {
         // initial listing creation always write a datum, so a legitimate
         // listing can never reach this path.
         expect None = datum
-        let cfg_input =
-          list.expect_find(
-            self.reference_inputs,
-            fn(i) {
-              assets.has_any_nft_strict(i.output.value, config_nft_policy)
-            },
-          )
+        let cfg_input = list.expect_find(
+          self.reference_inputs,
+          fn(i) { assets.has_any_nft_strict(i.output.value, config_nft_policy) },
+        )
         expect InlineDatum(cfg_data) = cfg_input.output.datum
         expect cfg: ConfigDatum = cfg_data
         utils.signed_by(self, cfg.admin_pkh)
@@ -135,19 +132,17 @@ fn validate_swap(
   // S1: locate the config UTxO via at-least-one ref input under
   // `config_nft_policy`. One-shot mint guarantees at most one asset under
   // this policy exists chain-wide.
-  let cfg_input =
-    list.expect_find(
-      reference_inputs,
-      fn(i) { assets.has_any_nft_strict(i.output.value, config_nft_policy) },
-    )
+  let cfg_input = list.expect_find(
+    reference_inputs,
+    fn(i) { assets.has_any_nft_strict(i.output.value, config_nft_policy) },
+  )
 
   // Extract the (asset_name, quantity) pair from the config NFT —
   // collection_policy_id IS the asset name (28 bytes, enforced at mint).
-  expect [Pair(actual_config_nft_policy, collection_nft)] =
-    cfg_input.output.value
-      |> assets.to_dict()
-      |> dict.expect_tail()
-      |> dict.to_pairs()
+  expect [Pair(actual_config_nft_policy, collection_nft)] = cfg_input.output.value
+    |> assets.to_dict()
+    |> dict.expect_tail()
+    |> dict.to_pairs()
   expect actual_config_nft_policy == config_nft_policy
 
   expect [Pair(collection_policy_id, 1)] = dict.to_pairs(collection_nft)
@@ -172,8 +167,11 @@ fn validate_swap(
   //      exactly one asset under that policy, with quantity 1.
   // Net: one walk through the value structure, replacing the previous
   // has_any_nft_strict + tokens.to_pairs (two walks).
-  expect [Pair(actual_collection_policy_id, na_inner)] =
-    assets.to_dict(input_value) |> dict.expect_tail() |> dict.to_pairs()
+  expect [Pair(actual_collection_policy_id, na_inner)] = assets.to_dict(
+    input_value,
+  )
+    |> dict.expect_tail()
+    |> dict.to_pairs()
   expect actual_collection_policy_id == collection_policy_id
   expect [Pair(na_asset_name, 1)] = dict.to_pairs(na_inner)
 
@@ -187,11 +185,10 @@ fn validate_swap(
 
   // Build the expected new listing datum once for S4 — compare-by-equality
   // saves field-by-field checks.
-  let expected_listing_datum =
-    ListingDatum {
-      lister_pkh: input_datum.lister_pkh,
-      update_ref: Some(own_tag),
-    }
+  let expected_listing_datum = ListingDatum {
+    lister_pkh: input_datum.lister_pkh,
+    update_ref: Some(own_tag),
+  }
   expect InlineDatum(out_listing_data) = out_listing.datum
   expect out_listing_datum: ListingDatum = out_listing_data
 
@@ -200,16 +197,15 @@ fn validate_swap(
   // strict equality and lets the callback assert any relation between the
   // two lovelace amounts. Combines S5 (strict NB) AND S6 (lovelace bound)
   // into one stdlib call.
-  let expected_output_value =
-    dict.from_ascending_pairs(
-      [
-        Pair(
-          ada_policy_id,
-          dict.singleton(ada_asset_name, input_lovelace + cfg.lister_fee),
-        ),
-        Pair(collection_policy_id, dict.singleton(nb_asset_name, 1)),
-      ],
-    )
+  let expected_output_value = dict.from_ascending_pairs(
+    [
+      Pair(
+        ada_policy_id,
+        dict.singleton(ada_asset_name, input_lovelace + cfg.lister_fee),
+      ),
+      Pair(collection_policy_id, dict.singleton(nb_asset_name, 1)),
+    ],
+  )
 
   and {
     // S3: continuing output at the same script address
@@ -280,16 +276,14 @@ fn bucket_equation(
   own_ref: OutputReference,
   m: Int,
 ) -> Bool {
-  let bucket_self =
-    collection_policy
-      |> bytearray.concat(na_asset_name)
-      |> blake2b_256
-      |> from_bytearray_big_endian
-  let bucket_target =
-    collection_policy
-      |> bytearray.concat(nb_asset_name)
-      |> bytearray.concat(cbor.serialise(own_ref))
-      |> blake2b_256
-      |> from_bytearray_big_endian
+  let bucket_self = collection_policy
+    |> bytearray.concat(na_asset_name)
+    |> blake2b_256
+    |> from_bytearray_big_endian
+  let bucket_target = collection_policy
+    |> bytearray.concat(nb_asset_name)
+    |> bytearray.concat(cbor.serialise(own_ref))
+    |> blake2b_256
+    |> from_bytearray_big_endian
   bucket_self % m == bucket_target % m
 }

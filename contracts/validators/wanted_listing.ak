@@ -75,13 +75,10 @@ validator wanted_listing(config_nft_policy: PolicyId) {
         // touched via this branch. Same semantics as v2 listing.ak's
         // Recover, renamed to avoid constructor-name collision in types.ak.
         expect None = datum
-        let cfg_input =
-          list.expect_find(
-            self.reference_inputs,
-            fn(i) {
-              assets.has_any_nft_strict(i.output.value, config_nft_policy)
-            },
-          )
+        let cfg_input = list.expect_find(
+          self.reference_inputs,
+          fn(i) { assets.has_any_nft_strict(i.output.value, config_nft_policy) },
+        )
         expect InlineDatum(cfg_data) = cfg_input.output.datum
         expect cfg: ConfigDatum = cfg_data
         utils.signed_by(self, cfg.admin_pkh)
@@ -136,16 +133,14 @@ fn validate_fulfill(
 
   // W1: locate config UTxO + extract cfg, collection_policy_id (= asset name
   // on the config NFT, enforced at config mint time).
-  let cfg_input =
-    list.expect_find(
-      reference_inputs,
-      fn(i) { assets.has_any_nft_strict(i.output.value, config_nft_policy) },
-    )
-  expect [Pair(actual_cfg_policy, cfg_nft)] =
-    cfg_input.output.value
-      |> assets.to_dict()
-      |> dict.expect_tail()
-      |> dict.to_pairs()
+  let cfg_input = list.expect_find(
+    reference_inputs,
+    fn(i) { assets.has_any_nft_strict(i.output.value, config_nft_policy) },
+  )
+  expect [Pair(actual_cfg_policy, cfg_nft)] = cfg_input.output.value
+    |> assets.to_dict()
+    |> dict.expect_tail()
+    |> dict.to_pairs()
   expect actual_cfg_policy == config_nft_policy
   expect [Pair(collection_policy_id, 1)] = dict.to_pairs(cfg_nft)
   expect InlineDatum(cfg_data) = cfg_input.output.datum
@@ -179,21 +174,22 @@ fn validate_fulfill(
   // route ONE NFT to satisfy both — the second listing's invocation needs
   // its own tag in its own output. Address check first, since it's the
   // more discriminating filter on a typical tx with diverse outputs.
-  expect Some(buyer_out) =
-    list.find(
-      outputs,
-      fn(o) {
-        o.address == input_datum.buyer_address && o.datum == buyer_out_datum
-      },
-    )
+  expect Some(buyer_out) = list.find(
+    outputs,
+    fn(o) {
+      o.address == input_datum.buyer_address && o.datum == buyer_out_datum
+    },
+  )
 
   // W3 (cont.): buyer_out strictly carries ONE NFT under collection_policy_id
   // and no other non-ADA assets. Extracting the deposit's asset_name from
   // the output (rather than the input) sidesteps the multi-listing "which
   // deposit belongs to me" question entirely — the seller commits via the
   // value they route to the buyer, and the validator reads it back.
-  let deposit_asset_name =
-    extract_single_collection_nft(buyer_out.value, collection_policy_id)
+  let deposit_asset_name = extract_single_collection_nft(
+    buyer_out.value,
+    collection_policy_id,
+  )
 
   // W4: merkle proof verifies deposit_asset_name → accepted_merkle_root via
   // the aiken_merkle_tree library (sha2_256 leaves + internals, directional
@@ -246,11 +242,10 @@ fn extract_single_collection_nft(
   // dict.expect_tail (relies on ADA's empty-bytestring policy id sorting
   // first ascending), then pattern-match the remainder as a single non-ADA
   // policy with a single 1-quantity asset.
-  expect [Pair(p, inner)] =
-    value
-      |> assets.to_dict()
-      |> dict.expect_tail()
-      |> dict.to_pairs()
+  expect [Pair(p, inner)] = value
+    |> assets.to_dict()
+    |> dict.expect_tail()
+    |> dict.to_pairs()
   expect p == collection_policy_id
   expect [Pair(name, 1)] = dict.to_pairs(inner)
   name

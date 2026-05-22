@@ -52,10 +52,9 @@ validator config(seed_utxo: OutputReference) {
     //        asset name length == 28 (= the collection policy id).
     // Pattern-matching the literal `1` does double duty: it both destructures
     // the (asset_name, quantity) pair AND asserts quantity == 1 in one step.
-    expect [Pair(asset_name, 1)] =
-      mint
-        |> assets.tokens(policy_id)
-        |> dict.to_pairs()
+    expect [Pair(asset_name, 1)] = mint
+      |> assets.tokens(policy_id)
+      |> dict.to_pairs()
 
     // M1: seed UTxO consumed (one-shot guarantee).
     list.expect_any(inputs, fn(input) { input.output_reference == seed_utxo })
@@ -93,16 +92,15 @@ validator config(seed_utxo: OutputReference) {
     // `assets.has_any_nft_strict` enforces "exactly one NFT under the
     // parameterized policy and no other non-ADA assets" — which is the right
     // continuity check for the config UTxO.
-    let output =
-      list.expect_find(
-        self.outputs,
-        fn(o) {
-          and {
-            o.address == own_address,
-            assets.has_any_nft_strict(o.value, policy_id),
-          }
-        },
-      )
+    let output = list.expect_find(
+      self.outputs,
+      fn(o) {
+        and {
+          o.address == own_address,
+          assets.has_any_nft_strict(o.value, policy_id),
+        }
+      },
+    )
 
     expect InlineDatum(out_data) = output.datum
     expect output_cfg: ConfigDatum = out_data
@@ -143,19 +141,18 @@ fn is_mint_output_valid(
   policy_id: PolicyId,
   asset_name: ByteArray,
 ) -> Bool {
-  let output =
-    list.expect_find(
-      outputs,
-      fn(o) {
-        when o.address.payment_credential is {
-          Script(hash) -> and {
-              hash == policy_id,
-              assets.has_nft_strict(o.value, policy_id, asset_name),
-            }
-          _ -> False
-        }
-      },
-    )
+  let output = list.expect_find(
+    outputs,
+    fn(o) {
+      when o.address.payment_credential is {
+        Script(hash) -> and {
+            hash == policy_id,
+            assets.has_nft_strict(o.value, policy_id, asset_name),
+          }
+        _ -> False
+      }
+    },
+  )
 
   expect InlineDatum(data) = output.datum
   expect cfg: ConfigDatum = data

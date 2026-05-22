@@ -36,8 +36,9 @@ pub fn invalid_config_datum() -> Fuzzer<ConfigDatum> {
   let field <- and_then(fuzz.int_between(0, 2))
   when field is {
     0 -> {
-      let bad <-
-        map(fuzz.either(fuzz.constant(0), fuzz.int_between(-1_000_000, -1)))
+      let bad <- map(
+        fuzz.either(fuzz.constant(0), fuzz.int_between(-1_000_000, -1)),
+      )
       ConfigDatum { ..base, m: bad }
     }
     1 -> {

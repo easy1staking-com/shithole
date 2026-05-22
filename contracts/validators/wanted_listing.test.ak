@@ -36,11 +36,17 @@ const test_admin_pkh =
 // Offered NFT (the buyer's "unwanted") and a sample of trait-matching NFTs
 // the seller might use as deposit.
 const test_offered_name = #"4f464645524544"
+
 // 28-byte asset names so the validator's strict 28-vs-32 length separator
 // for merkle leaves still holds against typical Cardano CNFT asset names.
-const test_deposit_name = #"aabbccddeeff00112233445566778899aabbccddeeff001122334411"
-const test_other_name = #"aabbccddeeff00112233445566778899aabbccddeeff001122334422"
-const test_third_name = #"aabbccddeeff00112233445566778899aabbccddeeff001122334433"
+const test_deposit_name =
+  #"aabbccddeeff00112233445566778899aabbccddeeff001122334411"
+
+const test_other_name =
+  #"aabbccddeeff00112233445566778899aabbccddeeff001122334422"
+
+const test_third_name =
+  #"aabbccddeeff00112233445566778899aabbccddeeff001122334433"
 
 const test_bounty_lovelace = 10_000_000
 
@@ -215,10 +221,9 @@ fn treasury_output(own_ref: OutputReference, lovelace: Int) -> Output {
 /// Build the merkle root bytes for a list of asset_names. Returns the raw
 /// 32-byte sha2_256-derived root — what we'd store in WantedDatum.
 fn build_root(items: List<ByteArray>) -> ByteArray {
-  expect Some(h) =
-    from_list(items, identity)
-      |> root
-      |> to_hash
+  expect Some(h) = from_list(items, identity)
+    |> root
+    |> to_hash
   h
 }
 
@@ -239,12 +244,11 @@ fn invoke_fulfill(
   merkle_proof: Proof<ByteArray>,
   treasury_output_index: Option<Int>,
 ) -> Bool {
-  let listing_datum: Data =
-    WantedDatum {
-      buyer_pkh: test_buyer_pkh,
-      buyer_address: test_buyer_addr(),
-      accepted_merkle_root: root,
-    }
+  let listing_datum: Data = WantedDatum {
+    buyer_pkh: test_buyer_pkh,
+    buyer_address: test_buyer_addr(),
+    accepted_merkle_root: root,
+  }
   wanted_listing.wanted_listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
@@ -255,12 +259,11 @@ fn invoke_fulfill(
 }
 
 fn invoke_reclaim(tx: Transaction) -> Bool {
-  let listing_datum: Data =
-    WantedDatum {
-      buyer_pkh: test_buyer_pkh,
-      buyer_address: test_buyer_addr(),
-      accepted_merkle_root: #"00",
-    }
+  let listing_datum: Data = WantedDatum {
+    buyer_pkh: test_buyer_pkh,
+    buyer_address: test_buyer_addr(),
+    accepted_merkle_root: #"00",
+  }
   wanted_listing.wanted_listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
@@ -309,7 +312,10 @@ fn happy_fulfill_tx(root: ByteArray) -> Transaction {
   let cfg = valid_config_datum()
   Transaction {
     ..transaction.placeholder,
-    inputs: [wanted_input(root, wanted_outref()), deposit_input(test_deposit_name)],
+    inputs: [
+      wanted_input(root, wanted_outref()),
+      deposit_input(test_deposit_name),
+    ],
     reference_inputs: [config_ref_input(cfg)],
     outputs: [
       buyer_output(test_deposit_name, wanted_outref()),
@@ -373,53 +379,53 @@ test fulfill_fails_when_buyer_output_has_wrong_policy_nft() fail {
   // Buyer output is correctly tagged + at buyer's pkh, but the NFT inside
   // is under a wrong policy. extract_single_collection_nft must reject:
   // it checks `p == collection_policy_id` exactly.
-  let wrong_policy =
-    #"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  let wrong_policy = #"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let bad_buyer_out =
-    Output {
-      address: test_buyer_addr(),
-      value: assets.from_lovelace(2_000_000)
-        |> assets.add(wrong_policy, test_deposit_name, 1),
-      datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
-      reference_script: None,
-    }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [wanted_input(root, wanted_outref()), deposit_input(test_deposit_name)],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [bad_buyer_out, treasury_output(wanted_outref(), cfg.protocol_fee)],
-    }
+  let bad_buyer_out = Output {
+    address: test_buyer_addr(),
+    value: assets.from_lovelace(2_000_000)
+      |> assets.add(wrong_policy, test_deposit_name, 1),
+    datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input(root, wanted_outref()),
+      deposit_input(test_deposit_name),
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [bad_buyer_out, treasury_output(wanted_outref(), cfg.protocol_fee)],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
 test fulfill_fails_when_buyer_output_has_extra_tokens() fail {
   // Strict shape: buyer_output may carry ADA + EXACTLY one NFT under
   // collection_policy_id. Co-tenant tokens are rejected.
-  let extra_policy =
-    #"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+  let extra_policy = #"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let bad_buyer_out =
-    Output {
-      address: test_buyer_addr(),
-      value: assets.from_lovelace(2_000_000)
-        |> assets.add(test_collection_policy, test_deposit_name, 1)
-        |> assets.add(extra_policy, #"01", 1),
-      datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
-      reference_script: None,
-    }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [wanted_input(root, wanted_outref()), deposit_input(test_deposit_name)],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [bad_buyer_out, treasury_output(wanted_outref(), cfg.protocol_fee)],
-    }
+  let bad_buyer_out = Output {
+    address: test_buyer_addr(),
+    value: assets.from_lovelace(2_000_000)
+      |> assets.add(test_collection_policy, test_deposit_name, 1)
+      |> assets.add(extra_policy, #"01", 1),
+    datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input(root, wanted_outref()),
+      deposit_input(test_deposit_name),
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [bad_buyer_out, treasury_output(wanted_outref(), cfg.protocol_fee)],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -427,21 +433,20 @@ test fulfill_fails_when_buyer_doesnt_receive_nft() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_fulfill_tx(root),
-      // Output 0 routed to seller instead of buyer — buyer doesn't get the NFT.
-      outputs: [
-        Output {
-          address: test_seller_addr(),
-          value: assets.from_lovelace(2_000_000)
-            |> assets.add(test_collection_policy, test_deposit_name, 1),
-          datum: NoDatum,
-          reference_script: None,
-        },
-        treasury_output(wanted_outref(), cfg.protocol_fee),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_fulfill_tx(root),
+    // Output 0 routed to seller instead of buyer — buyer doesn't get the NFT.
+    outputs: [
+      Output {
+        address: test_seller_addr(),
+        value: assets.from_lovelace(2_000_000)
+          |> assets.add(test_collection_policy, test_deposit_name, 1),
+        datum: NoDatum,
+        reference_script: None,
+      },
+      treasury_output(wanted_outref(), cfg.protocol_fee),
+    ],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -450,14 +455,14 @@ test fulfill_fails_when_buyer_output_has_wrong_nft() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_fulfill_tx(root),
-      outputs: [
-        buyer_output(test_third_name, wanted_outref()), // wrong asset!
-        treasury_output(wanted_outref(), cfg.protocol_fee),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_fulfill_tx(root),
+    outputs: [
+      buyer_output(test_third_name, wanted_outref()),
+      // wrong asset!
+      treasury_output(wanted_outref(), cfg.protocol_fee),
+    ],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -469,42 +474,51 @@ test fulfill_succeeds_with_zero_fee_and_no_treasury() {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = zero_fee_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [wanted_input(root, wanted_outref()), deposit_input(test_deposit_name)],
-      reference_inputs: [config_ref_input(cfg)],
-      // No treasury output.
-      outputs: [buyer_output(test_deposit_name, wanted_outref())],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input(root, wanted_outref()),
+      deposit_input(test_deposit_name),
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    // No treasury output.
+    outputs: [buyer_output(test_deposit_name, wanted_outref())],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), None)
 }
 
 test fulfill_fails_with_none_treasury_when_fee_positive() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
-  invoke_fulfill(happy_fulfill_tx(root), root, build_proof(items, test_deposit_name), None)
+  invoke_fulfill(
+    happy_fulfill_tx(root),
+    root,
+    build_proof(items, test_deposit_name),
+    None,
+  )
 }
 
 test fulfill_fails_with_wrong_treasury_address() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
-  let wrong_addr =
-    Address { payment_credential: VerificationKey(test_seller_pkh), stake_credential: None }
+  let wrong_addr = Address {
+    payment_credential: VerificationKey(test_seller_pkh),
+    stake_credential: None,
+  }
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_fulfill_tx(root),
-      outputs: [
-        buyer_output(test_deposit_name, wanted_outref()),
-        Output {
-          address: wrong_addr, // wrong treasury target
-          value: assets.from_lovelace(cfg.protocol_fee),
-          datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
-          reference_script: None,
-        },
-      ],
-    }
+  let tx = Transaction {
+    ..happy_fulfill_tx(root),
+    outputs: [
+      buyer_output(test_deposit_name, wanted_outref()),
+      Output {
+        address: wrong_addr,
+        // wrong treasury target
+        value: assets.from_lovelace(cfg.protocol_fee),
+        datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
+        reference_script: None,
+      },
+    ],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -513,19 +527,18 @@ test fulfill_fails_with_wrong_treasury_tag() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_fulfill_tx(root),
-      outputs: [
-        buyer_output(test_deposit_name, wanted_outref()),
-        Output {
-          address: cfg.treasury_addr,
-          value: assets.from_lovelace(cfg.protocol_fee),
-          datum: InlineDatum(utils.compute_output_tag(other_wanted_outref())),
-          reference_script: None,
-        },
-      ],
-    }
+  let tx = Transaction {
+    ..happy_fulfill_tx(root),
+    outputs: [
+      buyer_output(test_deposit_name, wanted_outref()),
+      Output {
+        address: cfg.treasury_addr,
+        value: assets.from_lovelace(cfg.protocol_fee),
+        datum: InlineDatum(utils.compute_output_tag(other_wanted_outref())),
+        reference_script: None,
+      },
+    ],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -533,20 +546,19 @@ test fulfill_fails_with_insufficient_treasury_lovelace() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_fulfill_tx(root),
-      outputs: [
-        buyer_output(test_deposit_name, wanted_outref()),
-        // Underpaid treasury: half of protocol_fee.
-        Output {
-          address: cfg.treasury_addr,
-          value: assets.from_lovelace(cfg.protocol_fee / 2),
-          datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
-          reference_script: None,
-        },
-      ],
-    }
+  let tx = Transaction {
+    ..happy_fulfill_tx(root),
+    outputs: [
+      buyer_output(test_deposit_name, wanted_outref()),
+      // Underpaid treasury: half of protocol_fee.
+      Output {
+        address: cfg.treasury_addr,
+        value: assets.from_lovelace(cfg.protocol_fee / 2),
+        datum: InlineDatum(utils.compute_output_tag(wanted_outref())),
+        reference_script: None,
+      },
+    ],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -564,19 +576,18 @@ test fulfill_succeeds_when_listing_lovelace_exactly_at_floor() {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        wanted_input_with_lovelace(root, wanted_outref(), 3_000_000),
-        deposit_input(test_deposit_name),
-      ],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [
-        buyer_output(test_deposit_name, wanted_outref()),
-        treasury_output(wanted_outref(), cfg.protocol_fee),
-      ],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input_with_lovelace(root, wanted_outref(), 3_000_000),
+      deposit_input(test_deposit_name),
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [
+      buyer_output(test_deposit_name, wanted_outref()),
+      treasury_output(wanted_outref(), cfg.protocol_fee),
+    ],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -585,19 +596,18 @@ test fulfill_fails_when_listing_lovelace_below_floor() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        wanted_input_with_lovelace(root, wanted_outref(), 2_999_999),
-        deposit_input(test_deposit_name),
-      ],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [
-        buyer_output(test_deposit_name, wanted_outref()),
-        treasury_output(wanted_outref(), cfg.protocol_fee),
-      ],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input_with_lovelace(root, wanted_outref(), 2_999_999),
+      deposit_input(test_deposit_name),
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [
+      buyer_output(test_deposit_name, wanted_outref()),
+      treasury_output(wanted_outref(), cfg.protocol_fee),
+    ],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -607,16 +617,15 @@ test fulfill_fails_on_zero_fee_path_when_listing_lovelace_below_floor() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = zero_fee_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        wanted_input_with_lovelace(root, wanted_outref(), 1_500_000),
-        deposit_input(test_deposit_name),
-      ],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [buyer_output(test_deposit_name, wanted_outref())],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input_with_lovelace(root, wanted_outref(), 1_500_000),
+      deposit_input(test_deposit_name),
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [buyer_output(test_deposit_name, wanted_outref())],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), None)
 }
 
@@ -625,16 +634,15 @@ test fulfill_succeeds_on_zero_fee_path_exactly_at_floor() {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = zero_fee_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        wanted_input_with_lovelace(root, wanted_outref(), 2_000_000),
-        deposit_input(test_deposit_name),
-      ],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [buyer_output(test_deposit_name, wanted_outref())],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input_with_lovelace(root, wanted_outref(), 2_000_000),
+      deposit_input(test_deposit_name),
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [buyer_output(test_deposit_name, wanted_outref())],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), None)
 }
 
@@ -645,19 +653,18 @@ test fulfill_succeeds_with_high_tip() {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        wanted_input_with_lovelace(root, wanted_outref(), 50_000_000),
-        deposit_input(test_deposit_name),
-      ],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [
-        buyer_output(test_deposit_name, wanted_outref()),
-        treasury_output(wanted_outref(), cfg.protocol_fee),
-      ],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input_with_lovelace(root, wanted_outref(), 50_000_000),
+      deposit_input(test_deposit_name),
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [
+      buyer_output(test_deposit_name, wanted_outref()),
+      treasury_output(wanted_outref(), cfg.protocol_fee),
+    ],
+  }
   invoke_fulfill(tx, root, build_proof(items, test_deposit_name), Some(1))
 }
 
@@ -666,23 +673,21 @@ test fulfill_succeeds_with_high_tip() {
 // ============================================================================
 
 test reclaim_succeeds_with_buyer_sig() {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [wanted_input(#"00", wanted_outref())],
-      extra_signatories: [test_buyer_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [wanted_input(#"00", wanted_outref())],
+    extra_signatories: [test_buyer_pkh],
+  }
   invoke_reclaim(tx)
 }
 
 test reclaim_fails_without_buyer_sig() fail {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [wanted_input(#"00", wanted_outref())],
-      // Wrong signer.
-      extra_signatories: [test_seller_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [wanted_input(#"00", wanted_outref())],
+    // Wrong signer.
+    extra_signatories: [test_seller_pkh],
+  }
   invoke_reclaim(tx)
 }
 
@@ -697,26 +702,24 @@ test reclaim_fails_without_buyer_sig() fail {
 
 test rescue_succeeds_with_admin_sig_on_no_datum_utxo() {
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [no_datum_input(wanted_outref())],
-      reference_inputs: [config_ref_input(cfg)],
-      extra_signatories: [test_admin_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [no_datum_input(wanted_outref())],
+    reference_inputs: [config_ref_input(cfg)],
+    extra_signatories: [test_admin_pkh],
+  }
   invoke_rescue(tx, None)
 }
 
 test rescue_fails_without_admin_sig() fail {
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [no_datum_input(wanted_outref())],
-      reference_inputs: [config_ref_input(cfg)],
-      // Buyer signed, not the admin — admin gate must reject.
-      extra_signatories: [test_buyer_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [no_datum_input(wanted_outref())],
+    reference_inputs: [config_ref_input(cfg)],
+    // Buyer signed, not the admin — admin gate must reject.
+    extra_signatories: [test_buyer_pkh],
+  }
   invoke_rescue(tx, None)
 }
 
@@ -726,32 +729,29 @@ test rescue_fails_when_datum_is_present() fail {
   // listing, not an accidental pay-to-script. Buyer-Reclaim is the
   // legitimate path for datum-bearing UTxOs.
   let cfg = valid_config_datum()
-  let listing_datum: Data =
-    WantedDatum {
-      buyer_pkh: test_buyer_pkh,
-      buyer_address: test_buyer_addr(),
-      accepted_merkle_root: #"00",
-    }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [wanted_input(#"00", wanted_outref())],
-      reference_inputs: [config_ref_input(cfg)],
-      extra_signatories: [test_admin_pkh],
-    }
+  let listing_datum: Data = WantedDatum {
+    buyer_pkh: test_buyer_pkh,
+    buyer_address: test_buyer_addr(),
+    accepted_merkle_root: #"00",
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [wanted_input(#"00", wanted_outref())],
+    reference_inputs: [config_ref_input(cfg)],
+    extra_signatories: [test_admin_pkh],
+  }
   invoke_rescue(tx, Some(listing_datum))
 }
 
 test rescue_fails_without_config_ref_input() fail {
   // No config ref input ⇒ no admin_pkh to check against ⇒ list.expect_find
   // fails before the signature check even runs.
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [no_datum_input(wanted_outref())],
-      reference_inputs: [],
-      extra_signatories: [test_admin_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [no_datum_input(wanted_outref())],
+    reference_inputs: [],
+    extra_signatories: [test_admin_pkh],
+  }
   invoke_rescue(tx, None)
 }
 
@@ -763,13 +763,12 @@ test rescue_fails_when_datum_is_malformed_data() fail {
   // writer. (Codex regression coverage.)
   let cfg = valid_config_datum()
   let malformed: Data = 42
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [wanted_input(#"00", wanted_outref())],
-      reference_inputs: [config_ref_input(cfg)],
-      extra_signatories: [test_admin_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [wanted_input(#"00", wanted_outref())],
+    reference_inputs: [config_ref_input(cfg)],
+    extra_signatories: [test_admin_pkh],
+  }
   invoke_rescue(tx, Some(malformed))
 }
 
@@ -787,45 +786,41 @@ test multi_fulfill_two_listings_pass() {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let other_deposit =
-    Input {
-      output_reference:
-        OutputReference {
-          transaction_id: #"0000000000000000000000000000000000000000000000000000000000000031",
-          output_index: 0,
-        },
-      output: Output {
-        address: test_seller_addr(),
-        value: assets.from_lovelace(5_000_000)
-          |> assets.add(test_collection_policy, test_other_name, 1),
-        datum: NoDatum,
-        reference_script: None,
-      },
-    }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        wanted_input(root, wanted_outref()),
-        wanted_input(root, other_wanted_outref()),
-        deposit_input(test_deposit_name),
-        other_deposit,
-      ],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [
-        buyer_output(test_deposit_name, wanted_outref()),
-        buyer_output(test_other_name, other_wanted_outref()),
-        // Two correctly-tagged treasury outputs, one per listing.
-        treasury_output(wanted_outref(), cfg.protocol_fee),
-        treasury_output(other_wanted_outref(), cfg.protocol_fee),
-      ],
-    }
-  let listing_datum: Data =
-    WantedDatum {
-      buyer_pkh: test_buyer_pkh,
-      buyer_address: test_buyer_addr(),
-      accepted_merkle_root: root,
-    }
+  let other_deposit = Input {
+    output_reference: OutputReference {
+      transaction_id: #"0000000000000000000000000000000000000000000000000000000000000031",
+      output_index: 0,
+    },
+    output: Output {
+      address: test_seller_addr(),
+      value: assets.from_lovelace(5_000_000)
+        |> assets.add(test_collection_policy, test_other_name, 1),
+      datum: NoDatum,
+      reference_script: None,
+    },
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input(root, wanted_outref()),
+      wanted_input(root, other_wanted_outref()),
+      deposit_input(test_deposit_name),
+      other_deposit,
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [
+      buyer_output(test_deposit_name, wanted_outref()),
+      buyer_output(test_other_name, other_wanted_outref()),
+      // Two correctly-tagged treasury outputs, one per listing.
+      treasury_output(wanted_outref(), cfg.protocol_fee),
+      treasury_output(other_wanted_outref(), cfg.protocol_fee),
+    ],
+  }
+  let listing_datum: Data = WantedDatum {
+    buyer_pkh: test_buyer_pkh,
+    buyer_address: test_buyer_addr(),
+    accepted_merkle_root: root,
+  }
   // Invocation for listing A. Proof: deposit_name's sibling is other_name.
   wanted_listing.wanted_listing.spend(
     test_config_nft_policy,
@@ -847,45 +842,41 @@ test multi_fulfill_blocked_by_treasury_tag_binding() fail {
   let items = [test_deposit_name, test_other_name]
   let root = build_root(items)
   let cfg = valid_config_datum()
-  let other_deposit =
-    Input {
-      output_reference:
-        OutputReference {
-          transaction_id: #"0000000000000000000000000000000000000000000000000000000000000031",
-          output_index: 0,
-        },
-      output: Output {
-        address: test_seller_addr(),
-        value: assets.from_lovelace(5_000_000)
-          |> assets.add(test_collection_policy, test_other_name, 1),
-        datum: NoDatum,
-        reference_script: None,
-      },
-    }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        wanted_input(root, wanted_outref()),
-        wanted_input(root, other_wanted_outref()),
-        deposit_input(test_deposit_name),
-        other_deposit,
-      ],
-      reference_inputs: [config_ref_input(cfg)],
-      outputs: [
-        buyer_output(test_deposit_name, wanted_outref()),
-        buyer_output(test_other_name, other_wanted_outref()),
-        // ONE treasury output tagged for listing A only.
-        treasury_output(wanted_outref(), cfg.protocol_fee),
-      ],
-    }
+  let other_deposit = Input {
+    output_reference: OutputReference {
+      transaction_id: #"0000000000000000000000000000000000000000000000000000000000000031",
+      output_index: 0,
+    },
+    output: Output {
+      address: test_seller_addr(),
+      value: assets.from_lovelace(5_000_000)
+        |> assets.add(test_collection_policy, test_other_name, 1),
+      datum: NoDatum,
+      reference_script: None,
+    },
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      wanted_input(root, wanted_outref()),
+      wanted_input(root, other_wanted_outref()),
+      deposit_input(test_deposit_name),
+      other_deposit,
+    ],
+    reference_inputs: [config_ref_input(cfg)],
+    outputs: [
+      buyer_output(test_deposit_name, wanted_outref()),
+      buyer_output(test_other_name, other_wanted_outref()),
+      // ONE treasury output tagged for listing A only.
+      treasury_output(wanted_outref(), cfg.protocol_fee),
+    ],
+  }
   // We're checking listing B's invocation, which uses other_wanted_outref.
-  let listing_datum: Data =
-    WantedDatum {
-      buyer_pkh: test_buyer_pkh,
-      buyer_address: test_buyer_addr(),
-      accepted_merkle_root: root,
-    }
+  let listing_datum: Data = WantedDatum {
+    buyer_pkh: test_buyer_pkh,
+    buyer_address: test_buyer_addr(),
+    accepted_merkle_root: root,
+  }
   wanted_listing.wanted_listing.spend(
     test_config_nft_policy,
     Some(listing_datum),

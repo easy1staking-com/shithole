@@ -102,11 +102,10 @@ fn ua_outref() -> OutputReference {
 }
 
 fn config_ref_input() -> Input {
-  let config_outref =
-    OutputReference {
-      transaction_id: #"0000000000000000000000000000000000000000000000000000000000000099",
-      output_index: 0,
-    }
+  let config_outref = OutputReference {
+    transaction_id: #"0000000000000000000000000000000000000000000000000000000000000099",
+    output_index: 0,
+  }
   Input {
     output_reference: config_outref,
     output: Output {
@@ -226,14 +225,19 @@ fn zero_fee_config_datum() -> ConfigDatum {
 /// the rest of the swap logic resolves unchanged.
 fn zero_fee_config_ref_input() -> Input {
   let i = config_ref_input()
-  Input { ..i, output: Output { ..i.output, datum: InlineDatum(zero_fee_config_datum()) } }
+  Input {
+    ..i,
+    output: Output { ..i.output, datum: InlineDatum(zero_fee_config_datum()) },
+  }
 }
 
 /// Invoke the listing spend validator for the canonical listing UTxO with a
 /// well-formed `ListingDatum` (cast to `Data`).
 fn invoke_swap(tx: Transaction, redeemer: ListingRedeemer) -> Bool {
-  let listing_datum: Data =
-    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
+  let listing_datum: Data = ListingDatum {
+    lister_pkh: test_lister_pkh,
+    update_ref: None,
+  }
   listing.listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
@@ -268,71 +272,65 @@ test swap_fails_when_input_has_no_collection_nft() fail {
   // Listing input holds an NFT under the WRONG policy — S2's
   // has_any_nft_strict(input_value, collection_policy_id) fails.
   let wrong_policy = #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-  let bad_input =
-    Input {
-      output_reference: listing_outref(),
-      output: Output {
-        address: test_listing_addr(),
-        value: assets.from_lovelace(2_000_000)
-          |> assets.add(wrong_policy, test_na_name, 1),
-        datum: InlineDatum(
-          ListingDatum { lister_pkh: test_lister_pkh, update_ref: None },
-        ),
-        reference_script: None,
-      },
-    }
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      inputs: [bad_input, ua_input_holding(test_nb_name)],
-    }
+  let bad_input = Input {
+    output_reference: listing_outref(),
+    output: Output {
+      address: test_listing_addr(),
+      value: assets.from_lovelace(2_000_000)
+        |> assets.add(wrong_policy, test_na_name, 1),
+      datum: InlineDatum(
+        ListingDatum { lister_pkh: test_lister_pkh, update_ref: None },
+      ),
+      reference_script: None,
+    },
+  }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    inputs: [bad_input, ua_input_holding(test_nb_name)],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
 test swap_fails_when_input_has_two_nfts_under_collection() fail {
   // Listing input holds TWO NFTs under collection_policy — has_any_nft_strict
   // requires exactly one.
-  let bad_input =
-    Input {
-      output_reference: listing_outref(),
-      output: Output {
-        address: test_listing_addr(),
-        value: assets.from_lovelace(2_000_000)
-          |> assets.add(test_collection_policy, test_na_name, 1)
-          |> assets.add(test_collection_policy, #"99", 1),
-        datum: InlineDatum(
-          ListingDatum { lister_pkh: test_lister_pkh, update_ref: None },
-        ),
-        reference_script: None,
-      },
-    }
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      inputs: [bad_input, ua_input_holding(test_nb_name)],
-    }
+  let bad_input = Input {
+    output_reference: listing_outref(),
+    output: Output {
+      address: test_listing_addr(),
+      value: assets.from_lovelace(2_000_000)
+        |> assets.add(test_collection_policy, test_na_name, 1)
+        |> assets.add(test_collection_policy, #"99", 1),
+      datum: InlineDatum(
+        ListingDatum { lister_pkh: test_lister_pkh, update_ref: None },
+      ),
+      reference_script: None,
+    },
+  }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    inputs: [bad_input, ua_input_holding(test_nb_name)],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
 test swap_fails_when_input_has_qty_2() fail {
-  let bad_input =
-    Input {
-      output_reference: listing_outref(),
-      output: Output {
-        address: test_listing_addr(),
-        value: assets.from_lovelace(2_000_000)
-          |> assets.add(test_collection_policy, test_na_name, 2),
-        datum: InlineDatum(
-          ListingDatum { lister_pkh: test_lister_pkh, update_ref: None },
-        ),
-        reference_script: None,
-      },
-    }
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      inputs: [bad_input, ua_input_holding(test_nb_name)],
-    }
+  let bad_input = Input {
+    output_reference: listing_outref(),
+    output: Output {
+      address: test_listing_addr(),
+      value: assets.from_lovelace(2_000_000)
+        |> assets.add(test_collection_policy, test_na_name, 2),
+      datum: InlineDatum(
+        ListingDatum { lister_pkh: test_lister_pkh, update_ref: None },
+      ),
+      reference_script: None,
+    },
+  }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    inputs: [bad_input, ua_input_holding(test_nb_name)],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -343,25 +341,24 @@ test swap_fails_when_input_has_qty_2() fail {
 test swap_fails_with_listing_to_wrong_address() fail {
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        Output {
-          address: test_swapper_addr(),
-          value: assets.from_lovelace(3_000_000)
-            |> assets.add(test_collection_policy, test_nb_name, 1),
-          datum: InlineDatum(
-            ListingDatum {
-              lister_pkh: test_lister_pkh,
-              update_ref: Some(own_tag),
-            },
-          ),
-          reference_script: None,
-        },
-        out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      Output {
+        address: test_swapper_addr(),
+        value: assets.from_lovelace(3_000_000)
+          |> assets.add(test_collection_policy, test_nb_name, 1),
+        datum: InlineDatum(
+          ListingDatum {
+            lister_pkh: test_lister_pkh,
+            update_ref: Some(own_tag),
+          },
+        ),
+        reference_script: None,
+      },
+      out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -372,64 +369,61 @@ test swap_fails_with_listing_to_wrong_address() fail {
 test swap_fails_when_lister_pkh_changes() fail {
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_swapper_pkh,
-          Some(own_tag),
-          2_000_000 + cfg.lister_fee,
-        ),
-        out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_swapper_pkh,
+        Some(own_tag),
+        2_000_000 + cfg.lister_fee,
+      ),
+      out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
 test swap_fails_with_wrong_update_ref() fail {
   let wrong_tag = utils.compute_output_tag(other_listing_outref())
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(wrong_tag),
-          2_000_000 + cfg.lister_fee,
-        ),
-        out_treasury_with(
-          utils.compute_output_tag(listing_outref()),
-          cfg.protocol_fee,
-          cfg.treasury_addr,
-        ),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(wrong_tag),
+        2_000_000 + cfg.lister_fee,
+      ),
+      out_treasury_with(
+        utils.compute_output_tag(listing_outref()),
+        cfg.protocol_fee,
+        cfg.treasury_addr,
+      ),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
 test swap_fails_with_no_update_ref() fail {
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          None,
-          2_000_000 + cfg.lister_fee,
-        ),
-        out_treasury_with(
-          utils.compute_output_tag(listing_outref()),
-          cfg.protocol_fee,
-          cfg.treasury_addr,
-        ),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        None,
+        2_000_000 + cfg.lister_fee,
+      ),
+      out_treasury_with(
+        utils.compute_output_tag(listing_outref()),
+        cfg.protocol_fee,
+        cfg.treasury_addr,
+      ),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -441,73 +435,67 @@ test swap_fails_when_out_listing_under_wrong_policy() fail {
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
   let wrong_policy = #"ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-  let bad =
-    Output {
-      address: test_listing_addr(),
-      value: assets.from_lovelace(2_000_000 + cfg.lister_fee)
-        |> assets.add(wrong_policy, test_nb_name, 1),
-      datum: InlineDatum(
-        ListingDatum { lister_pkh: test_lister_pkh, update_ref: Some(own_tag) },
-      ),
-      reference_script: None,
-    }
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        bad,
-        out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
-      ],
-    }
+  let bad = Output {
+    address: test_listing_addr(),
+    value: assets.from_lovelace(2_000_000 + cfg.lister_fee)
+      |> assets.add(wrong_policy, test_nb_name, 1),
+    datum: InlineDatum(
+      ListingDatum { lister_pkh: test_lister_pkh, update_ref: Some(own_tag) },
+    ),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      bad,
+      out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
 test swap_fails_when_out_listing_has_qty_2() fail {
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
-  let bad =
-    Output {
-      address: test_listing_addr(),
-      value: assets.from_lovelace(2_000_000 + cfg.lister_fee)
-        |> assets.add(test_collection_policy, test_nb_name, 2),
-      datum: InlineDatum(
-        ListingDatum { lister_pkh: test_lister_pkh, update_ref: Some(own_tag) },
-      ),
-      reference_script: None,
-    }
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        bad,
-        out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
-      ],
-    }
+  let bad = Output {
+    address: test_listing_addr(),
+    value: assets.from_lovelace(2_000_000 + cfg.lister_fee)
+      |> assets.add(test_collection_policy, test_nb_name, 2),
+    datum: InlineDatum(
+      ListingDatum { lister_pkh: test_lister_pkh, update_ref: Some(own_tag) },
+    ),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      bad,
+      out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
 test swap_fails_with_extra_asset_in_listing_output() fail {
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
-  let bloated =
-    Output {
-      address: test_listing_addr(),
-      value: assets.from_lovelace(2_000_000 + cfg.lister_fee)
-        |> assets.add(test_collection_policy, test_nb_name, 1)
-        |> assets.add(test_collection_policy, #"ee", 1),
-      datum: InlineDatum(
-        ListingDatum { lister_pkh: test_lister_pkh, update_ref: Some(own_tag) },
-      ),
-      reference_script: None,
-    }
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        bloated,
-        out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
-      ],
-    }
+  let bloated = Output {
+    address: test_listing_addr(),
+    value: assets.from_lovelace(2_000_000 + cfg.lister_fee)
+      |> assets.add(test_collection_policy, test_nb_name, 1)
+      |> assets.add(test_collection_policy, #"ee", 1),
+    datum: InlineDatum(
+      ListingDatum { lister_pkh: test_lister_pkh, update_ref: Some(own_tag) },
+    ),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      bloated,
+      out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -518,19 +506,18 @@ test swap_fails_with_extra_asset_in_listing_output() fail {
 test swap_fails_with_insufficient_accrual() fail {
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(own_tag),
-          2_000_000,
-        ),
-        out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(own_tag),
+        2_000_000,
+      ),
+      out_treasury_with(own_tag, cfg.protocol_fee, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -541,19 +528,18 @@ test swap_fails_with_insufficient_accrual() fail {
 test swap_fails_when_treasury_to_wrong_addr() fail {
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(own_tag),
-          2_000_000 + cfg.lister_fee,
-        ),
-        out_treasury_with(own_tag, cfg.protocol_fee, test_swapper_addr()),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(own_tag),
+        2_000_000 + cfg.lister_fee,
+      ),
+      out_treasury_with(own_tag, cfg.protocol_fee, test_swapper_addr()),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -566,19 +552,18 @@ test swap_fails_with_wrong_treasury_tag() fail {
   let wrong_tag = utils.compute_output_tag(other_listing_outref())
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(own_tag),
-          2_000_000 + cfg.lister_fee,
-        ),
-        out_treasury_with(wrong_tag, cfg.protocol_fee, cfg.treasury_addr),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(own_tag),
+        2_000_000 + cfg.lister_fee,
+      ),
+      out_treasury_with(wrong_tag, cfg.protocol_fee, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -589,19 +574,18 @@ test swap_fails_with_wrong_treasury_tag() fail {
 test swap_fails_with_insufficient_protocol_fee() fail {
   let own_tag = utils.compute_output_tag(listing_outref())
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..happy_swap_tx(),
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(own_tag),
-          2_000_000 + cfg.lister_fee,
-        ),
-        out_treasury_with(own_tag, cfg.protocol_fee - 1, cfg.treasury_addr),
-      ],
-    }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(own_tag),
+        2_000_000 + cfg.lister_fee,
+      ),
+      out_treasury_with(own_tag, cfg.protocol_fee - 1, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -625,42 +609,42 @@ test multi_swap_blocked_by_treasury_tag_binding() fail {
   let tag_a = utils.compute_output_tag(listing_outref())
   let tag_b = utils.compute_output_tag(other_listing_outref())
   let cfg = valid_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        listing_input_holding(test_na_name, listing_outref()),
-        listing_input_holding(test_na_name, other_listing_outref()),
-        ua_input_holding(test_nb_name),
-      ],
-      reference_inputs: [config_ref_input()],
-      outputs: [
-        // out_listing for A — correctly tagged
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(tag_a),
-          2_000_000 + cfg.lister_fee,
-        ),
-        // out_listing for B — correctly tagged
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(tag_b),
-          2_000_000 + cfg.lister_fee,
-        ),
-        // ONE treasury output, tagged for A only — B's S8 must reject
-        out_treasury_with(tag_a, cfg.protocol_fee, cfg.treasury_addr),
-      ],
-    }
-  let r =
-    Swap {
-      nb_asset_name: test_nb_name,
-      listing_output_index: 1,
-      treasury_output_index: Some(2),
-    }
-  let listing_datum: Data =
-    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      listing_input_holding(test_na_name, listing_outref()),
+      listing_input_holding(test_na_name, other_listing_outref()),
+      ua_input_holding(test_nb_name),
+    ],
+    reference_inputs: [config_ref_input()],
+    outputs: [
+      // out_listing for A — correctly tagged
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(tag_a),
+        2_000_000 + cfg.lister_fee,
+      ),
+      // out_listing for B — correctly tagged
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(tag_b),
+        2_000_000 + cfg.lister_fee,
+      ),
+      // ONE treasury output, tagged for A only — B's S8 must reject
+      out_treasury_with(tag_a, cfg.protocol_fee, cfg.treasury_addr),
+    ],
+  }
+  let r = Swap {
+    nb_asset_name: test_nb_name,
+    listing_output_index: 1,
+    treasury_output_index: Some(2),
+  }
+  let listing_datum: Data = ListingDatum {
+    lister_pkh: test_lister_pkh,
+    update_ref: None,
+  }
   listing.listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
@@ -687,14 +671,15 @@ test swap_fails_with_no_input_datum() fail {
 }
 
 test cancel_succeeds_with_lister_sig() {
-  let listing_datum: Data =
-    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [listing_input_holding(test_na_name, listing_outref())],
-      extra_signatories: [test_lister_pkh],
-    }
+  let listing_datum: Data = ListingDatum {
+    lister_pkh: test_lister_pkh,
+    update_ref: None,
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [listing_input_holding(test_na_name, listing_outref())],
+    extra_signatories: [test_lister_pkh],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
@@ -705,14 +690,15 @@ test cancel_succeeds_with_lister_sig() {
 }
 
 test cancel_fails_without_lister_sig() fail {
-  let listing_datum: Data =
-    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [listing_input_holding(test_na_name, listing_outref())],
-      extra_signatories: [],
-    }
+  let listing_datum: Data = ListingDatum {
+    lister_pkh: test_lister_pkh,
+    update_ref: None,
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [listing_input_holding(test_na_name, listing_outref())],
+    extra_signatories: [],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
@@ -723,14 +709,15 @@ test cancel_fails_without_lister_sig() fail {
 }
 
 test cancel_fails_with_wrong_signer() fail {
-  let listing_datum: Data =
-    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [listing_input_holding(test_na_name, listing_outref())],
-      extra_signatories: [test_swapper_pkh],
-    }
+  let listing_datum: Data = ListingDatum {
+    lister_pkh: test_lister_pkh,
+    update_ref: None,
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [listing_input_holding(test_na_name, listing_outref())],
+    extra_signatories: [test_swapper_pkh],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
@@ -747,17 +734,15 @@ test cancel_fails_with_wrong_signer() fail {
 test cancel_succeeds_with_corrupt_update_ref_field() {
   // Constr 0 [bytestring(lister_pkh), integer(42)] — second field is an Int
   // instead of Option<ByteArray>. A full `ListingDatum` cast would fail.
-  let weird_data: Data =
-    builtin.constr_data(
-      0,
-      [builtin.b_data(test_lister_pkh), builtin.i_data(42)],
-    )
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [listing_input_holding(test_na_name, listing_outref())],
-      extra_signatories: [test_lister_pkh],
-    }
+  let weird_data: Data = builtin.constr_data(
+    0,
+    [builtin.b_data(test_lister_pkh), builtin.i_data(42)],
+  )
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [listing_input_holding(test_na_name, listing_outref())],
+    extra_signatories: [test_lister_pkh],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     Some(weird_data),
@@ -781,23 +766,24 @@ test swap_fails_when_config_ref_has_extra_asset() fail {
   // Config UTxO carries the config NFT AND an extra unrelated asset.
   // has_any_nft_strict rejects → list.expect_find panics → swap fails.
   let extra_policy = #"deadbeef00000000000000000000000000000000000000000000beef"
-  let polluted_config_input =
-    Input {
-      output_reference: OutputReference {
-        transaction_id: #"0000000000000000000000000000000000000000000000000000000000000099",
-        output_index: 0,
-      },
-      output: Output {
-        address: test_config_addr(),
-        value: assets.from_lovelace(2_000_000)
-          |> assets.add(test_config_nft_policy, test_collection_policy, 1)
-          |> assets.add(extra_policy, #"6a756e6b", 5),
-        datum: InlineDatum(valid_config_datum()),
-        reference_script: None,
-      },
-    }
-  let tx =
-    Transaction { ..happy_swap_tx(), reference_inputs: [polluted_config_input] }
+  let polluted_config_input = Input {
+    output_reference: OutputReference {
+      transaction_id: #"0000000000000000000000000000000000000000000000000000000000000099",
+      output_index: 0,
+    },
+    output: Output {
+      address: test_config_addr(),
+      value: assets.from_lovelace(2_000_000)
+        |> assets.add(test_config_nft_policy, test_collection_policy, 1)
+        |> assets.add(extra_policy, #"6a756e6b", 5),
+      datum: InlineDatum(valid_config_datum()),
+      reference_script: None,
+    },
+  }
+  let tx = Transaction {
+    ..happy_swap_tx(),
+    reference_inputs: [polluted_config_input],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -825,13 +811,12 @@ fn datumless_listing_input(oref: OutputReference) -> Input {
 }
 
 test recover_succeeds_with_admin_sig_and_no_datum() {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [datumless_listing_input(listing_outref())],
-      reference_inputs: [config_ref_input()],
-      extra_signatories: [test_admin_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [datumless_listing_input(listing_outref())],
+    reference_inputs: [config_ref_input()],
+    extra_signatories: [test_admin_pkh],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     None,
@@ -842,13 +827,12 @@ test recover_succeeds_with_admin_sig_and_no_datum() {
 }
 
 test recover_fails_without_admin_sig() fail {
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [datumless_listing_input(listing_outref())],
-      reference_inputs: [config_ref_input()],
-      extra_signatories: [],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [datumless_listing_input(listing_outref())],
+    reference_inputs: [config_ref_input()],
+    extra_signatories: [],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     None,
@@ -861,13 +845,12 @@ test recover_fails_without_admin_sig() fail {
 test recover_fails_with_wrong_signer() fail {
   // Lister signs, but the listing has no datum — Recover requires admin sig,
   // not lister sig.
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [datumless_listing_input(listing_outref())],
-      reference_inputs: [config_ref_input()],
-      extra_signatories: [test_lister_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [datumless_listing_input(listing_outref())],
+    reference_inputs: [config_ref_input()],
+    extra_signatories: [test_lister_pkh],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     None,
@@ -881,15 +864,16 @@ test recover_fails_with_some_datum() fail {
   // Datum is present — admin cannot recover a datum-bearing UTxO. The
   // legitimate Swap or Cancel paths must be used instead. This test pins
   // the "admin has no power over legitimate listings" guarantee.
-  let listing_datum: Data =
-    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [listing_input_holding(test_na_name, listing_outref())],
-      reference_inputs: [config_ref_input()],
-      extra_signatories: [test_admin_pkh],
-    }
+  let listing_datum: Data = ListingDatum {
+    lister_pkh: test_lister_pkh,
+    update_ref: None,
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [listing_input_holding(test_na_name, listing_outref())],
+    reference_inputs: [config_ref_input()],
+    extra_signatories: [test_admin_pkh],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     Some(listing_datum),
@@ -901,13 +885,12 @@ test recover_fails_with_some_datum() fail {
 
 test recover_fails_without_config_ref_input() fail {
   // No config ref input — validator can't find admin_pkh.
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [datumless_listing_input(listing_outref())],
-      reference_inputs: [],
-      extra_signatories: [test_admin_pkh],
-    }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [datumless_listing_input(listing_outref())],
+    reference_inputs: [],
+    extra_signatories: [test_admin_pkh],
+  }
   listing.listing.spend(
     test_config_nft_policy,
     None,
@@ -1001,21 +984,20 @@ test swap_fails_with_some_treasury_missing_tag_when_fee_zero() fail {
   let cfg = zero_fee_config_datum()
   let own_tag = utils.compute_output_tag(listing_outref())
   let wrong_tag = utils.compute_output_tag(other_listing_outref())
-  let tx =
-    Transaction {
-      ..zero_fee_swap_tx_with_treasury(),
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(own_tag),
-          2_000_000 + cfg.lister_fee,
-        ),
-        // wrong tag — S8 should reject (lovelace 2 ADA to keep the value
-        // shape realistic and avoid expect_lovelace_of side-effects)
-        out_treasury_with(wrong_tag, 2_000_000, cfg.treasury_addr),
-      ],
-    }
+  let tx = Transaction {
+    ..zero_fee_swap_tx_with_treasury(),
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(own_tag),
+        2_000_000 + cfg.lister_fee,
+      ),
+      // wrong tag — S8 should reject (lovelace 2 ADA to keep the value
+      // shape realistic and avoid expect_lovelace_of side-effects)
+      out_treasury_with(wrong_tag, 2_000_000, cfg.treasury_addr),
+    ],
+  }
   invoke_swap(tx, happy_swap_redeemer())
 }
 
@@ -1028,40 +1010,40 @@ test multi_swap_zero_fee_no_treasury_both_pass() {
   let tag_a = utils.compute_output_tag(listing_outref())
   let tag_b = utils.compute_output_tag(other_listing_outref())
   let cfg = zero_fee_config_datum()
-  let tx =
-    Transaction {
-      ..transaction.placeholder,
-      inputs: [
-        listing_input_holding(test_na_name, listing_outref()),
-        listing_input_holding(test_na_name, other_listing_outref()),
-        ua_input_holding(test_nb_name),
-      ],
-      reference_inputs: [zero_fee_config_ref_input()],
-      outputs: [
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(tag_a),
-          2_000_000 + cfg.lister_fee,
-        ),
-        out_listing_holding(
-          test_nb_name,
-          test_lister_pkh,
-          Some(tag_b),
-          2_000_000 + cfg.lister_fee,
-        ),
-        // no treasury output — validator should still pass for input B with
-        // listing_output_index: 1, treasury_output_index: None.
-      ],
-    }
-  let r =
-    Swap {
-      nb_asset_name: test_nb_name,
-      listing_output_index: 1,
-      treasury_output_index: None,
-    }
-  let listing_datum: Data =
-    ListingDatum { lister_pkh: test_lister_pkh, update_ref: None }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [
+      listing_input_holding(test_na_name, listing_outref()),
+      listing_input_holding(test_na_name, other_listing_outref()),
+      ua_input_holding(test_nb_name),
+    ],
+    reference_inputs: [zero_fee_config_ref_input()],
+    outputs: [
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(tag_a),
+        2_000_000 + cfg.lister_fee,
+      ),
+      out_listing_holding(
+        test_nb_name,
+        test_lister_pkh,
+        Some(tag_b),
+        2_000_000 + cfg.lister_fee,
+      ),
+    ],
+  }
+  // no treasury output — validator should still pass for input B with
+  // listing_output_index: 1, treasury_output_index: None.
+  let r = Swap {
+    nb_asset_name: test_nb_name,
+    listing_output_index: 1,
+    treasury_output_index: None,
+  }
+  let listing_datum: Data = ListingDatum {
+    lister_pkh: test_lister_pkh,
+    update_ref: None,
+  }
   listing.listing.spend(
     test_config_nft_policy,
     Some(listing_datum),

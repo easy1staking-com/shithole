@@ -72,6 +72,47 @@
       "hash": "ab7d0b190a8a67ecebec6cd8b6a93d1109179deac831b39a6c078c1c"
     },
     {
+      "title": "jar.jar.spend",
+      "datum": {
+        "title": "datum",
+        "schema": {
+          "$ref": "#/definitions/jar~1JarDatum"
+        }
+      },
+      "redeemer": {
+        "title": "redeemer",
+        "schema": {
+          "$ref": "#/definitions/jar~1JarRedeemer"
+        }
+      },
+      "parameters": [
+        {
+          "title": "admin_pkh",
+          "schema": {
+            "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+          }
+        }
+      ],
+      "compiledCode": "590454010100229800aba2aba1aba0aab9faab9eaab9dab9a9bae0024888888896600264653001300900198049805000cc0240092225980099b8748008c020dd500144ca6002601a003300d300e0019b87480012223322598009801800c4c8c8c8ca60026eb4c0580066eb8c0580126eb8c05800e6eb4c058009222259800980d802c02a2c80c0602c002602a0026028002601e6ea80262b30013370e9001000c4c8c966002602a0050048b2024375a6026002601e6ea80262c806900d0acc004c004c030dd500144c8cc89660026008601e6ea80063300130133010375400323014301500199ba548000cc048dd49b94376600c97ae0912cc004c018c044dd500144c8c96600260300050038b202a375c602c00260246ea800a2c808246028602a602a0032225980099b894801000633001003980b980b8014cdc024006002801a2b3001337129001000c66002007301700299b80480040050034566002600e003130160028b2022404480892222229800980c980b1baa30053016375400d3756600a602c6ea8c014c058dd50034c004005222598009806980c1baa01389919194c004dd6980f800ccc010038dd6980f9810000cdd7180f801cdd7180f801244446644b30013370e900218109baa001899198080008acc004cdc42400000f15980099baf30263023375400c01b15980099baf001011899baf30123023375400c6e9800e2941021452820428a504084604a60446ea80062c810166002602800910098991919800800805912cc00400626604a66ec0dd48029ba60034bd6f7b63044c8cc896600266e4402000a2b30013371e0100051325980099baf4c101a000374c003100289981499bb037520126e9800400902519198008009bab30270042259800800c4cc0a8cdd81ba9009375001897adef6c6089919912cc004cdc8806001456600266e3c03000a264b30013370e00266e052000010880144cc0b8cdd81ba900d375066e0000404000902a1bad302b00389981699bb037520186ea003c01102944cc0b400ccc0140140050291bae3028001302d002302b00140a5133028337606ea4020dd3003002204889981400199802802800a048375c60460026050004604c0028120cc088cdd81ba9001375000897adef6c604078601860406ea800c603e002603c00260326ea804e26464b30013370e9002180d1baa001899198048008acc004c8cc004004dd6181018109810981098109810981098109810980e9baa0152259800800c528456600266e3cdd7181080080dc528c4cc008008c08800501c203e8acc004cdd7980f980e1baa003006899baf00100a8a50406914a080d0c078c06cdd5000c590191803180d1baa0013300100b375a603860326ea804d01711640386eb0c044c048c048004c8cc004004dd61809001112cc004006298103d87a80008992cc004cdd7980a18089baa001007899ba548000cc04c0052f5c11330030033015002403c60260028088c034dd5002c5900b18061baa00718049baa0028b200e180480098021baa0098a4d1365640081",
+      "hash": "cf9722c7b0628ff8dfeb47989f99aa87106db0cb3a819a1c53f805ae"
+    },
+    {
+      "title": "jar.jar.else",
+      "redeemer": {
+        "schema": {}
+      },
+      "parameters": [
+        {
+          "title": "admin_pkh",
+          "schema": {
+            "$ref": "#/definitions/aiken~1crypto~1VerificationKeyHash"
+          }
+        }
+      ],
+      "compiledCode": "590454010100229800aba2aba1aba0aab9faab9eaab9dab9a9bae0024888888896600264653001300900198049805000cc0240092225980099b8748008c020dd500144ca6002601a003300d300e0019b87480012223322598009801800c4c8c8c8ca60026eb4c0580066eb8c0580126eb8c05800e6eb4c058009222259800980d802c02a2c80c0602c002602a0026028002601e6ea80262b30013370e9001000c4c8c966002602a0050048b2024375a6026002601e6ea80262c806900d0acc004c004c030dd500144c8cc89660026008601e6ea80063300130133010375400323014301500199ba548000cc048dd49b94376600c97ae0912cc004c018c044dd500144c8c96600260300050038b202a375c602c00260246ea800a2c808246028602a602a0032225980099b894801000633001003980b980b8014cdc024006002801a2b3001337129001000c66002007301700299b80480040050034566002600e003130160028b2022404480892222229800980c980b1baa30053016375400d3756600a602c6ea8c014c058dd50034c004005222598009806980c1baa01389919194c004dd6980f800ccc010038dd6980f9810000cdd7180f801cdd7180f801244446644b30013370e900218109baa001899198080008acc004cdc42400000f15980099baf30263023375400c01b15980099baf001011899baf30123023375400c6e9800e2941021452820428a504084604a60446ea80062c810166002602800910098991919800800805912cc00400626604a66ec0dd48029ba60034bd6f7b63044c8cc896600266e4402000a2b30013371e0100051325980099baf4c101a000374c003100289981499bb037520126e9800400902519198008009bab30270042259800800c4cc0a8cdd81ba9009375001897adef6c6089919912cc004cdc8806001456600266e3c03000a264b30013370e00266e052000010880144cc0b8cdd81ba900d375066e0000404000902a1bad302b00389981699bb037520186ea003c01102944cc0b400ccc0140140050291bae3028001302d002302b00140a5133028337606ea4020dd3003002204889981400199802802800a048375c60460026050004604c0028120cc088cdd81ba9001375000897adef6c604078601860406ea800c603e002603c00260326ea804e26464b30013370e9002180d1baa001899198048008acc004c8cc004004dd6181018109810981098109810981098109810980e9baa0152259800800c528456600266e3cdd7181080080dc528c4cc008008c08800501c203e8acc004cdd7980f980e1baa003006899baf00100a8a50406914a080d0c078c06cdd5000c590191803180d1baa0013300100b375a603860326ea804d01711640386eb0c044c048c048004c8cc004004dd61809001112cc004006298103d87a80008992cc004cdd7980a18089baa001007899ba548000cc04c0052f5c11330030033015002403c60260028088c034dd5002c5900b18061baa00718049baa0028b200e180480098021baa0098a4d1365640081",
+      "hash": "cf9722c7b0628ff8dfeb47989f99aa87106db0cb3a819a1c53f805ae"
+    },
+    {
       "title": "listing.listing.spend",
       "datum": {
         "title": "datum",
@@ -377,6 +418,10 @@
         }
       ]
     },
+    "cardano/assets/AssetName": {
+      "title": "AssetName",
+      "dataType": "bytes"
+    },
     "cardano/assets/PolicyId": {
       "title": "PolicyId",
       "dataType": "bytes"
@@ -394,6 +439,64 @@
               "title": "transaction_id",
               "$ref": "#/definitions/ByteArray"
             },
+            {
+              "title": "output_index",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        }
+      ]
+    },
+    "jar/JarDatum": {
+      "title": "JarDatum",
+      "anyOf": [
+        {
+          "title": "JarDatum",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "update_ref",
+              "description": "Anti-double-sat binding for the continuing UTxO. On every Deposit and\n Sweep, the recreated jar's `update_ref` must equal\n `compute_output_tag(consumed_jar.out_ref)`. The seed (initial) jar\n created by the admin can carry any value here — the validator does not\n run on creation, and the first spend overwrites it.",
+              "$ref": "#/definitions/ByteArray"
+            }
+          ]
+        }
+      ]
+    },
+    "jar/JarRedeemer": {
+      "title": "JarRedeemer",
+      "anyOf": [
+        {
+          "title": "Deposit",
+          "description": "Caller adds `qty` of `(fee_token_policy, fee_token_name)` to the jar.\n `output_index` points to the continuing jar UTxO in `tx.outputs` for\n O(1) lookup.",
+          "dataType": "constructor",
+          "index": 0,
+          "fields": [
+            {
+              "title": "fee_token_policy",
+              "$ref": "#/definitions/cardano~1assets~1PolicyId"
+            },
+            {
+              "title": "fee_token_name",
+              "$ref": "#/definitions/cardano~1assets~1AssetName"
+            },
+            {
+              "title": "qty",
+              "$ref": "#/definitions/Int"
+            },
+            {
+              "title": "output_index",
+              "$ref": "#/definitions/Int"
+            }
+          ]
+        },
+        {
+          "title": "Sweep",
+          "description": "Admin-only path. The continuing UTxO must remain at the jar address\n with a correctly-tagged datum; ADA and token contents are at admin's\n discretion (Cardano-level min-UTxO will fail the tx if the admin tries\n to drain below the protocol floor — no on-chain assertion needed).",
+          "dataType": "constructor",
+          "index": 1,
+          "fields": [
             {
               "title": "output_index",
               "$ref": "#/definitions/Int"
