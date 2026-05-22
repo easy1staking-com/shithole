@@ -746,8 +746,10 @@ test buy_fails_when_fee_zero() fail {
   invoke_buy(tx, happy_cnt_buy_redeemer())
 }
 
-test buy_succeeds_when_overpaying_fee() {
-  // Buyer ships 5 of the price token to the jar instead of the required 2.
+test buy_fails_when_overpaying_fee_token() fail {
+  // Strict semantics: jar's value-bag must match `jar_in + Σfees` EXACTLY
+  // on the fee-token side. Buyer can't tip the protocol in CNT — the
+  // aggregate check is non-ADA strict (assets.match). Tips go via ADA.
   let own_tag = utils.compute_output_tag(listing_outref())
   let tx = Transaction {
     ..transaction.placeholder,
@@ -755,6 +757,30 @@ test buy_succeeds_when_overpaying_fee() {
     outputs: [
       cnt_seller_output(own_tag, 98, test_seller_addr()),
       cnt_jar_output(0, 5),
+    ],
+  }
+  invoke_buy(tx, happy_cnt_buy_redeemer())
+}
+
+test buy_succeeds_when_jar_receives_extra_ada() {
+  // Counterpart to the test above: tipping is allowed in ADA. The
+  // assets.match callback enforces `actual_lovelace >= expected_lovelace`,
+  // so a buyer adding extra lovelace to the jar's continuing output (over
+  // and above the recreated min-UTxO) is fine.
+  let own_tag = utils.compute_output_tag(listing_outref())
+  let tipped_jar = Output {
+    address: test_jar_addr(),
+    value: assets.from_lovelace(3_000_000)
+      |> assets.add(test_price_policy, test_price_name, 2),
+    datum: InlineDatum(0),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [cnt_listing_input(), buyer_funding_input(), cnt_jar_input()],
+    outputs: [
+      cnt_seller_output(own_tag, 98, test_seller_addr()),
+      tipped_jar,
     ],
   }
   invoke_buy(tx, happy_cnt_buy_redeemer())
@@ -824,18 +850,15 @@ test fee_ceiling_price_1_with_zero_fee_fails() fail {
   run_fee_ceiling_case(1, 0, 0)
 }
 
-// Property: any (price, fee_buffer) where buyer ships ceil(price * 2 / 100)
-// + fee_buffer to the jar AND seller_qty = price - ceil(price * 2 / 100)
-// to the seller passes. Buyer overpays the protocol via fee_buffer; the
-// seller's take is fixed at the validator-required minimum.
-test prop_fee_ceiling((price, fee_buffer) via fuzz.both(
-  fuzz.int_between(1, 1_000_000),
-  fuzz.int_between(0, 5),
-)) {
+// Property: for any price in [1, 1_000_000], the canonical tx
+// (jar gets ceil(price * 2 / 100), seller gets price - that) passes.
+// Strict semantics — `fee_buffer` is intentionally absent here; the
+// `buy_fails_when_overpaying_fee_token` unit test pins the non-ADA
+// strict-equality rejection separately.
+test prop_fee_ceiling(price via fuzz.int_between(1, 1_000_000)) {
   let expected_fee = ( price * 2 + 99 ) / 100
-  let fee = expected_fee + fee_buffer
   let seller_qty = price - expected_fee
-  run_fee_ceiling_case(price, fee, seller_qty)
+  run_fee_ceiling_case(price, expected_fee, seller_qty)
 }
 
 // ============================================================================
@@ -1141,11 +1164,14 @@ test bulk_buy_succeeds_three_listings_same_token() {
 }
 
 // ---------------------------------------------------------------------------
-// Jar overpayment on bulk is still accepted
+// Strict semantics: jar overpayment in the FEE TOKEN is rejected on bulk too.
+// (Buyers who want to tip the protocol do it in ADA via the assets.match
+// callback's `>=` lovelace check.)
 // ---------------------------------------------------------------------------
 
-test bulk_buy_succeeds_when_jar_overpaid() {
-  // Aggregate fee required = 4; buyer ships 7. Permitted.
+test bulk_buy_fails_when_jar_overpaid_in_fee_token() fail {
+  // Aggregate fee required = 4; buyer ships 7. Strict non-ADA equality
+  // rejects on the leader's aggregate check.
   let tag_a = utils.compute_output_tag(listing_outref())
   let tag_b = utils.compute_output_tag(other_listing_outref())
   let datum = cnt_datum()
@@ -1163,11 +1189,15 @@ test bulk_buy_succeeds_when_jar_overpaid() {
       cnt_jar_output(0, 7),
     ],
   }
+  // Invoke the LEADER (listing A) — its aggregate check sees the strict
+  // mismatch and rejects.
   let r_a =
     Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 0 }
+  let a_ok = invoke_bulk_spend(datum, listing_outref(), r_a, tx)
+  // Keep the same shape as the original test (AND with a follower) so the
+  // `fail` annotation observes the leader rejection.
   let r_b =
     Buy { jar_input_index: 3, jar_output_index: 2, seller_output_index: 1 }
-  let a_ok = invoke_bulk_spend(datum, listing_outref(), r_a, tx)
   let b_ok = invoke_bulk_spend(datum, other_listing_outref(), r_b, tx)
   a_ok && b_ok
 }

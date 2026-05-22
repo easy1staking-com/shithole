@@ -1,7 +1,7 @@
 use aiken/collection/list
 use aiken/crypto.{ScriptHash, VerificationKeyHash}
 use cardano/address.{Address, Script}
-use cardano/assets.{AssetName, PolicyId, Value, quantity_of}
+use cardano/assets.{AssetName, PolicyId}
 use cardano/transaction.{
   InlineDatum, Input, Output, OutputReference, Transaction, find_input,
 }
@@ -179,13 +179,14 @@ fn validate_buy(
   // `actual >= seller_amount + accompanying_lovelace` in one shot.
   let seller_out = list.expect_at(outputs, seller_output_index)
   let own_tag = utils.compute_output_tag(own_ref)
-  let expected_seller_payment =
-    assets.from_lovelace(input_datum.accompanying_lovelace)
-      |> assets.add(
-          input_datum.price_policy,
-          input_datum.price_name,
-          seller_amount,
-        )
+  let expected_seller_payment = assets.from_lovelace(
+    input_datum.accompanying_lovelace,
+  )
+    |> assets.add(
+        input_datum.price_policy,
+        input_datum.price_name,
+        seller_amount,
+      )
   let expected_payment_data: Data = expected_seller_payment
   expect input_datum.price_qty > 0
   expect seller_out.address == input_datum.seller_address
@@ -199,26 +200,28 @@ fn validate_buy(
       },
     )
 
-  // ---- B4 + B5: jar leg sanity (per-spend) ----
-  // Each spend resolves its own redeemer's jar hints and asserts they point
-  // at a real jar leg (input at the configured jar script, output continuing
-  // at the same address). Forces the off-chain tx-builder to set consistent
-  // jar_input_index / jar_output_index across every Buy redeemer in the tx.
-  // The aggregate fee check itself is leader-only (below).
-  let jar_in = list.expect_at(inputs, jar_input_index)
-  let jar_out = list.expect_at(outputs, jar_output_index)
-  expect jar_in.output.address.payment_credential == Script(jar_script_hash)
-  expect jar_out.address == jar_in.output.address
-
   // ---- Leader detection ----
   // tx.inputs is canonically sorted by OutRef in Plutus v3, so list.find
   // returns the lowest-outref marketplace input — deterministically the
   // same input no matter which spend is running. Exactly one spend will
   // find that this input IS itself.
-  expect Some(first_marketplace) =
-    list.find(inputs, fn(i) { i.output.address == own_address })
+  expect Some(first_marketplace) = list.find(
+    inputs,
+    fn(i) { i.output.address == own_address },
+  )
 
   if first_marketplace.output_reference == own_ref {
+    // ---- B4 + B5: jar leg sanity (per-spend) ----
+    // Each spend resolves its own redeemer's jar hints and asserts they point
+    // at a real jar leg (input at the configured jar script, output continuing
+    // at the same address). Forces the off-chain tx-builder to set consistent
+    // jar_input_index / jar_output_index across every Buy redeemer in the tx.
+    // The aggregate fee check itself is leader-only (below).
+    let jar_in = list.expect_at(inputs, jar_input_index)
+    let jar_out = list.expect_at(outputs, jar_output_index)
+    expect jar_in.output.address.payment_credential == Script(jar_script_hash)
+    expect jar_out.address == jar_in.output.address
+
     // Leader path — run the aggregate fee check once for the whole tx.
     validate_aggregate_fee(inputs, own_address, jar_in, jar_out)
   } else {
@@ -247,41 +250,20 @@ fn validate_aggregate_fee(
   jar_in: Input,
   jar_out: Output,
 ) -> Bool {
-  let expected_jar_delta =
-    list.foldr(
-      inputs,
-      assets.zero,
-      fn(input, acc) {
-        if input.output.address == marketplace_address {
-          expect InlineDatum(input_data) = input.output.datum
-          expect md: MarketDatum = input_data
-          let fee = ( md.price_qty * 2 + 99 ) / 100
-          assets.add(acc, md.price_policy, md.price_name, fee)
-        } else {
-          acc
-        }
-      },
-    )
+  let expected_jar_output_value = list.foldr(
+    inputs,
+    jar_in.output.value,
+    fn(input, acc) {
+      if input.output.address == marketplace_address {
+        expect InlineDatum(input_data) = input.output.datum
+        expect md: MarketDatum = input_data
+        let fee = ( md.price_qty * 2 + 99 ) / 100
+        assets.add(acc, md.price_policy, md.price_name, fee)
+      } else {
+        acc
+      }
+    },
+  )
 
-  expected_jar_delta
-    |> jar_delta_covers_each_token(jar_in.output.value, jar_out.value)
-}
-
-/// For every (policy, name, expected_qty) in `expected_delta`, check
-/// `quantity_of(jar_out_value, p, n) - quantity_of(jar_in_value, p, n) >= expected_qty`.
-/// Other tokens present in the jar's value bag are ignored — we only care
-/// that the FEE tokens went up by at least the expected amount.
-fn jar_delta_covers_each_token(
-  expected_delta: Value,
-  jar_in_value: Value,
-  jar_out_value: Value,
-) -> Bool {
-  expected_delta
-    |> assets.flatten
-    |> list.all(
-        fn(triple) {
-          let (p, n, expected_qty) = triple
-          quantity_of(jar_out_value, p, n) - quantity_of(jar_in_value, p, n) >= expected_qty
-        },
-      )
+  assets.match(jar_out.value, expected_jar_output_value, fn(a, b) { a >= b })
 }
