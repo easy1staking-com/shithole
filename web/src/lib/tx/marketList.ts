@@ -55,6 +55,15 @@ export async function submitMarketList(
   for (const l of input.listings) {
     const unit = l.unit.toLowerCase();
     const datum: Data.Data = buildMarketDatum(l.datum);
+    // autoMinUtxo bumps the output's lovelace to the chain-computed min
+    // when the user-supplied bond falls under. The listed asset + the
+    // inline MarketDatum push the floor up to ~1.8 ADA for a single-NFT
+    // listing on a script address; without this an under-bonded user
+    // hits BabbageOutputTooSmallUTxO at submit time. The validator's
+    // seller-payment check is >= on lovelace via assets.match's
+    // callback, so the buyer pays out the declared bond and any extra
+    // flows to their change output — no on-chain consequence beyond a
+    // small rebate to the buyer when seller over-bonds.
     txBuilder = txBuilder.payToAddress({
       address: toAddress(input.marketplaceAddress),
       assets: toAssets({
@@ -62,6 +71,7 @@ export async function submitMarketList(
         [unit]: l.qty,
       }),
       datum: inlineDatum(datum),
+      autoMinUtxo: true,
     });
   }
 

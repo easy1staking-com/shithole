@@ -35,7 +35,7 @@ export function ListForm() {
   const [unitQty, setUnitQty] = useState("1");
   const [priceTokenUnit, setPriceTokenUnit] = useState<string>(priceTokens[0]?.unit ?? "");
   const [priceDisplay, setPriceDisplay] = useState("10");
-  const [bondAda, setBondAda] = useState("1.5");
+  const [bondAda, setBondAda] = useState("2");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ txHash: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -214,7 +214,7 @@ export function ListForm() {
               inputMode="decimal"
               value={bondAda}
               onChange={(e) => setBondAda(e.target.value)}
-              placeholder="1.5"
+              placeholder="2"
               className="w-32 rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 focus:border-sky-700 focus:outline-none"
             />
             <p className="text-[10px] text-zinc-500">
