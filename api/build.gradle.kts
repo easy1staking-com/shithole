@@ -123,6 +123,14 @@ tasks.register<JavaExec>("preprodMintHoskyMimic") {
     standardInput = System.`in`
 }
 
+tasks.register<JavaExec>("preprodMintFungible") {
+    group = "preprod tools"
+    description = "Mint a preprod fungible token under a one-shot native policy. Args: <asset_name_ascii> <supply_smallest_unit> <decimals> [ticker]."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.MintPreprodFungibleTool")
+    standardInput = System.`in`
+}
+
 tasks.register<JavaExec>("preprodListNft") {
     group = "preprod tools"
     description = "List one NFT at the registered listing-script address (use --args=\"ShitterNNN\" to pick)."
