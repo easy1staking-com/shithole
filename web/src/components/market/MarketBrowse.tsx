@@ -18,7 +18,14 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
  * asset's policy id — typing a 56-hex string narrows to one collection.
  */
 export function MarketBrowse() {
-  const manifest = marketplaceManifest();
+  // Memoise the manifest read so its object identity is stable across
+  // renders — otherwise the refresh callback's deps tick every render and
+  // the useEffect fires in a tight loop (the "scanning…" spinner blinks
+  // fast, the page hammers Blockfrost). The manifest is only refreshed
+  // when the page mounts or localStorage is updated by /market/dev-tools
+  // (which calls window.location.reload anyway, so a per-mount snapshot
+  // is sufficient).
+  const manifest = useMemo(() => marketplaceManifest(), []);
   const walletApi = useWalletStore((s) => s.api);
 
   const [listings, setListings] = useState<DecodedListing[] | null>(null);
@@ -26,23 +33,22 @@ export function MarketBrowse() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const marketplaceAddress = manifest?.marketplaceAddress ?? null;
+
   const refresh = useCallback(async () => {
-    if (!manifest || !walletApi) return;
+    if (!marketplaceAddress || !walletApi) return;
     setLoading(true);
     setErr(null);
     try {
       const client = await makeClient(walletApi);
-      const found = await fetchMarketListings(
-        client,
-        manifest.marketplaceAddress,
-      );
+      const found = await fetchMarketListings(client, marketplaceAddress);
       setListings(found);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [manifest, walletApi]);
+  }, [marketplaceAddress, walletApi]);
 
   useEffect(() => {
     refresh();

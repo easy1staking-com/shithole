@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { marketplaceManifest } from "@/lib/market/config";
 import {
@@ -21,7 +21,10 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
  * Cancel from this page.
  */
 export function ListingDetail({ unit }: { unit: string }) {
-  const manifest = marketplaceManifest();
+  // Same reasoning as MarketBrowse: marketplaceManifest() returns a fresh
+  // object per render, which makes the useEffect dep tick every time and
+  // produces a re-fetch loop. Snapshot once.
+  const manifest = useMemo(() => marketplaceManifest(), []);
   const walletApi = useWalletStore((s) => s.api);
   const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
 
@@ -30,13 +33,15 @@ export function ListingDetail({ unit }: { unit: string }) {
   const [busy, setBusy] = useState(false);
   const [tx, setTx] = useState<string | null>(null);
 
+  const marketplaceAddress = manifest?.marketplaceAddress ?? null;
+
   useEffect(() => {
-    if (!manifest || !walletApi) return;
+    if (!marketplaceAddress || !walletApi) return;
     let cancelled = false;
     (async () => {
       try {
         const client = await makeClient(walletApi);
-        const all = await fetchMarketListings(client, manifest.marketplaceAddress);
+        const all = await fetchMarketListings(client, marketplaceAddress);
         const match = all.find((l) =>
           l.listedUnits.includes(unit.toLowerCase()),
         );
@@ -48,7 +53,7 @@ export function ListingDetail({ unit }: { unit: string }) {
     return () => {
       cancelled = true;
     };
-  }, [manifest, walletApi, unit]);
+  }, [marketplaceAddress, walletApi, unit]);
 
   const isSeller = listing && walletPkh && listing.datum.sellerPkhHex === walletPkh;
 
