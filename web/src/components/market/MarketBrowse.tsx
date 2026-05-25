@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ListingCard } from "@/components/market/ListingCard";
 import { marketplaceManifest } from "@/lib/market/config";
 import {
   fetchMarketListings,
@@ -112,7 +113,7 @@ export function MarketBrowse() {
                 : "nothing listed yet — be the first."}
             </p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {filtered.map((l) => (
                 <li key={`${l.utxo.txHash}:${l.utxo.outputIndex}`}>
                   <ListingCard listing={l} />
@@ -123,36 +124,6 @@ export function MarketBrowse() {
         </>
       )}
     </main>
-  );
-}
-
-function ListingCard({ listing }: { listing: DecodedListing }) {
-  const u = listing.listedUnits[0] ?? "";
-  const detailHref = `/market/${u}?utxo=${listing.utxo.txHash}.${listing.utxo.outputIndex}`;
-  const priceUnit = (
-    listing.datum.pricePolicyHex + listing.datum.priceNameHex
-  ).toLowerCase();
-  const priceLabel =
-    priceUnit === "" ? "₳" : `${priceUnit.slice(0, 8)}…`;
-  return (
-    <Link
-      href={detailHref}
-      className="block rounded-lg border border-zinc-800 bg-zinc-950 p-4 transition hover:border-zinc-700"
-    >
-      <div className="space-y-2">
-        <div className="break-all font-mono text-xs text-zinc-500">{u}</div>
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-sm font-semibold text-zinc-100">
-            {String(listing.datum.priceQty)} {priceLabel}
-          </span>
-          <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-            {listing.listedUnits.length === 1
-              ? "1 asset"
-              : `${listing.listedUnits.length} assets`}
-          </span>
-        </div>
-      </div>
-    </Link>
   );
 }
 
