@@ -94,36 +94,41 @@ export type DecodedMarketDatum = {
 };
 
 export function decodeMarketDatum(data: Data.Data): DecodedMarketDatum | null {
-  // Evolution's Data types carry runtime tag info under `_tag` even when
-  // the static types are sealed effect-schema discriminated unions —
-  // walk the structure with `unknown` casts rather than fight the type.
+  // Runtime shape from Evolution's Data.fromCBORHex (per swap.ts:215-236):
+  //   Constr  -> object with bigint `index` + Data[] `fields`
+  //   bytes   -> Uint8Array
+  //   int     -> bigint
+  //   list    -> Array (not used here)
+  //   map     -> JS Map (not used here)
+  // See Data.isConstr / Data.isList / etc. for SDK-side predicates.
   try {
-    const d = data as unknown as { _tag?: string; index?: bigint; fields?: unknown[] };
-    if (d._tag !== "Constr" || d.index !== 0n) return null;
-    const fields = d.fields ?? [];
-    if (fields.length !== 6) return null;
-    const [pkhF, addrF, ppF, pnF, qtyF, accLovF] = fields as Array<{
-      _tag?: string;
-      bytes?: string;
-      int?: bigint;
-    }>;
-    if (
-      pkhF?._tag !== "ByteArray" ||
-      ppF?._tag !== "ByteArray" ||
-      pnF?._tag !== "ByteArray"
-    ) {
-      return null;
-    }
-    if (qtyF?._tag !== "Integer" || accLovF?._tag !== "Integer") return null;
+    if (!Data.isConstr(data)) return null;
+    const c = data as unknown as { index: bigint; fields: ReadonlyArray<unknown> };
+    if (c.index !== 0n) return null;
+    if (c.fields.length !== 6) return null;
+    const [pkhF, addrF, ppF, pnF, qtyF, accLovF] = c.fields;
+    if (!(pkhF instanceof Uint8Array)) return null;
+    if (!(ppF instanceof Uint8Array)) return null;
+    if (!(pnF instanceof Uint8Array)) return null;
+    if (typeof qtyF !== "bigint") return null;
+    if (typeof accLovF !== "bigint") return null;
     return {
-      sellerPkhHex: pkhF.bytes ?? "",
+      sellerPkhHex: bytesToHex(pkhF),
       sellerAddressRaw: addrF as unknown as Data.Data,
-      pricePolicyHex: ppF.bytes ?? "",
-      priceNameHex: pnF.bytes ?? "",
-      priceQty: qtyF.int ?? 0n,
-      accompanyingLovelace: accLovF.int ?? 0n,
+      pricePolicyHex: bytesToHex(ppF),
+      priceNameHex: bytesToHex(pnF),
+      priceQty: qtyF,
+      accompanyingLovelace: accLovF,
     };
   } catch {
     return null;
   }
+}
+
+function bytesToHex(b: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < b.length; i++) {
+    s += b[i].toString(16).padStart(2, "0");
+  }
+  return s;
 }

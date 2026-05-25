@@ -32,22 +32,28 @@ export async function fetchJars(
       continue;
     }
     try {
-      const root = Data.fromCBORHex(u.datum) as unknown as {
-        _tag?: string;
-        index?: bigint;
-        fields?: unknown[];
-      };
-      if (root._tag !== "Constr" || root.index !== 0n) {
+      const root = Data.fromCBORHex(u.datum);
+      // Runtime shape per Evolution SDK: Constr is an object with bigint
+      // `index` + Data[] `fields`; byte fields are raw Uint8Array.
+      if (!Data.isConstr(root)) {
         junk.push(u);
         continue;
       }
-      const fields = root.fields ?? [];
-      const first = fields[0] as { _tag?: string; bytes?: string } | undefined;
-      if (first?._tag !== "ByteArray") {
+      const c = root as unknown as { index: bigint; fields: ReadonlyArray<unknown> };
+      if (c.index !== 0n) {
         junk.push(u);
         continue;
       }
-      jars.push({ utxo: u, updateRefHex: first.bytes ?? "" });
+      const first = c.fields[0];
+      if (!(first instanceof Uint8Array)) {
+        junk.push(u);
+        continue;
+      }
+      let hex = "";
+      for (let i = 0; i < first.length; i++) {
+        hex += first[i].toString(16).padStart(2, "0");
+      }
+      jars.push({ utxo: u, updateRefHex: hex });
     } catch {
       junk.push(u);
     }
