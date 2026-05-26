@@ -218,25 +218,112 @@ public class NftMetadataService {
         try { return Long.parseLong(s); } catch (NumberFormatException e) { return null; }
     }
 
-    /** Build a List<{key:value}> JSON for non-standard CIP-25 fields. */
+    /**
+     * Build a {@code List<{key:value}>} JSON for non-standard CIP-25
+     * fields, covering the dialects we've seen in mainnet + preprod:
+     *
+     * <ul>
+     *   <li>Nested-object container ({@code "traits": {Fur: "Original",
+     *       Eyes: "Original"}}) — older mainnet CNFT collections.</li>
+     *   <li>Nested-array container of single-key dicts ({@code "traits":
+     *       [{Fur: "Original"}, {Eyes: "Original"}]}) — CIP-25 v1
+     *       recommended shape, used by the preprod HOSKY mimic and many
+     *       mainnet collections under ornate keys like
+     *       "-----Traits-----".</li>
+     *   <li>OpenSea-style "attributes" array of {trait_type, value}.</li>
+     *   <li>Flat top-level fields — older convention where each trait is
+     *       a top-level field alongside name / image.</li>
+     * </ul>
+     *
+     * <p>All four are tried per call so a collection mixing two
+     * dialects still surfaces sensibly.
+     */
     private String extractTraits(JsonNode onchain) {
         if (!(onchain instanceof ObjectNode obj)) return null;
         var traits = objectMapper.createArrayNode();
+
+        // Dialects 1 & 2: nested container under any of the known keys.
+        // The mainnet HOSKY's ornate "-----Traits-----" key is included
+        // so the dev branch shares the same recognition surface as main.
+        for (String key : NESTED_TRAIT_KEYS) {
+            JsonNode container = obj.get(key);
+            if (container == null) continue;
+            if (container.isObject()) {
+                Iterator<String> names = container.fieldNames();
+                while (names.hasNext()) {
+                    String k = names.next();
+                    String txt = textOrJoined(container.get(k));
+                    if (txt == null) continue;
+                    ObjectNode pair = objectMapper.createObjectNode();
+                    pair.put(k, txt);
+                    traits.add(pair);
+                }
+            } else if (container.isArray()) {
+                for (JsonNode entry : container) {
+                    if (!entry.isObject()) continue;
+                    Iterator<String> names = entry.fieldNames();
+                    while (names.hasNext()) {
+                        String k = names.next();
+                        String txt = textOrJoined(entry.get(k));
+                        if (txt == null) continue;
+                        ObjectNode pair = objectMapper.createObjectNode();
+                        pair.put(k, txt);
+                        traits.add(pair);
+                    }
+                }
+            }
+        }
+
+        // Dialect 3: OpenSea "attributes" array.
+        for (String key : ATTRIBUTES_KEYS) {
+            JsonNode attrs = obj.get(key);
+            if (attrs == null || !attrs.isArray()) continue;
+            for (JsonNode attr : attrs) {
+                JsonNode tt = attr.get("trait_type");
+                if (tt == null || !tt.isTextual()) continue;
+                String txt = textOrJoined(attr.get("value"));
+                if (txt == null) continue;
+                ObjectNode pair = objectMapper.createObjectNode();
+                pair.put(tt.asText(), txt);
+                traits.add(pair);
+            }
+        }
+
+        // Dialect 4: flat top-level fields (fallback). Skip standard
+        // CIP-25 fields AND any key we already drained as a container
+        // above, to avoid double-counting.
         Iterator<String> names = obj.fieldNames();
         while (names.hasNext()) {
             String k = names.next();
-            // Skip the standard CIP-25 fields — those map to dedicated columns.
-            if (k.equals("name") || k.equals("image") || k.equals("mediaType")
-                    || k.equals("description") || k.equals("files")) continue;
-            JsonNode v = obj.get(k);
-            String txt = textOrJoined(v);
+            if (FLAT_SKIP_KEYS.contains(k)) continue;
+            String txt = textOrJoined(obj.get(k));
             if (txt == null) continue;
             ObjectNode pair = objectMapper.createObjectNode();
             pair.put(k, txt);
             traits.add(pair);
         }
+
         return traits.isEmpty() ? null : traits.toString();
     }
+
+    private static final List<String> NESTED_TRAIT_KEYS = List.of(
+            "-----Traits-----",
+            "traits",
+            "Traits",
+            "properties",
+            "Properties"
+    );
+
+    private static final List<String> ATTRIBUTES_KEYS = List.of(
+            "attributes",
+            "Attributes"
+    );
+
+    private static final java.util.Set<String> FLAT_SKIP_KEYS = java.util.Set.of(
+            "name", "image", "mediaType", "description", "files",
+            "-----Traits-----", "traits", "Traits", "properties", "Properties",
+            "attributes", "Attributes"
+    );
 
     private List<Map<String, String>> parseTraits(String traitsJson) {
         if (traitsJson == null || traitsJson.isBlank()) return new ArrayList<>();
