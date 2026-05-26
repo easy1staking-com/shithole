@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { ListForm } from "@/components/market/ListForm";
+import { ListDrawer } from "@/components/market/ListDrawer";
 import { isMarketplaceEnabled } from "@/lib/market/config";
 
 export const metadata = {
@@ -9,5 +9,5 @@ export const metadata = {
 
 export default function MarketNewPage() {
   if (!isMarketplaceEnabled()) notFound();
-  return <ListForm />;
+  return <ListDrawer />;
 }

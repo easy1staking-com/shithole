@@ -1,0 +1,4066 @@
+{
+  "pools": [
+    {
+      "ticker": "A3C",
+      "poolId": "pool1zkdaju2rjefa52uh6yh6etsxla0x6aqs6p6wm245y5szk7k3msd",
+      "traits": [
+        {
+          "category": "Background",
+          "value": "Blue",
+          "count": 31763
+        },
+        {
+          "category": "Frame",
+          "value": "Ikea",
+          "count": 20705
+        },
+        {
+          "category": "Mouth",
+          "value": "Sad-Ish",
+          "count": 17216
+        },
+        {
+          "category": "Background",
+          "value": "Khaki",
+          "count": 13890
+        },
+        {
+          "category": "Hat",
+          "value": "Bandana",
+          "count": 10376
+        },
+        {
+          "category": "Background",
+          "value": "Beige",
+          "count": 6860
+        },
+        {
+          "category": "Frame",
+          "value": "Green Hazmat Suit",
+          "count": 4281
+        },
+        {
+          "category": "Fur",
+          "value": "Tiger Fur",
+          "count": 3989
+        },
+        {
+          "category": "Mouth",
+          "value": "Rob Boss Beard",
+          "count": 3527
+        },
+        {
+          "category": "Fur",
+          "value": "Se\u00f1or Josqu\u00ed",
+          "count": 3491
+        },
+        {
+          "category": "Frame",
+          "value": "Warning",
+          "count": 3034
+        },
+        {
+          "category": "Frame",
+          "value": "Frosty",
+          "count": 3003
+        },
+        {
+          "category": "Eyes",
+          "value": "Charles Eyes",
+          "count": 2427
+        },
+        {
+          "category": "Hat",
+          "value": "Dumpling",
+          "count": 2427
+        },
+        {
+          "category": "Background",
+          "value": "Deep Green",
+          "count": 2345
+        },
+        {
+          "category": "Background",
+          "value": "Blue Purple Gradient",
+          "count": 2337
+        },
+        {
+          "category": "Glasses",
+          "value": "Eyes Patched",
+          "count": 1995
+        },
+        {
+          "category": "Neck",
+          "value": "Hosk Chain",
+          "count": 1991
+        },
+        {
+          "category": "Frame",
+          "value": "Thinking",
+          "count": 1990
+        },
+        {
+          "category": "Background",
+          "value": "Fuchsia",
+          "count": 1949
+        },
+        {
+          "category": "Background",
+          "value": "Neon Gradient",
+          "count": 1949
+        },
+        {
+          "category": "Background",
+          "value": "Orchid",
+          "count": 1897
+        },
+        {
+          "category": "Fur",
+          "value": "Knitted",
+          "count": 1897
+        },
+        {
+          "category": "Background",
+          "value": "Twilight Stepped Gradient",
+          "count": 1563
+        },
+        {
+          "category": "Hat",
+          "value": "Racing Helmet",
+          "count": 1560
+        },
+        {
+          "category": "Frame",
+          "value": "Fairy Lights",
+          "count": 1557
+        },
+        {
+          "category": "Background",
+          "value": "Highly Classified",
+          "count": 1556
+        },
+        {
+          "category": "Background",
+          "value": "Pink Gradient",
+          "count": 1285
+        },
+        {
+          "category": "Background",
+          "value": "Pastel",
+          "count": 1277
+        },
+        {
+          "category": "Frame",
+          "value": "Sticker",
+          "count": 1177
+        },
+        {
+          "category": "Mouth",
+          "value": "Clown Mouth",
+          "count": 1154
+        },
+        {
+          "category": "Hat",
+          "value": "Annie Hat",
+          "count": 1106
+        },
+        {
+          "category": "Mouth",
+          "value": "LED Mouth",
+          "count": 1092
+        },
+        {
+          "category": "Frame",
+          "value": "!%*@#?",
+          "count": 1011
+        },
+        {
+          "category": "Background",
+          "value": "Spamdle",
+          "count": 950
+        },
+        {
+          "category": "Background",
+          "value": "Confetti",
+          "count": 908
+        },
+        {
+          "category": "Frame",
+          "value": "Confetti",
+          "count": 908
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Biggie Hair",
+          "count": 874
+        },
+        {
+          "category": "Eyes",
+          "value": "Vasil Eyes",
+          "count": 820
+        },
+        {
+          "category": "Frame",
+          "value": "Square Cake",
+          "count": 795
+        },
+        {
+          "category": "Hat",
+          "value": "Tiger Hat",
+          "count": 774
+        },
+        {
+          "category": "Background",
+          "value": "Blue Yellow Gradient",
+          "count": 655
+        },
+        {
+          "category": "Hat",
+          "value": "Rainbow Hat",
+          "count": 630
+        },
+        {
+          "category": "Eyes",
+          "value": "Glowing Eyes",
+          "count": 565
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Candle Middle",
+          "count": 551
+        },
+        {
+          "category": "Frame",
+          "value": "1st Anniversary Fireworks",
+          "count": 418
+        },
+        {
+          "category": "Frame",
+          "value": "Torn",
+          "count": 398
+        },
+        {
+          "category": "Frame",
+          "value": "Shoot Out",
+          "count": 366
+        },
+        {
+          "category": "Glasses",
+          "value": "Red Laser",
+          "count": 333
+        },
+        {
+          "category": "Background",
+          "value": "Confetti Party",
+          "count": 234
+        },
+        {
+          "category": "Hat",
+          "value": "Neon Sphinx Hat",
+          "count": 222
+        },
+        {
+          "category": "Eyes",
+          "value": "Twitchy Eyes",
+          "count": 211
+        },
+        {
+          "category": "Frame",
+          "value": "1rd Anonversary Fireworks",
+          "count": 194
+        },
+        {
+          "category": "Neck",
+          "value": "Blue Bowtie",
+          "count": 183
+        },
+        {
+          "category": "Frame",
+          "value": "Please write something like happy 1st birthday hosky in blue",
+          "count": 138
+        },
+        {
+          "category": "Background",
+          "value": "Moderator Birthday Card",
+          "count": 113
+        },
+        {
+          "category": "Hat",
+          "value": "Fast Food Manager Error",
+          "count": 99
+        },
+        {
+          "category": "Background",
+          "value": "Radar Animated",
+          "count": 57
+        },
+        {
+          "category": "Background",
+          "value": "Sunset Clouds Animated",
+          "count": 57
+        },
+        {
+          "category": "Glasses",
+          "value": "Thug Life Error",
+          "count": 53
+        },
+        {
+          "category": "Glasses",
+          "value": "Eyes Patched Error",
+          "count": 52
+        },
+        {
+          "category": "Frame",
+          "value": "Stamp",
+          "count": 47
+        },
+        {
+          "category": "Hat",
+          "value": "Holographic Hat Error",
+          "count": 44
+        },
+        {
+          "category": "Glasses",
+          "value": "Green Laser Error",
+          "count": 40
+        },
+        {
+          "category": "Hat",
+          "value": "Mollusk Bone Play",
+          "count": 38
+        },
+        {
+          "category": "Hat",
+          "value": "King Tutankhamun Error",
+          "count": 36
+        },
+        {
+          "category": "Hat",
+          "value": "Third Ear Pink",
+          "count": 33
+        },
+        {
+          "category": "Hat",
+          "value": "Third Ear Orange",
+          "count": 26
+        },
+        {
+          "category": "Background",
+          "value": "Lunar New Year Blue Animated",
+          "count": 16
+        },
+        {
+          "category": "Background",
+          "value": "Fireworks Animated",
+          "count": 11
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Missing Bits",
+          "count": 10
+        },
+        {
+          "category": "Hat",
+          "value": "Third Ear Green",
+          "count": 8
+        }
+      ]
+    },
+    {
+      "ticker": "BAIDU",
+      "poolId": "pool1c86ul4pnqvu7jzag8fjdy6dgrn6pt4ad4vmyq038hyg0wl2kaed",
+      "traits": [
+        {
+          "category": "Mouth",
+          "value": "Yeh But No",
+          "count": 26885
+        },
+        {
+          "category": "Fur",
+          "value": "White",
+          "count": 23873
+        },
+        {
+          "category": "Neck",
+          "value": "Chain",
+          "count": 12145
+        },
+        {
+          "category": "Hat",
+          "value": "Birthday Hat",
+          "count": 10704
+        },
+        {
+          "category": "Hat",
+          "value": "Top Hat Blue",
+          "count": 8708
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Stud Left",
+          "count": 7339
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Double Stud Left",
+          "count": 7182
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Double Left Rings",
+          "count": 5472
+        },
+        {
+          "category": "Frame",
+          "value": "Birthday Cake",
+          "count": 4745
+        },
+        {
+          "category": "Frame",
+          "value": "Newspaper",
+          "count": 4569
+        },
+        {
+          "category": "Hat",
+          "value": "Black Lunar New Year Hat",
+          "count": 3966
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Crumpet",
+          "count": 3348
+        },
+        {
+          "category": "Fur",
+          "value": "Liberty",
+          "count": 3124
+        },
+        {
+          "category": "Hat",
+          "value": "Liberty",
+          "count": 3124
+        },
+        {
+          "category": "Fur",
+          "value": "Charles Mask",
+          "count": 3006
+        },
+        {
+          "category": "Hat",
+          "value": "Mardis Gras Hat",
+          "count": 2455
+        },
+        {
+          "category": "Background",
+          "value": "Brickwall",
+          "count": 2398
+        },
+        {
+          "category": "Hat",
+          "value": "Hero 2",
+          "count": 2308
+        },
+        {
+          "category": "Fur",
+          "value": "Scruff",
+          "count": 2259
+        },
+        {
+          "category": "Glasses",
+          "value": "Upside Down Right Way Up",
+          "count": 2050
+        },
+        {
+          "category": "Background",
+          "value": "Concrete Wall",
+          "count": 1995
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Beauty Mark",
+          "count": 1971
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Burgundy Moustache",
+          "count": 1947
+        },
+        {
+          "category": "Neck",
+          "value": "Blue Poncho",
+          "count": 1875
+        },
+        {
+          "category": "Frame",
+          "value": "Hosky 2000 Computer",
+          "count": 1874
+        },
+        {
+          "category": "Hat",
+          "value": "Blue Wooly Hat",
+          "count": 1609
+        },
+        {
+          "category": "Hat",
+          "value": "Cowboy Hero",
+          "count": 1596
+        },
+        {
+          "category": "Glasses",
+          "value": "Asymmetrical Glasses",
+          "count": 1541
+        },
+        {
+          "category": "Background",
+          "value": "Fireplace",
+          "count": 1484
+        },
+        {
+          "category": "Frame",
+          "value": "Dice",
+          "count": 1342
+        },
+        {
+          "category": "Glasses",
+          "value": "Stitches",
+          "count": 1255
+        },
+        {
+          "category": "Hat",
+          "value": "Stay Palm",
+          "count": 1253
+        },
+        {
+          "category": "Hat",
+          "value": "We Need You",
+          "count": 1150
+        },
+        {
+          "category": "Hat",
+          "value": "Buffon Hat",
+          "count": 998
+        },
+        {
+          "category": "Glasses",
+          "value": "Pilot Glasses Tinted",
+          "count": 960
+        },
+        {
+          "category": "Frame",
+          "value": "Fog",
+          "count": 868
+        },
+        {
+          "category": "Hat",
+          "value": "Sphinx Hat",
+          "count": 822
+        },
+        {
+          "category": "Hat",
+          "value": "Trash Can Lid",
+          "count": 802
+        },
+        {
+          "category": "Hat",
+          "value": "Afro",
+          "count": 748
+        },
+        {
+          "category": "Hat",
+          "value": "Orange Hoodie",
+          "count": 741
+        },
+        {
+          "category": "Hat",
+          "value": "Clown Hair",
+          "count": 695
+        },
+        {
+          "category": "Glasses",
+          "value": "Red Eye Mask",
+          "count": 635
+        },
+        {
+          "category": "Eyes",
+          "value": "Cyclops Eyes",
+          "count": 591
+        },
+        {
+          "category": "Fur",
+          "value": "Food Face",
+          "count": 570
+        },
+        {
+          "category": "Background",
+          "value": "Extra Stank",
+          "count": 565
+        },
+        {
+          "category": "Background",
+          "value": "Race Track",
+          "count": 559
+        },
+        {
+          "category": "Glasses",
+          "value": "Visor Dead",
+          "count": 516
+        },
+        {
+          "category": "Glasses",
+          "value": "Green Laser",
+          "count": 487
+        },
+        {
+          "category": "Frame",
+          "value": "Zeros Around the World",
+          "count": 475
+        },
+        {
+          "category": "Hat",
+          "value": "Black Mask",
+          "count": 436
+        },
+        {
+          "category": "Fur",
+          "value": "Neon Sphinx",
+          "count": 320
+        },
+        {
+          "category": "Background",
+          "value": "Stickers",
+          "count": 287
+        },
+        {
+          "category": "Hat",
+          "value": "Top Hat Blue Error",
+          "count": 238
+        },
+        {
+          "category": "Fur",
+          "value": "Family",
+          "count": 226
+        },
+        {
+          "category": "Background",
+          "value": "Circles Animated",
+          "count": 146
+        },
+        {
+          "category": "Hat",
+          "value": "Trent Barnes",
+          "count": 138
+        },
+        {
+          "category": "Glasses",
+          "value": "Eyepatch Right Error",
+          "count": 106
+        },
+        {
+          "category": "Background",
+          "value": "Underwater Animated",
+          "count": 94
+        },
+        {
+          "category": "Glasses",
+          "value": "3D Gloss Error",
+          "count": 93
+        },
+        {
+          "category": "Glasses",
+          "value": "Visor Animated",
+          "count": 72
+        },
+        {
+          "category": "Background",
+          "value": "Duplicate",
+          "count": 36
+        },
+        {
+          "category": "Background",
+          "value": "Twilight Haunted Moon",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "BONE",
+      "poolId": "pool1j742gcsul7u8c05rsqmkgpkvj5qadj0pew69nctu6crqy9wjjn4",
+      "traits": [
+        {
+          "category": "Frame",
+          "value": "Check Mate",
+          "count": 26451
+        },
+        {
+          "category": "Fur",
+          "value": "Oscar",
+          "count": 24914
+        },
+        {
+          "category": "Background",
+          "value": "Green",
+          "count": 11548
+        },
+        {
+          "category": "Frame",
+          "value": "Wood",
+          "count": 11385
+        },
+        {
+          "category": "Mouth",
+          "value": "Hmmm",
+          "count": 9508
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Double Stud Right",
+          "count": 7250
+        },
+        {
+          "category": "Background",
+          "value": "Sunset",
+          "count": 6871
+        },
+        {
+          "category": "Background",
+          "value": "April Fools",
+          "count": 4999
+        },
+        {
+          "category": "Background",
+          "value": "Lunar New Year Red",
+          "count": 4643
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Beard",
+          "count": 3989
+        },
+        {
+          "category": "Background",
+          "value": "Carbon Fiber",
+          "count": 3445
+        },
+        {
+          "category": "Background",
+          "value": "Red Gradient",
+          "count": 3343
+        },
+        {
+          "category": "Fur",
+          "value": "Red Gradient",
+          "count": 3343
+        },
+        {
+          "category": "Glasses",
+          "value": "Visor",
+          "count": 2978
+        },
+        {
+          "category": "Eyes",
+          "value": "Bloodyhell",
+          "count": 2943
+        },
+        {
+          "category": "Hat",
+          "value": "Hosk Cap",
+          "count": 2578
+        },
+        {
+          "category": "Hat",
+          "value": "Rob Boss",
+          "count": 2526
+        },
+        {
+          "category": "Hat",
+          "value": "Light Blue Hat",
+          "count": 2234
+        },
+        {
+          "category": "Mouth",
+          "value": "Robot Mouth",
+          "count": 2182
+        },
+        {
+          "category": "Eyes",
+          "value": "Jake Eyes",
+          "count": 2114
+        },
+        {
+          "category": "Glasses",
+          "value": "Visor Beam",
+          "count": 2028
+        },
+        {
+          "category": "Eyes",
+          "value": "Food Eyes",
+          "count": 1948
+        },
+        {
+          "category": "Background",
+          "value": "Orange",
+          "count": 1943
+        },
+        {
+          "category": "Neck",
+          "value": "Robot Bowtie",
+          "count": 1922
+        },
+        {
+          "category": "Mouth",
+          "value": "Knitted Mouth",
+          "count": 1892
+        },
+        {
+          "category": "Background",
+          "value": "Bright Blue Green Gradient",
+          "count": 1814
+        },
+        {
+          "category": "Background",
+          "value": "FIN",
+          "count": 1647
+        },
+        {
+          "category": "Hat",
+          "value": "Dune",
+          "count": 1568
+        },
+        {
+          "category": "Mouth",
+          "value": "Danksy Mouth",
+          "count": 1555
+        },
+        {
+          "category": "Eyes",
+          "value": "Scarred Eyes",
+          "count": 1479
+        },
+        {
+          "category": "Frame",
+          "value": "Lunar New Year Wave",
+          "count": 1356
+        },
+        {
+          "category": "Frame",
+          "value": "Retro Coins",
+          "count": 1271
+        },
+        {
+          "category": "Fur",
+          "value": "Mummy",
+          "count": 1190
+        },
+        {
+          "category": "Neck",
+          "value": "Rug Pool Bowl",
+          "count": 1133
+        },
+        {
+          "category": "Fur",
+          "value": "Sphinx",
+          "count": 1097
+        },
+        {
+          "category": "Fur",
+          "value": "Green Alien",
+          "count": 1043
+        },
+        {
+          "category": "Neck",
+          "value": "1rd Place Medal",
+          "count": 978
+        },
+        {
+          "category": "Fur",
+          "value": "Vasil Mask",
+          "count": 892
+        },
+        {
+          "category": "Glasses",
+          "value": "Orange Eye Mask",
+          "count": 887
+        },
+        {
+          "category": "Background",
+          "value": "Escher",
+          "count": 831
+        },
+        {
+          "category": "Hat",
+          "value": "Football Helmet",
+          "count": 795
+        },
+        {
+          "category": "Background",
+          "value": "Boo",
+          "count": 665
+        },
+        {
+          "category": "Frame",
+          "value": "Treat",
+          "count": 604
+        },
+        {
+          "category": "Background",
+          "value": "Starry Night",
+          "count": 600
+        },
+        {
+          "category": "Background",
+          "value": "Salvador Hosky",
+          "count": 566
+        },
+        {
+          "category": "Fur",
+          "value": "Original OAP",
+          "count": 545
+        },
+        {
+          "category": "Hat",
+          "value": "Santa Hat Error",
+          "count": 493
+        },
+        {
+          "category": "Fur",
+          "value": "Swampsky",
+          "count": 391
+        },
+        {
+          "category": "Hat",
+          "value": "Spin Top Error",
+          "count": 374
+        },
+        {
+          "category": "Eyes",
+          "value": "Left or Right Eyes",
+          "count": 280
+        },
+        {
+          "category": "Hat",
+          "value": "Fast Food Error",
+          "count": 235
+        },
+        {
+          "category": "Glasses",
+          "value": "Wipers",
+          "count": 193
+        },
+        {
+          "category": "Frame",
+          "value": "Wen Animated",
+          "count": 183
+        },
+        {
+          "category": "Frame",
+          "value": "Spinning Bowtie",
+          "count": 144
+        },
+        {
+          "category": "Frame",
+          "value": "S#!tty Cake",
+          "count": 62
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Engraved Skull",
+          "count": 51
+        },
+        {
+          "category": "Hat",
+          "value": "Gold Ribbon Hat Error",
+          "count": 25
+        },
+        {
+          "category": "Hat",
+          "value": "Reindeer Error",
+          "count": 24
+        },
+        {
+          "category": "Frame",
+          "value": "Blood",
+          "count": 5
+        },
+        {
+          "category": "Background",
+          "value": "Banksy Tribute 2 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Eyes",
+          "value": "Banksy Tribute 2 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Fur",
+          "value": "Banksy Tribute 2 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Mouth",
+          "value": "Banksy Tribute 2 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Background",
+          "value": "Pink Twilight Haunted Moon",
+          "count": 1
+        },
+        {
+          "category": "Eyes",
+          "value": "Elemental Blue",
+          "count": 1
+        },
+        {
+          "category": "Eyes",
+          "value": "Elemental Gray",
+          "count": 1
+        },
+        {
+          "category": "Fur",
+          "value": "Elemental Water",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "EASY1",
+      "poolId": "pool1yr0cv3dtmhcfgqa6yetvmf769ngk89e6tepecmjrmjl2jzcw2lm",
+      "traits": [
+        {
+          "category": "Eyes",
+          "value": "Overload",
+          "count": 18106
+        },
+        {
+          "category": "Background",
+          "value": "Yellow",
+          "count": 17113
+        },
+        {
+          "category": "Eyes",
+          "value": "Seasick",
+          "count": 16557
+        },
+        {
+          "category": "Eyes",
+          "value": "Knackered",
+          "count": 15615
+        },
+        {
+          "category": "Hat",
+          "value": "Bycocket",
+          "count": 9599
+        },
+        {
+          "category": "Background",
+          "value": "Pernis",
+          "count": 9536
+        },
+        {
+          "category": "Frame",
+          "value": "Pernis",
+          "count": 9536
+        },
+        {
+          "category": "Background",
+          "value": "Space",
+          "count": 6227
+        },
+        {
+          "category": "Frame",
+          "value": "Candy Cane",
+          "count": 5987
+        },
+        {
+          "category": "Hat",
+          "value": "Fast Food",
+          "count": 5901
+        },
+        {
+          "category": "Eyes",
+          "value": "Hoskytwo Eyes",
+          "count": 3992
+        },
+        {
+          "category": "Frame",
+          "value": "Orange Hazmat Suit",
+          "count": 3988
+        },
+        {
+          "category": "Fur",
+          "value": "Bear",
+          "count": 3718
+        },
+        {
+          "category": "Fur",
+          "value": "Decentralised",
+          "count": 3343
+        },
+        {
+          "category": "Fur",
+          "value": "Radioactive Pink",
+          "count": 2848
+        },
+        {
+          "category": "Fur",
+          "value": "Holographic",
+          "count": 2750
+        },
+        {
+          "category": "Background",
+          "value": "Jes Art",
+          "count": 2680
+        },
+        {
+          "category": "Background",
+          "value": "Radioactive Yellow",
+          "count": 2596
+        },
+        {
+          "category": "Background",
+          "value": "Hosky Code",
+          "count": 2201
+        },
+        {
+          "category": "Fur",
+          "value": "Hosky Sticker",
+          "count": 2165
+        },
+        {
+          "category": "Eyes",
+          "value": "Coqui Eyes",
+          "count": 2161
+        },
+        {
+          "category": "Eyes",
+          "value": "Hosky Island Eyes",
+          "count": 2142
+        },
+        {
+          "category": "Background",
+          "value": "Epilogue",
+          "count": 2106
+        },
+        {
+          "category": "Neck",
+          "value": "2st Place Medal",
+          "count": 1923
+        },
+        {
+          "category": "Glasses",
+          "value": "Nose Glasses",
+          "count": 1922
+        },
+        {
+          "category": "Frame",
+          "value": "Fools Gold",
+          "count": 1821
+        },
+        {
+          "category": "Glasses",
+          "value": "Pilot Glasses Classic",
+          "count": 1760
+        },
+        {
+          "category": "Neck",
+          "value": "Faux Rug Survivor",
+          "count": 1700
+        },
+        {
+          "category": "Hat",
+          "value": "Red Wooly Hat",
+          "count": 1631
+        },
+        {
+          "category": "Hat",
+          "value": "Bicycle Helmet Red",
+          "count": 1536
+        },
+        {
+          "category": "Frame",
+          "value": "<3",
+          "count": 1459
+        },
+        {
+          "category": "Frame",
+          "value": "Jigsaw",
+          "count": 1334
+        },
+        {
+          "category": "Background",
+          "value": "Livestream",
+          "count": 1263
+        },
+        {
+          "category": "Frame",
+          "value": "Felt",
+          "count": 1150
+        },
+        {
+          "category": "Fur",
+          "value": "Cardano Whale",
+          "count": 1094
+        },
+        {
+          "category": "Frame",
+          "value": "NGMI",
+          "count": 1034
+        },
+        {
+          "category": "Eyes",
+          "value": "Festive Holiday Dog Eyes",
+          "count": 969
+        },
+        {
+          "category": "Background",
+          "value": "Film Noir",
+          "count": 926
+        },
+        {
+          "category": "Hat",
+          "value": "Pumpkin 2",
+          "count": 888
+        },
+        {
+          "category": "Eyes",
+          "value": "Sphinx Eyes",
+          "count": 856
+        },
+        {
+          "category": "Frame",
+          "value": "Trick",
+          "count": 788
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Spider Legs",
+          "count": 755
+        },
+        {
+          "category": "Fur",
+          "value": "Gold Tiger",
+          "count": 712
+        },
+        {
+          "category": "Fur",
+          "value": "Hoskpig",
+          "count": 688
+        },
+        {
+          "category": "Hat",
+          "value": "Black and White Jester",
+          "count": 518
+        },
+        {
+          "category": "Glasses",
+          "value": "Yellow Laser",
+          "count": 504
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Antlers",
+          "count": 469
+        },
+        {
+          "category": "Hat",
+          "value": "Stay Palm Gold",
+          "count": 439
+        },
+        {
+          "category": "Hat",
+          "value": "Silver Crown Error",
+          "count": 308
+        },
+        {
+          "category": "Frame",
+          "value": "Flies Animated",
+          "count": 271
+        },
+        {
+          "category": "Frame",
+          "value": "Think S#!tty",
+          "count": 201
+        },
+        {
+          "category": "Hat",
+          "value": "Hero Error",
+          "count": 181
+        },
+        {
+          "category": "Frame",
+          "value": "Enchanted Fog",
+          "count": 86
+        },
+        {
+          "category": "Background",
+          "value": "Banksy Tribute 4 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Eyes",
+          "value": "Banksy Tribute 4 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Fur",
+          "value": "Banksy Tribute 4 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Mouth",
+          "value": "Banksy Tribute 4 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Eyes",
+          "value": "Elemental Red",
+          "count": 1
+        },
+        {
+          "category": "Fur",
+          "value": "Elemental Fire",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "FARM",
+      "poolId": "pool1dpu6kslgxlg3ccrwxldl8e6r7ylnq0yalafmucp0yc7k6qegtt0",
+      "traits": [
+        {
+          "category": "Glasses",
+          "value": "3D Gloss",
+          "count": 23229
+        },
+        {
+          "category": "Mouth",
+          "value": "WTF",
+          "count": 22019
+        },
+        {
+          "category": "Background",
+          "value": "Red",
+          "count": 13496
+        },
+        {
+          "category": "Neck",
+          "value": "Bow Tie",
+          "count": 12250
+        },
+        {
+          "category": "Background",
+          "value": "Wernis",
+          "count": 7856
+        },
+        {
+          "category": "Frame",
+          "value": "Wernis",
+          "count": 7856
+        },
+        {
+          "category": "Mouth",
+          "value": "Sad",
+          "count": 7415
+        },
+        {
+          "category": "Hat",
+          "value": "Top Hat Red",
+          "count": 6832
+        },
+        {
+          "category": "Neck",
+          "value": "Hawaiian",
+          "count": 6243
+        },
+        {
+          "category": "Hat",
+          "value": "Poo Hat",
+          "count": 5683
+        },
+        {
+          "category": "Frame",
+          "value": "Consensus 2022",
+          "count": 4100
+        },
+        {
+          "category": "Eyes",
+          "value": "White Eyes",
+          "count": 3858
+        },
+        {
+          "category": "Eyes",
+          "value": "Hoskrogu Eyes",
+          "count": 3793
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Rainbow Vomit",
+          "count": 3227
+        },
+        {
+          "category": "Glasses",
+          "value": "Neistat",
+          "count": 2819
+        },
+        {
+          "category": "Fur",
+          "value": "Hosky Droid",
+          "count": 2762
+        },
+        {
+          "category": "Eyes",
+          "value": "Coyote Eyes",
+          "count": 2668
+        },
+        {
+          "category": "Mouth",
+          "value": "Gherkin Mouth",
+          "count": 2626
+        },
+        {
+          "category": "Fur",
+          "value": "Golden",
+          "count": 2245
+        },
+        {
+          "category": "Mouth",
+          "value": "Uncertain",
+          "count": 2175
+        },
+        {
+          "category": "Mouth",
+          "value": "Blingin'",
+          "count": 2110
+        },
+        {
+          "category": "Fur",
+          "value": "Radioactive Orange",
+          "count": 2007
+        },
+        {
+          "category": "Eyes",
+          "value": "Brown Eyes",
+          "count": 1958
+        },
+        {
+          "category": "Background",
+          "value": "Sunset Tones Gradient",
+          "count": 1939
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "White Earphones",
+          "count": 1770
+        },
+        {
+          "category": "Hat",
+          "value": "Headache",
+          "count": 1734
+        },
+        {
+          "category": "Hat",
+          "value": "Aye Cap'n",
+          "count": 1565
+        },
+        {
+          "category": "Glasses",
+          "value": "Monocle",
+          "count": 1555
+        },
+        {
+          "category": "Hat",
+          "value": "Blood Poo",
+          "count": 1433
+        },
+        {
+          "category": "Frame",
+          "value": "Zero",
+          "count": 1307
+        },
+        {
+          "category": "Background",
+          "value": "Vegas",
+          "count": 1264
+        },
+        {
+          "category": "Background",
+          "value": "Sunrise",
+          "count": 1206
+        },
+        {
+          "category": "Fur",
+          "value": "Sunrise",
+          "count": 1206
+        },
+        {
+          "category": "Background",
+          "value": "Blue Grid",
+          "count": 1168
+        },
+        {
+          "category": "Fur",
+          "value": "Clown",
+          "count": 1166
+        },
+        {
+          "category": "Fur",
+          "value": "Clay Face",
+          "count": 1165
+        },
+        {
+          "category": "Fur",
+          "value": "Ascosky",
+          "count": 1100
+        },
+        {
+          "category": "Eyes",
+          "value": "Ukraine Eyes",
+          "count": 1099
+        },
+        {
+          "category": "Frame",
+          "value": "Wen",
+          "count": 941
+        },
+        {
+          "category": "Fur",
+          "value": "Light Spectre",
+          "count": 908
+        },
+        {
+          "category": "Frame",
+          "value": "Another Holiday",
+          "count": 880
+        },
+        {
+          "category": "Hat",
+          "value": "Desert Camo",
+          "count": 828
+        },
+        {
+          "category": "Hat",
+          "value": "Fez",
+          "count": 759
+        },
+        {
+          "category": "Hat",
+          "value": "Mohican",
+          "count": 680
+        },
+        {
+          "category": "Frame",
+          "value": "1st Anniversary",
+          "count": 679
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Sick",
+          "count": 601
+        },
+        {
+          "category": "Fur",
+          "value": "Shaved",
+          "count": 578
+        },
+        {
+          "category": "Eyes",
+          "value": "Popped Eye",
+          "count": 529
+        },
+        {
+          "category": "Fur",
+          "value": "Grey Alien",
+          "count": 424
+        },
+        {
+          "category": "Neck",
+          "value": "Poo Bowtie",
+          "count": 326
+        },
+        {
+          "category": "Background",
+          "value": "Earth",
+          "count": 260
+        },
+        {
+          "category": "Hat",
+          "value": "Viking Error",
+          "count": 246
+        },
+        {
+          "category": "Fur",
+          "value": "Red Tiger",
+          "count": 137
+        },
+        {
+          "category": "Background",
+          "value": "Radioactive Yellow Animated",
+          "count": 55
+        },
+        {
+          "category": "Hat",
+          "value": "Red Wooly Hat Error",
+          "count": 30
+        },
+        {
+          "category": "Glasses",
+          "value": "Blue Laser Error",
+          "count": 18
+        },
+        {
+          "category": "Background",
+          "value": "Banksy Tribute 3 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Eyes",
+          "value": "Banksy Tribute 3 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Fur",
+          "value": "Banksy Tribute 3 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Mouth",
+          "value": "Banksy Tribute 3 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Background",
+          "value": "Dark Blue Haunted Moon",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "HOSKY",
+      "poolId": "pool1jqssxka8hu94aj6f4w3s8l5m6juqmx0hk3ges48jfac6zngmkh8",
+      "traits": [
+        {
+          "category": "Glasses",
+          "value": "3D Glasses",
+          "count": 23047
+        },
+        {
+          "category": "Background",
+          "value": "Baby Blue",
+          "count": 22470
+        },
+        {
+          "category": "Fur",
+          "value": "Baby Blue",
+          "count": 22470
+        },
+        {
+          "category": "Background",
+          "value": "Mint",
+          "count": 12361
+        },
+        {
+          "category": "Hat",
+          "value": "Police",
+          "count": 12266
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Goatee",
+          "count": 8503
+        },
+        {
+          "category": "Eyes",
+          "value": "Black Eye",
+          "count": 8379
+        },
+        {
+          "category": "Hat",
+          "value": "Captain",
+          "count": 5822
+        },
+        {
+          "category": "Hat",
+          "value": "Sweatband 2",
+          "count": 5059
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Big Moustache",
+          "count": 4632
+        },
+        {
+          "category": "Hat",
+          "value": "Viking",
+          "count": 4061
+        },
+        {
+          "category": "Fur",
+          "value": "Panda",
+          "count": 3754
+        },
+        {
+          "category": "Frame",
+          "value": "Cocktail",
+          "count": 3372
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Double Bandaged Ears",
+          "count": 3090
+        },
+        {
+          "category": "Glasses",
+          "value": "Love",
+          "count": 2726
+        },
+        {
+          "category": "Background",
+          "value": "Iris",
+          "count": 2604
+        },
+        {
+          "category": "Frame",
+          "value": "Copper",
+          "count": 2417
+        },
+        {
+          "category": "Fur",
+          "value": "Doodle",
+          "count": 2285
+        },
+        {
+          "category": "Glasses",
+          "value": "Laser Visor",
+          "count": 2241
+        },
+        {
+          "category": "Frame",
+          "value": "Fish Bowl",
+          "count": 2007
+        },
+        {
+          "category": "Fur",
+          "value": "Robot",
+          "count": 2004
+        },
+        {
+          "category": "Neck",
+          "value": "Green Poncho",
+          "count": 1973
+        },
+        {
+          "category": "Hat",
+          "value": "Beret",
+          "count": 1971
+        },
+        {
+          "category": "Neck",
+          "value": "Trash Can",
+          "count": 1875
+        },
+        {
+          "category": "Glasses",
+          "value": "Late Night Glasses",
+          "count": 1874
+        },
+        {
+          "category": "Background",
+          "value": "Bubbles",
+          "count": 1619
+        },
+        {
+          "category": "Fur",
+          "value": "Static",
+          "count": 1614
+        },
+        {
+          "category": "Neck",
+          "value": "The Fools Neck",
+          "count": 1612
+        },
+        {
+          "category": "Frame",
+          "value": "Astronaut",
+          "count": 1479
+        },
+        {
+          "category": "Neck",
+          "value": "Vicar",
+          "count": 1472
+        },
+        {
+          "category": "Background",
+          "value": "Violet Stepped Gradient",
+          "count": 1428
+        },
+        {
+          "category": "Frame",
+          "value": "Crypto Magazine",
+          "count": 1346
+        },
+        {
+          "category": "Frame",
+          "value": "Flies",
+          "count": 1156
+        },
+        {
+          "category": "Background",
+          "value": "FIAT",
+          "count": 1149
+        },
+        {
+          "category": "Eyes",
+          "value": "Cyan Glowing Eyes",
+          "count": 1115
+        },
+        {
+          "category": "Background",
+          "value": "Radar",
+          "count": 1072
+        },
+        {
+          "category": "Frame",
+          "value": "Neon Green",
+          "count": 1065
+        },
+        {
+          "category": "Eyes",
+          "value": "Knitted Eyes",
+          "count": 981
+        },
+        {
+          "category": "Frame",
+          "value": "Hosky Blocks",
+          "count": 980
+        },
+        {
+          "category": "Background",
+          "value": "Hosky Blue Gradient",
+          "count": 958
+        },
+        {
+          "category": "Eyes",
+          "value": "Ded Eyes",
+          "count": 850
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Tongue Out",
+          "count": 839
+        },
+        {
+          "category": "Hat",
+          "value": "Dank Hat",
+          "count": 826
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Bubblegum Popped",
+          "count": 795
+        },
+        {
+          "category": "Hat",
+          "value": "Fighter Pilot",
+          "count": 778
+        },
+        {
+          "category": "Background",
+          "value": "Busy",
+          "count": 734
+        },
+        {
+          "category": "Background",
+          "value": "Press Start",
+          "count": 656
+        },
+        {
+          "category": "Eyes",
+          "value": "Vegas Eyes",
+          "count": 622
+        },
+        {
+          "category": "Glasses",
+          "value": "Visor Heart",
+          "count": 565
+        },
+        {
+          "category": "Eyes",
+          "value": "LED Eyes",
+          "count": 555
+        },
+        {
+          "category": "Background",
+          "value": "After Party",
+          "count": 429
+        },
+        {
+          "category": "Hat",
+          "value": "Gladiator Mask",
+          "count": 384
+        },
+        {
+          "category": "Glasses",
+          "value": "Rainbow Visor",
+          "count": 383
+        },
+        {
+          "category": "Background",
+          "value": "Glowing Pyramids",
+          "count": 306
+        },
+        {
+          "category": "Hat",
+          "value": "Miner Error",
+          "count": 293
+        },
+        {
+          "category": "Hat",
+          "value": "Flat Peak Error",
+          "count": 274
+        },
+        {
+          "category": "Hat",
+          "value": "Bandana Error",
+          "count": 248
+        },
+        {
+          "category": "Frame",
+          "value": "Neon Pink",
+          "count": 196
+        },
+        {
+          "category": "Background",
+          "value": "Eighties",
+          "count": 184
+        },
+        {
+          "category": "Hat",
+          "value": "Hero 2 Error",
+          "count": 132
+        },
+        {
+          "category": "Frame",
+          "value": "Ghost Costume",
+          "count": 129
+        },
+        {
+          "category": "Fur",
+          "value": "Unknown",
+          "count": 95
+        },
+        {
+          "category": "Background",
+          "value": "Light Speed",
+          "count": 78
+        },
+        {
+          "category": "Glasses",
+          "value": "Love Error",
+          "count": 42
+        },
+        {
+          "category": "Glasses",
+          "value": "Yellow Laser Error",
+          "count": 42
+        },
+        {
+          "category": "Eyes",
+          "value": "Three Eyes",
+          "count": 33
+        },
+        {
+          "category": "Glasses",
+          "value": "Mirrored Glasses Error",
+          "count": 28
+        },
+        {
+          "category": "Hat",
+          "value": "Mollusk Bowl Play Error",
+          "count": 8
+        },
+        {
+          "category": "Hat",
+          "value": "Mollusk S#1t Play",
+          "count": 8
+        },
+        {
+          "category": "Background",
+          "value": "HOSKY Turbo",
+          "count": 4
+        },
+        {
+          "category": "Eyes",
+          "value": "HOSKY Turbo",
+          "count": 4
+        },
+        {
+          "category": "Fur",
+          "value": "HOSKY Turbo",
+          "count": 4
+        },
+        {
+          "category": "Hat",
+          "value": "Mollusk S#1t Play Error",
+          "count": 4
+        },
+        {
+          "category": "Mouth",
+          "value": "HOSKY Turbo",
+          "count": 4
+        },
+        {
+          "category": "Background",
+          "value": "Fireworks Lunar New Year Animated",
+          "count": 3
+        },
+        {
+          "category": "Eyes",
+          "value": "Spamsky",
+          "count": 3
+        },
+        {
+          "category": "Frame",
+          "value": "Spamsky",
+          "count": 3
+        },
+        {
+          "category": "Fur",
+          "value": "Spamsky",
+          "count": 3
+        },
+        {
+          "category": "Background",
+          "value": "Fire Sky Haunted Moon",
+          "count": 1
+        },
+        {
+          "category": "Background",
+          "value": "Spamsky Gradient",
+          "count": 1
+        },
+        {
+          "category": "Background",
+          "value": "Water Blue Gradient",
+          "count": 1
+        },
+        {
+          "category": "Hat",
+          "value": "Spamsky Spamband",
+          "count": 1
+        },
+        {
+          "category": "Mouth",
+          "value": "Spamsky Original",
+          "count": 1
+        },
+        {
+          "category": "Neck",
+          "value": "Spamsky Bling",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "MALU",
+      "poolId": "pool1qku2yhky7sv4dfjfv42uyvauhehuqevk25aw952d7ulzqzx3jcu",
+      "traits": [
+        {
+          "category": "Neck",
+          "value": "Blue Collar",
+          "count": 26952
+        },
+        {
+          "category": "Mouth",
+          "value": "Good Boy",
+          "count": 16760
+        },
+        {
+          "category": "Mouth",
+          "value": "Happy",
+          "count": 16655
+        },
+        {
+          "category": "Hat",
+          "value": "Sweatband",
+          "count": 10585
+        },
+        {
+          "category": "Mouth",
+          "value": "Ooooo",
+          "count": 10046
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Stud Right",
+          "count": 7209
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Pizza",
+          "count": 5976
+        },
+        {
+          "category": "Hat",
+          "value": "Party Hat",
+          "count": 5155
+        },
+        {
+          "category": "Background",
+          "value": "Underwater",
+          "count": 4761
+        },
+        {
+          "category": "Hat",
+          "value": "Yellow Feather Hat",
+          "count": 4696
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Taco",
+          "count": 3984
+        },
+        {
+          "category": "Background",
+          "value": "Gold Frameception",
+          "count": 3484
+        },
+        {
+          "category": "Glasses",
+          "value": "Gold Glasses",
+          "count": 3306
+        },
+        {
+          "category": "Fur",
+          "value": "Imagine Dragons",
+          "count": 3242
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Bandaged Ear Left",
+          "count": 3143
+        },
+        {
+          "category": "Background",
+          "value": "Ganja",
+          "count": 2480
+        },
+        {
+          "category": "Fur",
+          "value": "Ghost",
+          "count": 2383
+        },
+        {
+          "category": "Background",
+          "value": "Slate",
+          "count": 2299
+        },
+        {
+          "category": "Hat",
+          "value": "Green Hat",
+          "count": 2291
+        },
+        {
+          "category": "Eyes",
+          "value": "Were Eyes",
+          "count": 1991
+        },
+        {
+          "category": "Background",
+          "value": "Clouds",
+          "count": 1985
+        },
+        {
+          "category": "Hat",
+          "value": "Chef Hat",
+          "count": 1983
+        },
+        {
+          "category": "Background",
+          "value": "Field Gradient",
+          "count": 1842
+        },
+        {
+          "category": "Background",
+          "value": "Happy Trees - JES Art",
+          "count": 1829
+        },
+        {
+          "category": "Hat",
+          "value": "Cork Hat",
+          "count": 1637
+        },
+        {
+          "category": "Hat",
+          "value": "Idiot Hat",
+          "count": 1630
+        },
+        {
+          "category": "Hat",
+          "value": "Horns",
+          "count": 1535
+        },
+        {
+          "category": "Background",
+          "value": "Snowfall",
+          "count": 1491
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Dizzy",
+          "count": 1317
+        },
+        {
+          "category": "Fur",
+          "value": "Turtle",
+          "count": 1261
+        },
+        {
+          "category": "Fur",
+          "value": "Robot 2.0",
+          "count": 1223
+        },
+        {
+          "category": "Background",
+          "value": "Orange Pink Gradient",
+          "count": 1208
+        },
+        {
+          "category": "Fur",
+          "value": "Danksy",
+          "count": 1152
+        },
+        {
+          "category": "Fur",
+          "value": "Fingerprint",
+          "count": 1106
+        },
+        {
+          "category": "Fur",
+          "value": "Grave Stone",
+          "count": 1030
+        },
+        {
+          "category": "Hat",
+          "value": "Holographic Hat",
+          "count": 976
+        },
+        {
+          "category": "Fur",
+          "value": "Gherkin",
+          "count": 958
+        },
+        {
+          "category": "Hat",
+          "value": "Paper Bag",
+          "count": 953
+        },
+        {
+          "category": "Background",
+          "value": "Twilight Tones",
+          "count": 839
+        },
+        {
+          "category": "Hat",
+          "value": "Head Wrap",
+          "count": 832
+        },
+        {
+          "category": "Hat",
+          "value": "Pumpkin",
+          "count": 829
+        },
+        {
+          "category": "Frame",
+          "value": "Suits",
+          "count": 814
+        },
+        {
+          "category": "Fur",
+          "value": "Sprinkles",
+          "count": 780
+        },
+        {
+          "category": "Fur",
+          "value": "Radioactive Purple",
+          "count": 656
+        },
+        {
+          "category": "Fur",
+          "value": "Cyclops",
+          "count": 586
+        },
+        {
+          "category": "Background",
+          "value": "Peace",
+          "count": 585
+        },
+        {
+          "category": "Neck",
+          "value": "Gold Bowtie",
+          "count": 474
+        },
+        {
+          "category": "Hat",
+          "value": "Super Hero",
+          "count": 405
+        },
+        {
+          "category": "Frame",
+          "value": "1rd Birthday Pin",
+          "count": 353
+        },
+        {
+          "category": "Eyes",
+          "value": "Big Eyes",
+          "count": 302
+        },
+        {
+          "category": "Hat",
+          "value": "Top Hat Red Error",
+          "count": 219
+        },
+        {
+          "category": "Frame",
+          "value": "Crypto Magazine Special Edition",
+          "count": 173
+        },
+        {
+          "category": "Frame",
+          "value": "Birthday Balloons",
+          "count": 154
+        },
+        {
+          "category": "Eyes",
+          "value": "Blinking",
+          "count": 87
+        },
+        {
+          "category": "Background",
+          "value": "Salvador Hosky Animated",
+          "count": 74
+        },
+        {
+          "category": "Background",
+          "value": "Grey Haunted Moon",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "PRIDE",
+      "poolId": "pool1h6q8jj55dn6727yydlypu0rz4sflf2enxhs0thqydmddgu3shl5",
+      "traits": [
+        {
+          "category": "Neck",
+          "value": "Blue Collar Gold Spikes",
+          "count": 22275
+        },
+        {
+          "category": "Glasses",
+          "value": "Upside Down",
+          "count": 21302
+        },
+        {
+          "category": "Background",
+          "value": "Purple",
+          "count": 13661
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Cigar",
+          "count": 12570
+        },
+        {
+          "category": "Frame",
+          "value": "Spotty",
+          "count": 8459
+        },
+        {
+          "category": "Eyes",
+          "value": "Beatenup",
+          "count": 8450
+        },
+        {
+          "category": "Frame",
+          "value": "Pernis Vs Wernis",
+          "count": 5970
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Right Ring",
+          "count": 5444
+        },
+        {
+          "category": "Hat",
+          "value": "Pork Pie Hat",
+          "count": 4505
+        },
+        {
+          "category": "Fur",
+          "value": "Flaming Hot",
+          "count": 3992
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Flaming Hot",
+          "count": 3992
+        },
+        {
+          "category": "Background",
+          "value": "Test Card",
+          "count": 3640
+        },
+        {
+          "category": "Frame",
+          "value": "Test Card",
+          "count": 3640
+        },
+        {
+          "category": "Background",
+          "value": "Fireworks Lunar New Year",
+          "count": 3381
+        },
+        {
+          "category": "Frame",
+          "value": "Mega Pint",
+          "count": 3142
+        },
+        {
+          "category": "Fur",
+          "value": "NSFW",
+          "count": 2786
+        },
+        {
+          "category": "Background",
+          "value": "Consensus 2022 Common",
+          "count": 2618
+        },
+        {
+          "category": "Eyes",
+          "value": "Robot Eyes",
+          "count": 2378
+        },
+        {
+          "category": "Background",
+          "value": "Full Moon",
+          "count": 2272
+        },
+        {
+          "category": "Fur",
+          "value": "Coqui",
+          "count": 2208
+        },
+        {
+          "category": "Glasses",
+          "value": "Visor Meh",
+          "count": 2093
+        },
+        {
+          "category": "Hat",
+          "value": "Elf Hat",
+          "count": 2064
+        },
+        {
+          "category": "Hat",
+          "value": "Fast Food Manager",
+          "count": 2027
+        },
+        {
+          "category": "Hat",
+          "value": "Arrow",
+          "count": 1949
+        },
+        {
+          "category": "Glasses",
+          "value": "Cyber Hosky 2.0",
+          "count": 1940
+        },
+        {
+          "category": "Background",
+          "value": "Rose",
+          "count": 1880
+        },
+        {
+          "category": "Background",
+          "value": "Green Yellow Gradient",
+          "count": 1788
+        },
+        {
+          "category": "Hat",
+          "value": "Forest Camo",
+          "count": 1662
+        },
+        {
+          "category": "Background",
+          "value": "GM",
+          "count": 1618
+        },
+        {
+          "category": "Background",
+          "value": "Muddy Prints",
+          "count": 1492
+        },
+        {
+          "category": "Glasses",
+          "value": "Broken Pilot Glasses",
+          "count": 1473
+        },
+        {
+          "category": "Background",
+          "value": "Mint Gradient",
+          "count": 1400
+        },
+        {
+          "category": "Mouth",
+          "value": "Snowman Error",
+          "count": 1310
+        },
+        {
+          "category": "Background",
+          "value": "Green Purple Gradient",
+          "count": 1280
+        },
+        {
+          "category": "Fur",
+          "value": "Werewolf",
+          "count": 1176
+        },
+        {
+          "category": "Fur",
+          "value": "Ghost Chain",
+          "count": 1123
+        },
+        {
+          "category": "Background",
+          "value": "Ukraine",
+          "count": 1090
+        },
+        {
+          "category": "Background",
+          "value": "Fluorescent Gradient",
+          "count": 1074
+        },
+        {
+          "category": "Hat",
+          "value": "The Fools Hat",
+          "count": 1030
+        },
+        {
+          "category": "Hat",
+          "value": "Bloody Arrow",
+          "count": 962
+        },
+        {
+          "category": "Frame",
+          "value": "Aboslutely",
+          "count": 936
+        },
+        {
+          "category": "Frame",
+          "value": "Food",
+          "count": 873
+        },
+        {
+          "category": "Background",
+          "value": "Halloween",
+          "count": 855
+        },
+        {
+          "category": "Background",
+          "value": "Twisted Clouds",
+          "count": 799
+        },
+        {
+          "category": "Hat",
+          "value": "Bicycle Helmet Orange",
+          "count": 774
+        },
+        {
+          "category": "Frame",
+          "value": "Birthday Pin",
+          "count": 755
+        },
+        {
+          "category": "Glasses",
+          "value": "Purple Eye Mask",
+          "count": 724
+        },
+        {
+          "category": "Fur",
+          "value": "Jaguar",
+          "count": 722
+        },
+        {
+          "category": "Fur",
+          "value": "Catfish",
+          "count": 680
+        },
+        {
+          "category": "Fur",
+          "value": "Dark Spectre",
+          "count": 538
+        },
+        {
+          "category": "Background",
+          "value": "Lightning",
+          "count": 495
+        },
+        {
+          "category": "Neck",
+          "value": "1rd Chain",
+          "count": 486
+        },
+        {
+          "category": "Hat",
+          "value": "Splitting Headache",
+          "count": 407
+        },
+        {
+          "category": "Frame",
+          "value": "Balloon",
+          "count": 393
+        },
+        {
+          "category": "Hat",
+          "value": "Police Error",
+          "count": 372
+        },
+        {
+          "category": "Background",
+          "value": "It's Behind You",
+          "count": 275
+        },
+        {
+          "category": "Hat",
+          "value": "Elf Hat Error",
+          "count": 266
+        },
+        {
+          "category": "Background",
+          "value": "Consensus 2022 Rare",
+          "count": 194
+        },
+        {
+          "category": "Hat",
+          "value": "Crown Error",
+          "count": 183
+        },
+        {
+          "category": "Eyes",
+          "value": "Danksy Eyes",
+          "count": 121
+        },
+        {
+          "category": "Glasses",
+          "value": "Eyepatch Left Error",
+          "count": 91
+        },
+        {
+          "category": "Fur",
+          "value": "Ghosky",
+          "count": 64
+        },
+        {
+          "category": "Fur",
+          "value": "Zombie",
+          "count": 20
+        },
+        {
+          "category": "Mouth",
+          "value": "Zombie",
+          "count": 20
+        },
+        {
+          "category": "Hat",
+          "value": "Mollusk Bone Play Error",
+          "count": 13
+        },
+        {
+          "category": "Eyes",
+          "value": "Three Quarters There Original",
+          "count": 3
+        },
+        {
+          "category": "Fur",
+          "value": "Three Quarters There Original",
+          "count": 3
+        },
+        {
+          "category": "Mouth",
+          "value": "Three Quarters There Original",
+          "count": 3
+        },
+        {
+          "category": "Background",
+          "value": "Deep Purple Haunted Moon",
+          "count": 1
+        },
+        {
+          "category": "Background",
+          "value": "Earth Green Gradient",
+          "count": 1
+        },
+        {
+          "category": "Eyes",
+          "value": "Elemental Green",
+          "count": 1
+        },
+        {
+          "category": "Fur",
+          "value": "Elemental Earth",
+          "count": 1
+        },
+        {
+          "category": "Fur",
+          "value": "Elemental Wind",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "QCPOL",
+      "poolId": "pool1zytydvyy3qztrs8l2xyggvkfcjctp23m2hc3aj7sudnzgny79cg",
+      "traits": [
+        {
+          "category": "Eyes",
+          "value": "Crazy Eyes",
+          "count": 20152
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Cigarette",
+          "count": 19742
+        },
+        {
+          "category": "Glasses",
+          "value": "Eyepatch Left",
+          "count": 14332
+        },
+        {
+          "category": "Glasses",
+          "value": "Eyepatch Right",
+          "count": 14273
+        },
+        {
+          "category": "Hat",
+          "value": "Flat Peak",
+          "count": 9099
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Eat Poo",
+          "count": 8914
+        },
+        {
+          "category": "Background",
+          "value": "Prison",
+          "count": 6525
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Left Ring",
+          "count": 5639
+        },
+        {
+          "category": "Glasses",
+          "value": "Lennon",
+          "count": 4288
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Bubblegum",
+          "count": 3984
+        },
+        {
+          "category": "Neck",
+          "value": "Black Bowtie",
+          "count": 3945
+        },
+        {
+          "category": "Fur",
+          "value": "Hoskasaur",
+          "count": 3605
+        },
+        {
+          "category": "Fur",
+          "value": "Jake",
+          "count": 3166
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Strawberry",
+          "count": 2903
+        },
+        {
+          "category": "Hat",
+          "value": "Hero",
+          "count": 2800
+        },
+        {
+          "category": "Fur",
+          "value": "Ginger",
+          "count": 2698
+        },
+        {
+          "category": "Neck",
+          "value": "Neck Bolts",
+          "count": 2667
+        },
+        {
+          "category": "Hat",
+          "value": "Halo",
+          "count": 2598
+        },
+        {
+          "category": "Fur",
+          "value": "Red Panda",
+          "count": 2208
+        },
+        {
+          "category": "Eyes",
+          "value": "Stoned Eyes",
+          "count": 2170
+        },
+        {
+          "category": "Eyes",
+          "value": "Cact-eyes",
+          "count": 2145
+        },
+        {
+          "category": "Glasses",
+          "value": "Night Vision Goggles",
+          "count": 2086
+        },
+        {
+          "category": "Background",
+          "value": "Neon",
+          "count": 1942
+        },
+        {
+          "category": "Hat",
+          "value": "Blue Hat",
+          "count": 1919
+        },
+        {
+          "category": "Neck",
+          "value": "Diamond Chain",
+          "count": 1792
+        },
+        {
+          "category": "Background",
+          "value": "This is Fine",
+          "count": 1761
+        },
+        {
+          "category": "Fur",
+          "value": "Original Droopy Ear",
+          "count": 1725
+        },
+        {
+          "category": "Glasses",
+          "value": "Black Lennons",
+          "count": 1687
+        },
+        {
+          "category": "Neck",
+          "value": "Bubblebath",
+          "count": 1590
+        },
+        {
+          "category": "Frame",
+          "value": "Sunlight",
+          "count": 1454
+        },
+        {
+          "category": "Hat",
+          "value": "Gold Ribbon Hat",
+          "count": 1354
+        },
+        {
+          "category": "Background",
+          "value": "Consensus 2022 Uncommon",
+          "count": 1288
+        },
+        {
+          "category": "Hat",
+          "value": "Space Invader",
+          "count": 1184
+        },
+        {
+          "category": "Frame",
+          "value": "LED",
+          "count": 1134
+        },
+        {
+          "category": "Fur",
+          "value": "LED",
+          "count": 1134
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Fighter Pilot Mask",
+          "count": 1096
+        },
+        {
+          "category": "Fur",
+          "value": "Frankenhosk",
+          "count": 1061
+        },
+        {
+          "category": "Fur",
+          "value": "Original Retired",
+          "count": 959
+        },
+        {
+          "category": "Hat",
+          "value": "Purple Hat",
+          "count": 896
+        },
+        {
+          "category": "Fur",
+          "value": "Ape S#!t",
+          "count": 883
+        },
+        {
+          "category": "Glasses",
+          "value": "Blue Eye Mask",
+          "count": 862
+        },
+        {
+          "category": "Hat",
+          "value": "Lawyer Wig",
+          "count": 777
+        },
+        {
+          "category": "Hat",
+          "value": "Tea Cup World's Best Coder",
+          "count": 751
+        },
+        {
+          "category": "Fur",
+          "value": "Vegas Mask",
+          "count": 680
+        },
+        {
+          "category": "Hat",
+          "value": "Bycocket Error",
+          "count": 645
+        },
+        {
+          "category": "Eyes",
+          "value": "White Glowing Eyes",
+          "count": 525
+        },
+        {
+          "category": "Frame",
+          "value": "Vote",
+          "count": 485
+        },
+        {
+          "category": "Hat",
+          "value": "Gold Poo Hat",
+          "count": 425
+        },
+        {
+          "category": "Frame",
+          "value": "Cut the Cake",
+          "count": 403
+        },
+        {
+          "category": "Hat",
+          "value": "Sweatband Error",
+          "count": 354
+        },
+        {
+          "category": "Hat",
+          "value": "King Tutankhamun",
+          "count": 326
+        },
+        {
+          "category": "Eyes",
+          "value": "Rolls Eyes",
+          "count": 267
+        },
+        {
+          "category": "Frame",
+          "value": "Catastrophe",
+          "count": 216
+        },
+        {
+          "category": "Frame",
+          "value": "It's Raining!",
+          "count": 159
+        },
+        {
+          "category": "Hat",
+          "value": "Theme Park Error",
+          "count": 115
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Double Right Ring Errors",
+          "count": 95
+        },
+        {
+          "category": "Background",
+          "value": "Crimson Haunted Moon",
+          "count": 1
+        },
+        {
+          "category": "Background",
+          "value": "Wind Gray Gradient",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "SALT",
+      "poolId": "pool1a2gt2mvuf5zvtqlvw2xgks2efze3p4r985ft62q64lua7gx7lal",
+      "traits": [
+        {
+          "category": "Mouth Decoration",
+          "value": "Bone",
+          "count": 18935
+        },
+        {
+          "category": "Eyes",
+          "value": "Whatsthat",
+          "count": 17375
+        },
+        {
+          "category": "Fur",
+          "value": "Doberman",
+          "count": 16231
+        },
+        {
+          "category": "Background",
+          "value": "Dark Black",
+          "count": 14477
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Tooth",
+          "count": 10302
+        },
+        {
+          "category": "Mouth",
+          "value": "Meh",
+          "count": 9946
+        },
+        {
+          "category": "Frame",
+          "value": "Traditional Painting",
+          "count": 5121
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Shizzle",
+          "count": 4882
+        },
+        {
+          "category": "Fur",
+          "value": "Hoskrogu",
+          "count": 4730
+        },
+        {
+          "category": "Frame",
+          "value": "Lunar New Year Gold",
+          "count": 4676
+        },
+        {
+          "category": "Hat",
+          "value": "Red Lunar New Year Hat",
+          "count": 4022
+        },
+        {
+          "category": "Eyes",
+          "value": "Spicy Eyes",
+          "count": 3480
+        },
+        {
+          "category": "Glasses",
+          "value": "Thug Life",
+          "count": 3464
+        },
+        {
+          "category": "Hat",
+          "value": "Reindeer",
+          "count": 2982
+        },
+        {
+          "category": "Hat",
+          "value": "Sombrero",
+          "count": 2963
+        },
+        {
+          "category": "Neck",
+          "value": "Neckerchief",
+          "count": 2860
+        },
+        {
+          "category": "Fur",
+          "value": "X-ray",
+          "count": 2637
+        },
+        {
+          "category": "Background",
+          "value": "Landscape",
+          "count": 2555
+        },
+        {
+          "category": "Eyes",
+          "value": "Dizzy Eyes",
+          "count": 2205
+        },
+        {
+          "category": "Eyes",
+          "value": "Psychedelic Eyes",
+          "count": 2183
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Candle Right",
+          "count": 2145
+        },
+        {
+          "category": "Eyes",
+          "value": "Blue Eyes",
+          "count": 2095
+        },
+        {
+          "category": "Glasses",
+          "value": "Heads-Up Display",
+          "count": 1942
+        },
+        {
+          "category": "Fur",
+          "value": "Skull",
+          "count": 1907
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Solar Panels",
+          "count": 1778
+        },
+        {
+          "category": "Hat",
+          "value": "Prisoner 42069",
+          "count": 1764
+        },
+        {
+          "category": "Background",
+          "value": "Hosky Island",
+          "count": 1752
+        },
+        {
+          "category": "Fur",
+          "value": "Hosky Island",
+          "count": 1752
+        },
+        {
+          "category": "Neck",
+          "value": "SlumDogeEx-Millionaire",
+          "count": 1730
+        },
+        {
+          "category": "Glasses",
+          "value": "Fighter Pilot Glasses",
+          "count": 1531
+        },
+        {
+          "category": "Background",
+          "value": "Fireworks",
+          "count": 1453
+        },
+        {
+          "category": "Hat",
+          "value": "Karen",
+          "count": 1428
+        },
+        {
+          "category": "Hat",
+          "value": "Trucker",
+          "count": 1289
+        },
+        {
+          "category": "Background",
+          "value": "Blue Stepped Gradient",
+          "count": 1288
+        },
+        {
+          "category": "Background",
+          "value": "Hexagon Green",
+          "count": 1249
+        },
+        {
+          "category": "Eyes",
+          "value": "Neon Sphinx Eyes",
+          "count": 1182
+        },
+        {
+          "category": "Eyes",
+          "value": "Hypno Eyes",
+          "count": 1049
+        },
+        {
+          "category": "Frame",
+          "value": "Prison Bars",
+          "count": 999
+        },
+        {
+          "category": "Background",
+          "value": "Web",
+          "count": 973
+        },
+        {
+          "category": "Frame",
+          "value": "Web",
+          "count": 973
+        },
+        {
+          "category": "Frame",
+          "value": "Shredder",
+          "count": 962
+        },
+        {
+          "category": "Frame",
+          "value": "FIRED!",
+          "count": 864
+        },
+        {
+          "category": "Fur",
+          "value": "Gold Skull",
+          "count": 767
+        },
+        {
+          "category": "Frame",
+          "value": "Ded",
+          "count": 670
+        },
+        {
+          "category": "Fur",
+          "value": "Looking The Other Way",
+          "count": 539
+        },
+        {
+          "category": "Frame",
+          "value": "1rd Anonversary",
+          "count": 514
+        },
+        {
+          "category": "Frame",
+          "value": "Fingerpaint",
+          "count": 457
+        },
+        {
+          "category": "Mouth",
+          "value": "Snowman",
+          "count": 366
+        },
+        {
+          "category": "Background",
+          "value": "Pop Art",
+          "count": 344
+        },
+        {
+          "category": "Fur",
+          "value": "Glow In The Dark Skull",
+          "count": 229
+        },
+        {
+          "category": "Hat",
+          "value": "Captain Error",
+          "count": 225
+        },
+        {
+          "category": "Glasses",
+          "value": "Blue Laser",
+          "count": 200
+        },
+        {
+          "category": "Frame",
+          "value": "Golden Shine",
+          "count": 174
+        },
+        {
+          "category": "Frame",
+          "value": "Crypto Magazine Halloween Edition",
+          "count": 148
+        },
+        {
+          "category": "Background",
+          "value": "Black Radioactive Animated",
+          "count": 145
+        },
+        {
+          "category": "Eyes",
+          "value": "Snowman Eyes",
+          "count": 103
+        },
+        {
+          "category": "Glasses",
+          "value": "Upside Down Error",
+          "count": 98
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Right Ring Error",
+          "count": 88
+        },
+        {
+          "category": "Hat",
+          "value": "Mollusk Print Play",
+          "count": 55
+        },
+        {
+          "category": "Glasses",
+          "value": "Dude Error",
+          "count": 53
+        },
+        {
+          "category": "Eyes",
+          "value": "Zombie Blood",
+          "count": 10
+        },
+        {
+          "category": "Background",
+          "value": "Snowfall Animated",
+          "count": 7
+        },
+        {
+          "category": "Background",
+          "value": "Banksy Tribute 1 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Eyes",
+          "value": "Banksy Tribute 1 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Fur",
+          "value": "Banksy Tribute 1 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Mouth",
+          "value": "Banksy Tribute 1 of 4 by Danksy",
+          "count": 4
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Beard Error",
+          "count": 3
+        },
+        {
+          "category": "Background",
+          "value": "Cyan Haunted Moon",
+          "count": 1
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Spamsky Studs",
+          "count": 1
+        },
+        {
+          "category": "Glasses",
+          "value": "Spamsky Love",
+          "count": 1
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Spamsky Sick",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "VEGAS",
+      "poolId": "pool17xh922cr9skc0fqk7sr8at6xx6eluh5qyv9p7ca2x0mtc3st0mz",
+      "traits": [
+        {
+          "category": "Background",
+          "value": "Grey",
+          "count": 18377
+        },
+        {
+          "category": "Fur",
+          "value": "Grey",
+          "count": 18377
+        },
+        {
+          "category": "Frame",
+          "value": "Silver",
+          "count": 17701
+        },
+        {
+          "category": "Neck",
+          "value": "Red Collar",
+          "count": 16530
+        },
+        {
+          "category": "Background",
+          "value": "Navy",
+          "count": 16196
+        },
+        {
+          "category": "Glasses",
+          "value": "Dude",
+          "count": 15277
+        },
+        {
+          "category": "Background",
+          "value": "Deep Purple",
+          "count": 9666
+        },
+        {
+          "category": "Background",
+          "value": "Peach",
+          "count": 9183
+        },
+        {
+          "category": "Background",
+          "value": "Late Night",
+          "count": 6799
+        },
+        {
+          "category": "Fur",
+          "value": "Late Night",
+          "count": 6799
+        },
+        {
+          "category": "Eyes",
+          "value": "Ghost Eyes",
+          "count": 3837
+        },
+        {
+          "category": "Fur",
+          "value": "Coyote",
+          "count": 3720
+        },
+        {
+          "category": "Background",
+          "value": "Lunar New Year Blue",
+          "count": 3337
+        },
+        {
+          "category": "Background",
+          "value": "Black Radioactive",
+          "count": 3150
+        },
+        {
+          "category": "Glasses",
+          "value": "Hero Mask",
+          "count": 2806
+        },
+        {
+          "category": "Neck",
+          "value": "Medicine Barrel",
+          "count": 2756
+        },
+        {
+          "category": "Background",
+          "value": "Obsidian",
+          "count": 2643
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Snorkel",
+          "count": 2584
+        },
+        {
+          "category": "Mouth",
+          "value": "Snarl",
+          "count": 2232
+        },
+        {
+          "category": "Mouth",
+          "value": "Duckface",
+          "count": 2191
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Handlebar Moustache",
+          "count": 2160
+        },
+        {
+          "category": "Mouth",
+          "value": "Dollar Mouth",
+          "count": 2047
+        },
+        {
+          "category": "Background",
+          "value": "Paint Splats",
+          "count": 1944
+        },
+        {
+          "category": "Fur",
+          "value": "Pink",
+          "count": 1906
+        },
+        {
+          "category": "Mouth",
+          "value": "Flaming Hot Mouth",
+          "count": 1856
+        },
+        {
+          "category": "Fur",
+          "value": "Raccoon",
+          "count": 1754
+        },
+        {
+          "category": "Background",
+          "value": "Light Blue Gradient",
+          "count": 1742
+        },
+        {
+          "category": "Fur",
+          "value": "Mistakes Were Made",
+          "count": 1618
+        },
+        {
+          "category": "Neck",
+          "value": "Cone",
+          "count": 1500
+        },
+        {
+          "category": "Hat",
+          "value": "HBI Hat",
+          "count": 1432
+        },
+        {
+          "category": "Background",
+          "value": "Morning Gradient",
+          "count": 1306
+        },
+        {
+          "category": "Fur",
+          "value": "Fox",
+          "count": 1296
+        },
+        {
+          "category": "Mouth",
+          "value": "Sausage",
+          "count": 1200
+        },
+        {
+          "category": "Eyes",
+          "value": "Flaming Hot Eyes",
+          "count": 1102
+        },
+        {
+          "category": "Frame",
+          "value": "Glass Jarsky",
+          "count": 1038
+        },
+        {
+          "category": "Frame",
+          "value": "Rug Me Daddy!",
+          "count": 973
+        },
+        {
+          "category": "Fur",
+          "value": "Crazy Mary",
+          "count": 849
+        },
+        {
+          "category": "Fur",
+          "value": "Robot 2.0 Rusty",
+          "count": 816
+        },
+        {
+          "category": "Fur",
+          "value": "Festive Holiday Dog",
+          "count": 806
+        },
+        {
+          "category": "Hat",
+          "value": "TBLH Hat",
+          "count": 760
+        },
+        {
+          "category": "Fur",
+          "value": "Cerberosky",
+          "count": 593
+        },
+        {
+          "category": "Background",
+          "value": "Old Computer",
+          "count": 584
+        },
+        {
+          "category": "Frame",
+          "value": "Neon Blue",
+          "count": 552
+        },
+        {
+          "category": "Eyes",
+          "value": "Lightning Eyes",
+          "count": 475
+        },
+        {
+          "category": "Background",
+          "value": "Community Birthday Card",
+          "count": 473
+        },
+        {
+          "category": "Background",
+          "value": "Urban Wall Art",
+          "count": 291
+        },
+        {
+          "category": "Mouth",
+          "value": "Barking",
+          "count": 225
+        },
+        {
+          "category": "Frame",
+          "value": "Dripping Blood",
+          "count": 156
+        },
+        {
+          "category": "Hat",
+          "value": "Gold Helmet",
+          "count": 63
+        },
+        {
+          "category": "Fur",
+          "value": "Purple Alien",
+          "count": 60
+        },
+        {
+          "category": "Hat",
+          "value": "Silver Helmet",
+          "count": 32
+        },
+        {
+          "category": "Hat",
+          "value": "Mollusk Bowl Play",
+          "count": 24
+        },
+        {
+          "category": "Fur",
+          "value": "Cardoggo",
+          "count": 17
+        },
+        {
+          "category": "Hat",
+          "value": "Brains",
+          "count": 10
+        },
+        {
+          "category": "Background",
+          "value": "Fireplace Animated",
+          "count": 5
+        },
+        {
+          "category": "Background",
+          "value": "Blood Orange Haunted Moon",
+          "count": 1
+        },
+        {
+          "category": "Background",
+          "value": "Fire Red Gradient",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "ticker": "WEED",
+      "poolId": "pool1mscll7kd2y9c56kv7thv7kv99wjvrr72uwpmuhphaltjz0pkuqa",
+      "traits": [
+        {
+          "category": "Eyes",
+          "value": "Pink Eye",
+          "count": 22243
+        },
+        {
+          "category": "Neck",
+          "value": "Red Collar Gold Spikes",
+          "count": 19329
+        },
+        {
+          "category": "Background",
+          "value": "Cyan",
+          "count": 14453
+        },
+        {
+          "category": "Glasses",
+          "value": "Mirrored Glasses",
+          "count": 13207
+        },
+        {
+          "category": "Background",
+          "value": "Poo",
+          "count": 9454
+        },
+        {
+          "category": "Frame",
+          "value": "Poo",
+          "count": 9454
+        },
+        {
+          "category": "Hat",
+          "value": "Spin Top",
+          "count": 7901
+        },
+        {
+          "category": "Hat",
+          "value": "Miner",
+          "count": 6524
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Double Right Rings",
+          "count": 5550
+        },
+        {
+          "category": "Background",
+          "value": "Green Gradient",
+          "count": 4469
+        },
+        {
+          "category": "Hat",
+          "value": "Santa Hat",
+          "count": 3871
+        },
+        {
+          "category": "Mouth",
+          "value": "Zipped",
+          "count": 3380
+        },
+        {
+          "category": "Frame",
+          "value": "Playing Card",
+          "count": 3180
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Bandaged Ear Right",
+          "count": 3099
+        },
+        {
+          "category": "Eyes",
+          "value": "Hoskasaur Eyes",
+          "count": 2871
+        },
+        {
+          "category": "Background",
+          "value": "Granite",
+          "count": 2845
+        },
+        {
+          "category": "Hat",
+          "value": "Tea Cup",
+          "count": 2624
+        },
+        {
+          "category": "Background",
+          "value": "Blue Gradient",
+          "count": 2417
+        },
+        {
+          "category": "Hat",
+          "value": "Crown",
+          "count": 2271
+        },
+        {
+          "category": "Eyes",
+          "value": "Hypno Dizzy Eyes",
+          "count": 2212
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Candle Left",
+          "count": 2078
+        },
+        {
+          "category": "Glasses",
+          "value": "Goggles",
+          "count": 2021
+        },
+        {
+          "category": "Background",
+          "value": "Cosmos",
+          "count": 1954
+        },
+        {
+          "category": "Neck",
+          "value": "Doggy Bowl",
+          "count": 1942
+        },
+        {
+          "category": "Glasses",
+          "value": "Sunset Glasses",
+          "count": 1890
+        },
+        {
+          "category": "Fur",
+          "value": "War Paint",
+          "count": 1851
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Diamond Stud",
+          "count": 1821
+        },
+        {
+          "category": "Background",
+          "value": "GN",
+          "count": 1654
+        },
+        {
+          "category": "Hat",
+          "value": "FUD Cap",
+          "count": 1582
+        },
+        {
+          "category": "Fur",
+          "value": "Yellow Dog",
+          "count": 1554
+        },
+        {
+          "category": "Fur",
+          "value": "Blue Dog",
+          "count": 1468
+        },
+        {
+          "category": "Glasses",
+          "value": "Tears",
+          "count": 1428
+        },
+        {
+          "category": "Hat",
+          "value": "Major Hosky",
+          "count": 1255
+        },
+        {
+          "category": "Fur",
+          "value": "Radioactive Green",
+          "count": 1232
+        },
+        {
+          "category": "Background",
+          "value": "Notepad",
+          "count": 1117
+        },
+        {
+          "category": "Frame",
+          "value": "Out Of Ink",
+          "count": 1006
+        },
+        {
+          "category": "Eyes",
+          "value": "Envy Eyes",
+          "count": 1001
+        },
+        {
+          "category": "Frame",
+          "value": "Vegas Computer",
+          "count": 992
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Red Earphones",
+          "count": 977
+        },
+        {
+          "category": "Hat",
+          "value": "Theme Park",
+          "count": 956
+        },
+        {
+          "category": "Background",
+          "value": "Maffs",
+          "count": 837
+        },
+        {
+          "category": "Hat",
+          "value": "YOLO Hat",
+          "count": 817
+        },
+        {
+          "category": "Mouth",
+          "value": "Stitched Up",
+          "count": 809
+        },
+        {
+          "category": "Hat",
+          "value": "Straw Hat",
+          "count": 783
+        },
+        {
+          "category": "Eyes",
+          "value": "Clown Eyes",
+          "count": 692
+        },
+        {
+          "category": "Background",
+          "value": "Neon Pink Gradient",
+          "count": 639
+        },
+        {
+          "category": "Background",
+          "value": "Sahara",
+          "count": 580
+        },
+        {
+          "category": "Neck",
+          "value": "Black and White Jester Neck",
+          "count": 562
+        },
+        {
+          "category": "Background",
+          "value": "Dimalix",
+          "count": 547
+        },
+        {
+          "category": "Background",
+          "value": "Beach",
+          "count": 405
+        },
+        {
+          "category": "Hat",
+          "value": "Poo Cap",
+          "count": 399
+        },
+        {
+          "category": "Glasses",
+          "value": "3D Glasses Error",
+          "count": 360
+        },
+        {
+          "category": "Frame",
+          "value": "Crypto Ticker",
+          "count": 307
+        },
+        {
+          "category": "Glasses",
+          "value": "Retro Rainbow Eyes",
+          "count": 300
+        },
+        {
+          "category": "Frame",
+          "value": "Prison Bars Animated",
+          "count": 213
+        },
+        {
+          "category": "Eyes",
+          "value": "Heterochromia",
+          "count": 208
+        },
+        {
+          "category": "Fur",
+          "value": "Hoskytwo",
+          "count": 174
+        },
+        {
+          "category": "Hat",
+          "value": "Poo Hat Error",
+          "count": 158
+        },
+        {
+          "category": "Fur",
+          "value": "Jake Droopy",
+          "count": 71
+        },
+        {
+          "category": "Hat",
+          "value": "Blue Wooly Hat Error",
+          "count": 24
+        },
+        {
+          "category": "Glasses",
+          "value": "Red Laser Error",
+          "count": 20
+        },
+        {
+          "category": "Background",
+          "value": "Lunar New Year Red Animated",
+          "count": 15
+        },
+        {
+          "category": "Hat",
+          "value": "Mollusk Print Play Error",
+          "count": 13
+        },
+        {
+          "category": "Background",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Ear Decoration",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Eyes",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Frame",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Fur",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Glasses",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Hat",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Mouth",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Mouth Decoration",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Neck",
+          "value": "Out-Of-Ink",
+          "count": 10
+        },
+        {
+          "category": "Eyes",
+          "value": "Halfway Original",
+          "count": 3
+        },
+        {
+          "category": "Fur",
+          "value": "Halfway Original",
+          "count": 3
+        },
+        {
+          "category": "Mouth",
+          "value": "Halfway Original",
+          "count": 3
+        },
+        {
+          "category": "Mouth",
+          "value": "Original Mouth",
+          "count": 3
+        },
+        {
+          "category": "Background",
+          "value": "Green Haunted Moon",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

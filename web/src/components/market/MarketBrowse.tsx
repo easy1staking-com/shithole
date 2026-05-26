@@ -1,38 +1,47 @@
 "use client";
 
+import { useQueries } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { FilterBar, type FilterState } from "@/components/market/FilterBar";
 import { ListingCard } from "@/components/market/ListingCard";
+import { fetchNftMetadata } from "@/lib/api/client";
+import { queryKeys } from "@/lib/api/hooks";
 import { marketplaceManifest } from "@/lib/market/config";
 import {
   fetchMarketListings,
   type DecodedListing,
 } from "@/lib/market/queryListings";
+import { matchesPool, poolByTicker } from "@/lib/market/poolTraits";
+import { isSupportedCollection } from "@/lib/market/supportedCollections";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
 /**
- * Browse view for /market. Polls Blockfrost for UTxOs at the marketplace
- * address (read from {@link marketplaceManifest}), decodes inline-datums
- * into a typed list, and supports a client-side filter on the listed
- * asset's policy id — typing a 56-hex string narrows to one collection.
+ * Browse view for /market. Steps:
+ *   1. Pull every UTxO at the marketplace address (single Blockfrost call).
+ *   2. Drop anything outside the {@link isSupportedCollection} whitelist —
+ *      HOSKY CashGrab only in v1.
+ *   3. Batch-fetch CIP-25 metadata for each remaining listing (uses
+ *      React Query under useQueries; deduped against ListingCard's own
+ *      useNftMetadata call so each unit is fetched once).
+ *   4. Apply the filter bar (currency, pool-traits, sort) to the
+ *      decorated list.
+ *   5. Render filtered listings.
  */
 export function MarketBrowse() {
-  // Memoise the manifest read so its object identity is stable across
-  // renders — otherwise the refresh callback's deps tick every render and
-  // the useEffect fires in a tight loop (the "scanning…" spinner blinks
-  // fast, the page hammers Blockfrost). The manifest is only refreshed
-  // when the page mounts or localStorage is updated by /market/dev-tools
-  // (which calls window.location.reload anyway, so a per-mount snapshot
-  // is sufficient).
   const manifest = useMemo(() => marketplaceManifest(), []);
   const walletApi = useWalletStore((s) => s.api);
 
   const [listings, setListings] = useState<DecodedListing[] | null>(null);
-  const [policyFilter, setPolicyFilter] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    priceUnit: "",
+    poolTicker: "",
+    sort: "none",
+  });
 
   const marketplaceAddress = manifest?.marketplaceAddress ?? null;
 
@@ -55,17 +64,76 @@ export function MarketBrowse() {
     refresh();
   }, [refresh]);
 
-  const filtered = useMemo(() => {
+  // Whitelist filter — keep only listings whose listed asset is in a
+  // supported collection (HOSKY CashGrab today).
+  const onCollection = useMemo<DecodedListing[]>(() => {
     if (!listings) return [];
-    const p = policyFilter.trim().toLowerCase();
-    if (!p) return listings;
-    return listings.filter((l) =>
-      l.listedUnits.some((u) => u.startsWith(p)),
-    );
-  }, [listings, policyFilter]);
+    return listings.filter((l) => {
+      const u = l.listedUnits[0];
+      return Boolean(u) && isSupportedCollection(u);
+    });
+  }, [listings]);
+
+  // Batch-fetch metadata for every visible (whitelisted) listing in
+  // parallel. React Query dedupes against ListingCard's own
+  // useNftMetadata call so each unit hits the BE once total.
+  const metaQueries = useQueries({
+    queries: onCollection.map((l) => {
+      const unit = l.listedUnits[0] ?? "";
+      return {
+        queryKey: queryKeys.nft(unit),
+        queryFn: () => fetchNftMetadata(unit),
+        enabled: Boolean(unit),
+        staleTime: 60_000,
+      };
+    }),
+  });
+
+  const decorated = useMemo(() => {
+    return onCollection.map((listing, i) => ({
+      listing,
+      traits: extractTraits(metaQueries[i]?.data?.traits),
+    }));
+  }, [onCollection, metaQueries]);
+
+  const visible = useMemo(() => {
+    let xs = decorated;
+
+    // Currency filter.
+    if (filters.priceUnit !== "") {
+      const want = filters.priceUnit.toLowerCase();
+      xs = xs.filter(
+        (e) =>
+          (
+            e.listing.datum.pricePolicyHex + e.listing.datum.priceNameHex
+          ).toLowerCase() === want,
+      );
+    }
+
+    // Pool-traits filter.
+    if (filters.poolTicker) {
+      const pool = poolByTicker(filters.poolTicker);
+      if (pool) {
+        xs = xs.filter((e) => matchesPool(e.traits, pool).length > 0);
+      }
+    }
+
+    // Sort — only when one currency. Across currencies it's nonsense.
+    if (filters.sort !== "none" && filters.priceUnit !== "") {
+      const factor = filters.sort === "asc" ? 1n : -1n;
+      xs = [...xs].sort((a, b) => {
+        const d = (a.listing.datum.priceQty - b.listing.datum.priceQty) * factor;
+        return d > 0n ? 1 : d < 0n ? -1 : 0;
+      });
+    }
+
+    return xs;
+  }, [decorated, filters]);
+
+  const someMetaLoading = metaQueries.some((q) => q.isLoading);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
       <nav className="flex items-center justify-between text-xs uppercase tracking-widest text-zinc-500">
         <Link href="/" className="hover:text-zinc-300">
           ← home
@@ -78,8 +146,9 @@ export function MarketBrowse() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">marketplace</h1>
         <p className="max-w-2xl text-sm text-zinc-400">
-          any Cardano native asset, priced in any token. 2 % protocol fee
-          taken from the price; tip in ADA if you want. dev feature.
+          HOSKY CashGrab NFTs only (for now). filter by sale currency or
+          by the stake-pool trait set you care about — buyers wanting
+          delegate-able art can find it.
         </p>
       </header>
 
@@ -87,14 +156,7 @@ export function MarketBrowse() {
         <ManifestEmptyState />
       ) : (
         <>
-          <input
-            type="text"
-            value={policyFilter}
-            onChange={(e) => setPolicyFilter(e.target.value)}
-            placeholder="filter by policy id (56 hex chars)…"
-            spellCheck={false}
-            className="w-full rounded border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-sky-700 focus:outline-none"
-          />
+          <FilterBar filters={filters} onChange={setFilters} />
 
           {err ? (
             <p className="rounded border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
@@ -106,25 +168,55 @@ export function MarketBrowse() {
             <p className="text-sm text-zinc-500">connect a wallet to browse.</p>
           ) : loading ? (
             <p className="text-sm text-zinc-500">scanning the marketplace…</p>
-          ) : filtered.length === 0 ? (
+          ) : visible.length === 0 ? (
             <p className="text-sm text-zinc-500">
-              {listings && listings.length > 0
-                ? "no listings match that policy id."
-                : "nothing listed yet — be the first."}
+              {onCollection.length === 0
+                ? "no HOSKY CashGrab listings yet — be the first."
+                : someMetaLoading
+                ? "applying filters…"
+                : "no listings match the current filters."}
             </p>
           ) : (
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {filtered.map((l) => (
-                <li key={`${l.utxo.txHash}:${l.utxo.outputIndex}`}>
-                  <ListingCard listing={l} />
-                </li>
-              ))}
-            </ul>
+            <>
+              <p className="text-xs text-zinc-500">
+                {visible.length} listing{visible.length === 1 ? "" : "s"}
+                {onCollection.length !== visible.length
+                  ? ` of ${onCollection.length}`
+                  : ""}
+              </p>
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {visible.map((e) => (
+                  <li
+                    key={`${e.listing.utxo.txHash}:${e.listing.utxo.outputIndex}`}
+                  >
+                    <ListingCard listing={e.listing} />
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </>
       )}
     </main>
   );
+}
+
+/**
+ * The NFT metadata's traits are a list of single-key dicts (CIP-25
+ * dialect). Flatten to {category, value} pairs for matching.
+ */
+function extractTraits(
+  raw: ReadonlyArray<Record<string, string | number | boolean | null | undefined>> | undefined,
+): Array<{ category: string; value: string }> {
+  if (!raw) return [];
+  const out: Array<{ category: string; value: string }> = [];
+  for (const pair of raw) {
+    if (!pair || typeof pair !== "object") continue;
+    for (const [k, v] of Object.entries(pair as Record<string, unknown>)) {
+      if (typeof v === "string") out.push({ category: k, value: v });
+    }
+  }
+  return out;
 }
 
 function ManifestEmptyState() {
