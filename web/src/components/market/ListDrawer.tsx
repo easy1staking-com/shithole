@@ -222,10 +222,10 @@ export function ListDrawer() {
           {/* ---- NFT picker ---- */}
           <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
             <header className="flex items-baseline justify-between">
-              <h2 className="text-xs uppercase tracking-widest text-zinc-500">
+              <h2 className="text-sm font-semibold uppercase tracking-widest text-zinc-400">
                 pick {collection.label}
               </h2>
-              <span className="text-[10px] text-zinc-600">
+              <span className="text-sm text-zinc-300">
                 {nftsLoading
                   ? "loading…"
                   : `${walletNfts?.length ?? 0} in wallet · ${selected.size} selected`}
@@ -241,23 +241,28 @@ export function ListDrawer() {
                   : `you don't hold any ${collection.label}.`}
               </p>
             ) : (
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {walletNfts.map((n) => (
-                  <NftPickRow
-                    key={n.unit}
-                    nft={n}
-                    isSelected={selected.has(n.unit)}
-                    onToggle={() => toggleSelect(n.unit)}
-                    showOverride={!sameForAll && selected.has(n.unit)}
-                    override={overrides[n.unit] ?? {
-                      displayPrice: sharedPrice,
-                      tokenUnit: sharedTokenUnit,
-                    }}
-                    onOverrideChange={(patch) => setOverride(n.unit, patch)}
-                    priceTokens={priceTokens}
-                  />
-                ))}
-              </ul>
+              // Cap height + scroll. Wallets with hundreds of HOSKY
+              // CashGrab NFTs would otherwise produce a 30-row grid
+              // that pushes the submit button miles below the fold.
+              <div className="max-h-[36rem] overflow-y-auto rounded border border-zinc-900 p-1">
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {walletNfts.map((n) => (
+                    <NftPickRow
+                      key={n.unit}
+                      nft={n}
+                      isSelected={selected.has(n.unit)}
+                      onToggle={() => toggleSelect(n.unit)}
+                      showOverride={!sameForAll && selected.has(n.unit)}
+                      override={overrides[n.unit] ?? {
+                        displayPrice: sharedPrice,
+                        tokenUnit: sharedTokenUnit,
+                      }}
+                      onOverrideChange={(patch) => setOverride(n.unit, patch)}
+                      priceTokens={priceTokens}
+                    />
+                  ))}
+                </ul>
+              </div>
             )}
           </section>
 
