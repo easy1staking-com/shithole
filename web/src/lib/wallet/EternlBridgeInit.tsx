@@ -45,28 +45,26 @@ function initBridgeOnce(): void {
   bridgeInitialised = true;
   try {
     // Raw passive listener — fires BEFORE the bridge's filtered one
-    // and logs every postMessage that lands in the iframe regardless
-    // of `data.type`. If eternl.io's `connect` never shows up here,
-    // it isn't being posted to us at all (curation gate / different
-    // protocol / iframe-target mismatch). If it shows up but the
-    // bridge ignores it, the wire format diverged from what the
-    // bundled bridge expects.
+    // and logs EVERY postMessage with NO filtering, so we can see
+    // exactly what (if anything) eternl.io is sending into our iframe.
+    // Strip once we've identified what's going on.
     window.addEventListener(
       "message",
       (event: MessageEvent) => {
-        if (!event.data || typeof event.data !== "object") return;
-        const data = event.data as { type?: unknown; method?: unknown };
-        if (typeof data.type !== "string") return;
         console.log(`${LOG_PREFIX}:raw`, {
           origin: event.origin,
-          type: data.type,
-          method: data.method,
+          dataType: typeof event.data,
           data: event.data,
         });
       },
       false,
     );
 
+    console.log(
+      `${LOG_PREFIX} build=2026-05-28-raw-unfiltered; in iframe=${
+        window.self !== window.top
+      }; href=${window.location.href}`,
+    );
     console.log(`${LOG_PREFIX} attaching bridge listener`);
     initCardanoDAppConnectorBridge(() => {
       console.log(`${LOG_PREFIX} handshake complete → auto-connect`);
