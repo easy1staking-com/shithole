@@ -44,24 +44,40 @@ function initBridgeOnce(): void {
   if (typeof window === "undefined") return;
   bridgeInitialised = true;
   try {
-    // Raw passive listener — fires BEFORE the bridge's filtered one
-    // and logs EVERY postMessage with NO filtering, so we can see
-    // exactly what (if anything) eternl.io is sending into our iframe.
-    // Strip once we've identified what's going on.
+    // Raw passive listener — flatten payload to a single-line string
+    // so Chrome console copy-paste captures the actual content (object
+    // refs get serialised to "[object Object]" otherwise). Truncates
+    // to keep huge payloads readable; strip once root cause is known.
     window.addEventListener(
       "message",
       (event: MessageEvent) => {
-        console.log(`${LOG_PREFIX}:raw`, {
-          origin: event.origin,
-          dataType: typeof event.data,
-          data: event.data,
-        });
+        let payload: string;
+        try {
+          payload =
+            event.data === undefined
+              ? "<undefined>"
+              : event.data === null
+                ? "<null>"
+                : typeof event.data === "string"
+                  ? `<string>${JSON.stringify(event.data)}`
+                  : JSON.stringify(event.data, (_k, v) =>
+                      typeof v === "function" ? "<fn>" : v,
+                    );
+          if (payload.length > 600) payload = payload.slice(0, 600) + "…";
+        } catch (err) {
+          payload = `<unserialisable: ${
+            err instanceof Error ? err.message : String(err)
+          }>`;
+        }
+        console.log(
+          `${LOG_PREFIX}:raw origin=${event.origin} dataType=${typeof event.data} payload=${payload}`,
+        );
       },
       false,
     );
 
     console.log(
-      `${LOG_PREFIX} build=2026-05-28-raw-unfiltered; in iframe=${
+      `${LOG_PREFIX} build=2026-05-28-flat-payload; in iframe=${
         window.self !== window.top
       }; href=${window.location.href}`,
     );
