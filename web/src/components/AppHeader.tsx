@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { NavMenu } from "@/components/NavMenu";
-import { isMarketplaceEnabled } from "@/lib/market/config";
+import { isMarketplaceNavEnabled } from "@/lib/market/config";
 import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 
 /**
@@ -81,7 +81,7 @@ export function AppHeader() {
                 { label: "your history", href: "/me/history?type=p2p" },
               ]}
             />
-            {isMarketplaceEnabled() ? (
+            {isMarketplaceNavEnabled() ? (
               <NavMenu
                 label="market"
                 items={[
