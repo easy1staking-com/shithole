@@ -34,6 +34,14 @@ import { useWalletStore } from "./walletStore";
  * caches by {@code window.cardano} object identity, and the bridge
  * mutates a property on that object (doesn't replace it), so the
  * picker would otherwise never observe the new entry.
+ *
+ * <p><b>Deployment invariant.</b> Eternl pins postMessage targetOrigin
+ * to the catalog-registered <code>urlBridge</code>. The host that
+ * <code>urlBridge</code> points at MUST serve 200 directly — any
+ * cross-origin redirect (apex↔www, http→https on the wrong host)
+ * silently drops the handshake. Verify with
+ * <code>curl -sI &lt;urlBridge&gt;</code> after any DNS / Vercel
+ * domain change.
  */
 
 const LOG_PREFIX = "[EternlBridge]";
@@ -44,43 +52,6 @@ function initBridgeOnce(): void {
   if (typeof window === "undefined") return;
   bridgeInitialised = true;
   try {
-    // Raw passive listener — flatten payload to a single-line string
-    // so Chrome console copy-paste captures the actual content (object
-    // refs get serialised to "[object Object]" otherwise). Truncates
-    // to keep huge payloads readable; strip once root cause is known.
-    window.addEventListener(
-      "message",
-      (event: MessageEvent) => {
-        let payload: string;
-        try {
-          payload =
-            event.data === undefined
-              ? "<undefined>"
-              : event.data === null
-                ? "<null>"
-                : typeof event.data === "string"
-                  ? `<string>${JSON.stringify(event.data)}`
-                  : JSON.stringify(event.data, (_k, v) =>
-                      typeof v === "function" ? "<fn>" : v,
-                    );
-          if (payload.length > 600) payload = payload.slice(0, 600) + "…";
-        } catch (err) {
-          payload = `<unserialisable: ${
-            err instanceof Error ? err.message : String(err)
-          }>`;
-        }
-        console.log(
-          `${LOG_PREFIX}:raw origin=${event.origin} dataType=${typeof event.data} payload=${payload}`,
-        );
-      },
-      false,
-    );
-
-    console.log(
-      `${LOG_PREFIX} build=2026-05-28-flat-payload; in iframe=${
-        window.self !== window.top
-      }; href=${window.location.href}`,
-    );
     console.log(`${LOG_PREFIX} attaching bridge listener`);
     initCardanoDAppConnectorBridge(() => {
       console.log(`${LOG_PREFIX} handshake complete → auto-connect`);
