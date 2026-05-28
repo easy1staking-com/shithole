@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
+import { listPools, matchesPool } from "@/lib/market/poolTraits";
 import {
   fetchMarketListings,
   type DecodedListing,
@@ -82,6 +83,17 @@ export function ListingDetail({ unit }: { unit: string }) {
   const meta = useNftMetadata(unit);
   const displayName = meta.data?.name ?? unit.slice(0, 22) + "…";
   const imageUrl = meta.data?.image_url ?? null;
+
+  // Pools this NFT matches — same logic + visual vocabulary as the
+  // browse-grid card (ListingCard's PoolChips), surfaced here so the
+  // buyer/seller sees the same context at checkout time.
+  const matchingPools = useMemo(() => {
+    const traits = meta.data?.traits ?? [];
+    if (traits.length === 0) return [];
+    return listPools()
+      .filter((p) => matchesPool(traits, p).length > 0)
+      .map((p) => p.ticker);
+  }, [meta.data]);
 
   // Price-token label + decimals (for human-readable display).
   const priceTokens = useMemo(() => supportedPriceTokens(), []);
@@ -175,6 +187,7 @@ export function ListingDetail({ unit }: { unit: string }) {
 
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">{displayName}</h1>
+        {matchingPools.length > 0 ? <PoolChips tickers={matchingPools} /> : null}
         <p className="break-all font-mono text-xs text-zinc-500">{unit}</p>
       </header>
 
@@ -259,6 +272,28 @@ export function ListingDetail({ unit }: { unit: string }) {
         </p>
       ) : null}
     </main>
+  );
+}
+
+function PoolChips({ tickers }: { tickers: string[] }) {
+  const visible = tickers.slice(0, 3);
+  const overflow = tickers.length - visible.length;
+  return (
+    <div className="flex flex-wrap gap-1" title={`matches: ${tickers.join(", ")}`}>
+      {visible.map((t) => (
+        <span
+          key={t}
+          className="rounded bg-sky-950/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-sky-300"
+        >
+          {t}
+        </span>
+      ))}
+      {overflow > 0 ? (
+        <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+          +{overflow}
+        </span>
+      ) : null}
+    </div>
   );
 }
 

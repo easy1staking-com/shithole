@@ -47,7 +47,7 @@ export function ListingCard({ listing }: { listing: DecodedListing }) {
   // per-card here so the chips appear alongside the name. Computed
   // once per metadata refresh.
   const matchingPools = useMemo(() => {
-    const traits = extractNftTraits(meta.data?.traits);
+    const traits = meta.data?.traits ?? [];
     if (traits.length === 0) return [];
     return listPools()
       .filter((p) => matchesPool(traits, p).length > 0)
@@ -110,26 +110,6 @@ function PoolChips({ tickers }: { tickers: string[] }) {
       ) : null}
     </div>
   );
-}
-
-/**
- * Flatten the BE's NftTrait[] (list of single-key objects) into
- * {category, value} pairs that {@link matchesPool} expects.
- */
-function extractNftTraits(
-  raw:
-    | ReadonlyArray<Record<string, string | number | boolean | null | undefined>>
-    | undefined,
-): Array<{ category: string; value: string }> {
-  if (!raw) return [];
-  const out: Array<{ category: string; value: string }> = [];
-  for (const pair of raw) {
-    if (!pair || typeof pair !== "object") continue;
-    for (const [k, v] of Object.entries(pair as Record<string, unknown>)) {
-      if (typeof v === "string") out.push({ category: k, value: v });
-    }
-  }
-  return out;
 }
 
 function ListingImage({

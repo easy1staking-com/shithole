@@ -96,7 +96,7 @@ export function MarketBrowse() {
   const decorated = useMemo(() => {
     return onCollection.map((listing, i) => ({
       listing,
-      traits: extractTraits(metaQueries[i]?.data?.traits),
+      traits: metaQueries[i]?.data?.traits ?? [],
     }));
   }, [onCollection, metaQueries]);
 
@@ -208,24 +208,6 @@ export function MarketBrowse() {
       )}
     </main>
   );
-}
-
-/**
- * The NFT metadata's traits are a list of single-key dicts (CIP-25
- * dialect). Flatten to {category, value} pairs for matching.
- */
-function extractTraits(
-  raw: ReadonlyArray<Record<string, string | number | boolean | null | undefined>> | undefined,
-): Array<{ category: string; value: string }> {
-  if (!raw) return [];
-  const out: Array<{ category: string; value: string }> = [];
-  for (const pair of raw) {
-    if (!pair || typeof pair !== "object") continue;
-    for (const [k, v] of Object.entries(pair as Record<string, unknown>)) {
-      if (typeof v === "string") out.push({ category: k, value: v });
-    }
-  }
-  return out;
 }
 
 function ManifestEmptyState() {

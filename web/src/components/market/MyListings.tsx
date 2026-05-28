@@ -305,7 +305,7 @@ function ListingRow({
   const displayPrice = formatPriceQty(listing.datum.priceQty, priceLabel.decimals);
 
   const matchingPools = useMemo(() => {
-    const traits = extractNftTraits(meta.data?.traits);
+    const traits = meta.data?.traits ?? [];
     if (traits.length === 0) return [];
     return listPools()
       .filter((p) => matchesPool(traits, p).length > 0)
@@ -436,22 +436,6 @@ function resolvePriceLabel(
   }
   const head = listing.datum.pricePolicyHex.slice(0, 6);
   return { label: `?${head}…`, decimals: 0 };
-}
-
-function extractNftTraits(
-  raw:
-    | ReadonlyArray<Record<string, string | number | boolean | null | undefined>>
-    | undefined,
-): Array<{ category: string; value: string }> {
-  if (!raw) return [];
-  const out: Array<{ category: string; value: string }> = [];
-  for (const pair of raw) {
-    if (!pair || typeof pair !== "object") continue;
-    for (const [k, v] of Object.entries(pair as Record<string, unknown>)) {
-      if (typeof v === "string") out.push({ category: k, value: v });
-    }
-  }
-  return out;
 }
 
 function formatPriceQty(qty: bigint, decimals: number): string {
