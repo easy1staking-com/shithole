@@ -1,9 +1,11 @@
 /**
  * Build + submit a v3 P2P (wanted-listing) creation tx — a buyer locks one
- * "offered" NFT plus a bounty of ADA at the parameterized wanted_listing
+ * "offered" NFT plus a fixed ADA deposit at the parameterized wanted_listing
  * script address, with an inline {@code WantedDatum} carrying their pkh,
  * full bech32 delivery address, and the committed merkle root of the pool
- * they're targeting.
+ * they're targeting. The locked ADA is not a bounty: at fulfill time it pays
+ * out as protocol fee + buyer's NFT-delivery min-utxo + the seller's tx-fee
+ * cushion.
  *
  * <p>Mirrors v2's {@code list.ts} shape: pay-to-script with an inline
  * datum, no validator attached (we're paying TO the script, not spending
@@ -34,8 +36,11 @@ import { inlineDatum, toAddress, toAssets, txHashHex } from "./txAdapters";
 
 /**
  * On-chain protocol floor enforced by the wanted_listing validator's W2
- * invariant: own_input.lovelace >= cfg.protocol_fee + 2_000_000. Anything
- * above the floor is the buyer's tip to attract a fulfiller.
+ * invariant: own_input.lovelace >= cfg.protocol_fee + 2_000_000. The
+ * 2 ADA covers the buyer's NFT-delivery min-utxo (~1.4 ADA) + the
+ * seller's tx-fee cushion (~0.6 ADA). It is not an incentive — values
+ * above the floor are technically accepted but pointless: no real
+ * "tip" market exists.
  *
  * <p>Source of truth lives in {@code contracts/lib/shithole/types.ak}
  * as {@code min_seller_compensation = 2_000_000}. Provisional value
@@ -122,9 +127,9 @@ export type CreateP2pListingInput = {
    * Lovelace PER LISTING. Each output gets exactly this amount + 1 NFT.
    * Must be at least cfg.protocol_fee + MIN_SELLER_COMPENSATION_LOVELACE,
    * validated on-chain at Fulfill time. Total ADA committed by the buyer
-   * = bountyLovelace × offeredNftUnits.length.
+   * = lovelaceToLock × offeredNftUnits.length.
    */
-  bountyLovelace: bigint;
+  lovelaceToLock: bigint;
 };
 
 export type CreateP2pListingResult = {
@@ -139,21 +144,21 @@ export type CreateP2pListingResult = {
 };
 
 /**
- * Static check: bounty meets the on-chain seller-compensation floor given
- * a known protocol fee. Throw early so the UI doesn't waste a wallet
- * popup on a doomed tx.
+ * Static check: the listing deposit meets the on-chain floor given a known
+ * protocol fee. Throw early so the UI doesn't waste a wallet popup on a
+ * doomed tx.
  *
  * <p>Pure function — no SDK dependencies. The {@link submitCreateP2pListing}
  * builder enforces the same check defensively.
  */
-export function assertBountyFloor(
-  bountyLovelace: bigint,
+export function assertDepositFloor(
+  lovelaceToLock: bigint,
   protocolFeeLovelace: bigint,
 ): void {
   const floor = protocolFeeLovelace + MIN_SELLER_COMPENSATION_LOVELACE;
-  if (bountyLovelace < floor) {
+  if (lovelaceToLock < floor) {
     throw new Error(
-      `bounty ${bountyLovelace} below floor ${floor} (protocol_fee ${protocolFeeLovelace} + ${MIN_SELLER_COMPENSATION_LOVELACE} seller compensation)`,
+      `deposit ${lovelaceToLock} below floor ${floor} (protocol_fee ${protocolFeeLovelace} + ${MIN_SELLER_COMPENSATION_LOVELACE} seller tx-fee cushion)`,
     );
   }
 }
@@ -161,7 +166,7 @@ export function assertBountyFloor(
 /**
  * Build, sign, and submit the listing-creation tx.
  *
- * <p>One output: bountyLovelace + offered NFT @ wanted_listing script
+ * <p>One output: lovelaceToLock + offered NFT @ wanted_listing script
  * address, with the inline WantedDatum. No validator attached (paying
  * TO the script, not spending FROM it). The wallet builder auto-balances
  * change + tx fee from the buyer's other UTxOs.
@@ -174,9 +179,9 @@ export async function submitCreateP2pListing(
     throw new Error("at least one NFT must be offered");
   }
   // Defensive: enforce the protocol floor independent of caller.
-  if (input.bountyLovelace < MIN_SELLER_COMPENSATION_LOVELACE) {
+  if (input.lovelaceToLock < MIN_SELLER_COMPENSATION_LOVELACE) {
     throw new Error(
-      `bountyLovelace ${input.bountyLovelace} is below the protocol-level seller-compensation floor of ${MIN_SELLER_COMPENSATION_LOVELACE}`,
+      `lovelaceToLock ${input.lovelaceToLock} is below the protocol-level seller tx-fee cushion floor of ${MIN_SELLER_COMPENSATION_LOVELACE}`,
     );
   }
   // Defensive: dedup. The Cardano ledger forbids the same NFT appearing
@@ -210,7 +215,7 @@ export async function submitCreateP2pListing(
     const unit = rawUnit.toLowerCase();
     txBuilder = txBuilder.payToAddress({
       address: toAddress(applied.address),
-      assets: toAssets({ lovelace: input.bountyLovelace, [unit]: 1n }),
+      assets: toAssets({ lovelace: input.lovelaceToLock, [unit]: 1n }),
       datum: inlineDatum(datum),
     });
   }

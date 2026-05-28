@@ -44,9 +44,9 @@ export function P2pCard({ collection }: { collection: CuratedCollection }) {
     }
     // Spread across distinct target pools — how many different
     // delegator audiences buyers are currently fishing in. More useful
-    // than an avg-bounty number (which was misleading: most of the
-    // locked ADA is min-utxo + treasury + chain fees, not swapper
-    // payout — see BountyStep's effective-cost math).
+    // than an avg-deposit number (which was misleading: the locked ADA
+    // is just min-utxo + treasury + chain fees, not a payout to the
+    // seller — see DepositStep's effective-cost math).
     const roots = new Set(listings.map((l) => l.accepted_merkle_root));
     return { count: listings.length, poolCount: roots.size };
   }, [listings]);

@@ -9,7 +9,7 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
-import { BountyStep } from "@/components/p2p/BountyStep";
+import { DepositStep } from "@/components/p2p/DepositStep";
 import { NftPickerStep } from "@/components/p2p/NftPickerStep";
 import { PoolPicker, PoolSummary } from "@/components/p2p/PoolPicker";
 import { useCollection, useCurated } from "@/lib/api/hooks";
@@ -30,13 +30,10 @@ import type { Pool } from "@/types/api";
  *
  *   1. Pick which SPO pool to bait (which delegators care about your NFT)
  *   2. Pick the NFT you want to offload from your wallet
- *   3. Set the bounty + confirm the swap math
+ *   3. Confirm the deposit + see the swap math
  *
  * Reads {@code ?collection=<slug>} from the URL. If absent, falls back to a
  * collection picker so users who landed here from the global nav can pick.
- *
- * <p>Step 3 is stubbed until the bounty input + tx builder land — this
- * commit ships steps 1+2 (pool + NFT picker) fully wired.
  */
 export function CreateListingForm() {
   const params = useSearchParams();
@@ -152,8 +149,8 @@ function FlowForCollection({ slug }: { slug: string }) {
   const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
   const queryClient = useQueryClient();
 
-  const handleSubmitBounty = useCallback(
-    async (bountyLovelace: bigint) => {
+  const handleSubmitDeposit = useCallback(
+    async (lovelaceToLock: bigint) => {
       if (!selectedPool || selectedNfts.size === 0) return;
       if (!api || !paymentKeyHashHex || !addressBech32 || !collection.data) {
         setSubmitError("connect your wallet first");
@@ -175,7 +172,7 @@ function FlowForCollection({ slug }: { slug: string }) {
           buyerBech32Address: addressBech32,
           acceptedMerkleRootHex: selectedPool.merkle_root_hex,
           offeredNftUnits: Array.from(selectedNfts.keys()),
-          bountyLovelace,
+          lovelaceToLock,
         });
         setSubmitResult(result);
         setConfirmation("confirming");
@@ -240,8 +237,8 @@ function FlowForCollection({ slug }: { slug: string }) {
           <span className="font-medium text-zinc-100">
             {collection.data.display_name}
           </span>{" "}
-          to a delegator who actually wants its traits. you pay them; they
-          take it.
+          to a delegator who actually wants its traits. they bring an NFT,
+          you both swap.
         </p>
         {/* Inline risk disclosure — the user is about to lock NFT + ADA
             at a permissionless script. T&C covers the full picture;
@@ -299,7 +296,7 @@ function FlowForCollection({ slug }: { slug: string }) {
 
       <Step
         number={3}
-        title="how generous are you feeling?"
+        title="lock the deposit"
         complete={!!submitResult}
         disabled={!selectedPool || selectedNfts.size === 0}
       >
@@ -311,10 +308,10 @@ function FlowForCollection({ slug }: { slug: string }) {
           <SuccessPanel result={submitResult} confirmation={confirmation} />
         ) : (
           <>
-            <BountyStep
+            <DepositStep
               protocolFeeLovelace={BigInt(collection.data.config.protocol_fee)}
               listingCount={selectedNfts.size}
-              onSubmit={handleSubmitBounty}
+              onSubmit={handleSubmitDeposit}
               submitting={submitting}
             />
             {submitError && (
@@ -352,12 +349,12 @@ function SuccessPanel({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-amber-200">
+      <p className="text-lg text-amber-200">
         {n === 1
           ? "listing posted. waiting for some idiot to take the bait."
           : `${n} listings posted. waiting for ${n} idiots to take the bait.`}
       </p>
-      <dl className="space-y-1 text-xs">
+      <dl className="space-y-1 text-base">
         <div className="flex gap-2">
           <dt className="w-24 text-zinc-500">tx hash</dt>
           <dd className="font-mono text-zinc-300 break-all">
@@ -392,10 +389,10 @@ function SuccessPanel({
           </dd>
         </div>
       </dl>
-      <p className="text-xs text-zinc-500">
+      <p className="text-base text-zinc-500">
         the {n === 1 ? "listing" : "listings"} settle on chain in ~30-60s.
-        your s#!t is locked at the script address with your bounty; you can
-        reclaim {n === 1 ? "it" : "them"} any time.
+        your s#!t is locked at the script address with your deposit; you
+        can reclaim {n === 1 ? "it" : "them"} any time.
       </p>
 
       {/* Post-tx CTAs — guide the user away from the dead-end "now what"
@@ -404,19 +401,19 @@ function SuccessPanel({
       <div className="flex flex-wrap gap-2 pt-1">
         <Link
           href="/me/p2p"
-          className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-400"
+          className="rounded-md bg-amber-500 px-3 py-1.5 text-base font-semibold text-zinc-950 hover:bg-amber-400"
         >
           your listings →
         </Link>
         <Link
           href="/p2p"
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-base text-zinc-200 hover:bg-zinc-800"
         >
           browse all open listings
         </Link>
         <Link
           href="/"
-          className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+          className="rounded-md border border-zinc-800 px-3 py-1.5 text-base text-zinc-400 hover:text-zinc-200"
         >
           home
         </Link>

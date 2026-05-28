@@ -19,7 +19,7 @@ export default function MyP2pPage() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">your p2p listings</h1>
         <p className="text-sm text-zinc-400">
-          open offers you posted. reclaim any time to pull the NFT + bounty back.
+          open offers you posted. reclaim any time to pull the NFT + deposit back.
         </p>
       </header>
       <MyListingsBoard />

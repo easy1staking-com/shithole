@@ -4,30 +4,31 @@ import { useMemo, useState } from "react";
 
 import {
   MIN_SELLER_COMPENSATION_LOVELACE,
-  assertBountyFloor,
+  assertDepositFloor,
 } from "@/lib/tx/createP2pListing";
 
 /**
- * Step 3 of the p2p create flow — bounty input + live breakdown.
+ * Step 3 of the p2p create flow — deposit input + live breakdown.
  *
- * <p>The bounty is the TOTAL lovelace the buyer locks in the listing UTxO.
+ * <p>The deposit is the TOTAL lovelace the buyer locks in the listing UTxO.
  * The on-chain validator's W2 invariant enforces
- *   bounty >= cfg.protocol_fee + min_seller_compensation (2 ADA)
+ *   deposit >= cfg.protocol_fee + min_seller_compensation (2 ADA)
  * so any value below that floor would produce an unfulfillable listing.
  *
  * <p>Where the locked ADA actually goes at fulfill time:
  *   - protocol_fee                       → treasury (per-collection config)
  *   - {@link ESTIMATED_BUYER_OUTPUT_MIN} → BACK TO BUYER (NFT delivery min-utxo)
- *   - {@link ESTIMATED_TX_FEE}           → chain (eats out of the locked ADA)
- *   - remainder                          → swapper's profit
+ *   - {@link ESTIMATED_TX_FEE}           → seller's tx fee
+ *   - remainder                          → seller's tx-fee variance cushion
  *
- * <p>The "returns to buyer" leg is non-obvious and confused us once already
- * (we labeled the entire 2 ADA seller-compensation envelope as "to the
- * seller" — but ~1.4 of it actually flows back to the buyer's wallet via
- * the buyer-output min-utxo). The breakdown now exposes all four legs +
- * a "your effective cost" summary so the buyer can see what they're
- * really spending (≈ 1.6 ADA at the floor, or bounty − returned-min-utxo
- * in general).
+ * <p>None of these legs is a bounty: the deposit only covers the chain
+ * mechanics of the swap. The "returns to buyer" leg is non-obvious and
+ * confused us once already (we labeled the entire 2 ADA seller-compensation
+ * envelope as "to the seller" — but ~1.4 of it actually flows back to the
+ * buyer's wallet via the buyer-output min-utxo). The breakdown now exposes
+ * all four legs + a "your effective cost" summary so the buyer can see what
+ * they're really spending (≈ 1.6 ADA at the floor, or deposit − returned-
+ * min-utxo in general).
  *
  * <p>Submission is delegated to the parent via {@code onSubmit}: this
  * component is purely UI + validation; the parent owns the wallet + tx
@@ -47,10 +48,10 @@ const ESTIMATED_BUYER_OUTPUT_MIN = 1_400_000n;
  * Estimated tx fee for a single-listing Fulfill (one script input, one
  * ref input, two outputs). Observed ~0.38 ADA on preprod; rounded up
  * to 0.4 for a slight margin in the UI. Comes out of the buyer's
- * locked ADA via the swapper's change calculation.
+ * locked ADA via the seller's change calculation.
  */
 const ESTIMATED_TX_FEE = 400_000n;
-export function BountyStep({
+export function DepositStep({
   protocolFeeLovelace,
   listingCount,
   onSubmit,
@@ -59,11 +60,11 @@ export function BountyStep({
   protocolFeeLovelace: bigint;
   /**
    * Number of listings being created in this tx (= N offered NFTs). The
-   * bounty is per-listing, so total ADA committed is bounty × N. UI shows
-   * this explicitly when N > 1.
+   * deposit is per-listing, so total ADA committed is deposit × N. UI
+   * shows this explicitly when N > 1.
    */
   listingCount: number;
-  onSubmit: (bountyLovelace: bigint) => void;
+  onSubmit: (lovelaceToLock: bigint) => void;
   submitting: boolean;
 }) {
   const floor = protocolFeeLovelace + MIN_SELLER_COMPENSATION_LOVELACE;
@@ -77,17 +78,18 @@ export function BountyStep({
   const protocolFee = protocolFeeLovelace;
   const returnedToBuyer = ESTIMATED_BUYER_OUTPUT_MIN;
   const estTxFee = ESTIMATED_TX_FEE;
-  // Swapper's actual take = bounty − protocol_fee − min_utxo_returning_to_buyer
-  //                       − estimated tx fee. At the contract floor
-  // (bounty = protocol_fee + 2 ADA, returned ~1.4, tx ~0.4) this is ~0.2 ADA
-  // — barely an incentive. Any tip the buyer adds flows entirely here.
-  const swapperTake = useMemo(() => {
+  // Seller's tx-fee cushion = deposit − protocol_fee − min_utxo_returning_to_buyer
+  //                         − estimated tx fee. At the contract floor
+  // (deposit = protocol_fee + 2 ADA, returned ~1.4, tx ~0.4) this is ~0.2 ADA.
+  // Not a tip — just slack so the seller stays solvent when tx-fee
+  // variance pushes their actual fee a hair above the estimate.
+  const sellerCushion = useMemo(() => {
     if (parsed == null || !aboveFloor) return 0n;
-    const take = parsed - protocolFee - returnedToBuyer - estTxFee;
-    return take > 0n ? take : 0n;
+    const slack = parsed - protocolFee - returnedToBuyer - estTxFee;
+    return slack > 0n ? slack : 0n;
   }, [parsed, aboveFloor, protocolFee, returnedToBuyer, estTxFee]);
-  // What the buyer actually SPENDS = bounty minus what comes back to
-  // them with the NFT. Equivalent to protocol_fee + tx_fee + swapper_take.
+  // What the buyer actually SPENDS = deposit minus what comes back to
+  // them with the NFT. Equivalent to protocol_fee + tx_fee + seller_cushion.
   const effectiveCost = useMemo(() => {
     if (parsed == null) return 0n;
     return parsed > returnedToBuyer ? parsed - returnedToBuyer : 0n;
@@ -111,12 +113,13 @@ export function BountyStep({
             disabled={submitting}
             className="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm focus:border-amber-500 focus:outline-none"
             aria-invalid={!aboveFloor}
-            aria-describedby="bounty-help"
+            aria-describedby="deposit-help"
           />
           <span className="text-xs text-zinc-500">ADA</span>
         </div>
-        <p id="bounty-help" className="mt-1 text-xs text-zinc-500">
-          minimum {formatAda(floor)} ADA. add more to sweeten the swapper&apos;s take.
+        <p id="deposit-help" className="mt-1 text-xs text-zinc-500">
+          minimum {formatAda(floor)} ADA. covers chain costs only — no tip,
+          no incentive. the floor is the floor.
         </p>
         {parsed == null && (
           <p className="mt-1 text-xs text-red-400">enter a positive number.</p>
@@ -129,8 +132,8 @@ export function BountyStep({
         )}
       </label>
 
-      <dl className="space-y-1 rounded-md border border-zinc-800 bg-zinc-950/40 p-3 text-xs">
-        <div className="pb-1 text-[10px] uppercase tracking-wider text-zinc-600">
+      <dl className="space-y-1 rounded-md border border-zinc-800 bg-zinc-950/40 p-3 text-base">
+        <div className="pb-1 text-sm uppercase tracking-wider text-zinc-600">
           where your {formatAda(parsed ?? 0n)} ADA deposit goes when someone swaps
         </div>
 
@@ -138,7 +141,7 @@ export function BountyStep({
           label="↩ returns to you with the NFT"
           value={returnedToBuyer}
           tone="returned"
-          help="min-utxo on the buyer-output that lands the NFT in your wallet — this is YOUR ADA coming back, not a cost"
+          help="your ADA coming back with the NFT — not a cost"
         />
         <Row
           label="protocol fee → treasury"
@@ -150,18 +153,16 @@ export function BountyStep({
           label="tx fee (chain, est.)"
           value={estTxFee}
           tone="muted"
-          help="paid by the swapper, but comes out of your locked ADA via their change"
+          help="paid by the seller, but comes out of your locked ADA via their change"
         />
         <Row
-          label="swapper's take"
-          value={swapperTake}
-          tone={swapperTake > MIN_SELLER_COMPENSATION_LOVELACE / 4n ? "highlight" : "muted"}
+          label="swap tx fee buffer"
+          value={sellerCushion}
+          tone="muted"
           help={
-            swapperTake === 0n
-              ? "below the floor — no swapper would touch this"
-              : swapperTake < 500_000n
-                ? "barely an incentive at this bounty — tip more to attract a taker"
-                : "pure incentive: what makes them grab your listing"
+            sellerCushion === 0n
+              ? "no buffer — if the mempool sneezes, someone's eating it"
+              : "covers for tx fee excess. anything left over goes to the fee gremlin who lives in the mempool."
           }
         />
 
@@ -176,7 +177,7 @@ export function BountyStep({
           label="estimated swap cost to you"
           value={effectiveCost}
           tone="bold-highlight"
-          help={`bounty (${formatAda(parsed ?? 0n)}) − ${formatAda(returnedToBuyer)} ADA that returns to you with the NFT`}
+          help={`deposit (${formatAda(parsed ?? 0n)}) − ${formatAda(returnedToBuyer)} ADA that returns to you with the NFT`}
         />
 
         {listingCount > 1 && (
@@ -199,9 +200,8 @@ export function BountyStep({
       </dl>
 
       <p className="text-[11px] leading-snug text-zinc-500">
-        once a swap lands, the protocol fee + tx fee + swapper&apos;s take
-        are gone — no refunds. reclaim only works on listings nobody&apos;s
-        taken yet.
+        once a swap lands, the protocol fee + chain costs are gone — no
+        refunds. reclaim only works on listings nobody&apos;s taken yet.
       </p>
 
       <button
@@ -255,12 +255,12 @@ function Row({
             ? "text-emerald-300"
             : "text-zinc-400");
   return (
-    <div className="flex items-baseline justify-between gap-3">
+    <div className="flex items-start justify-between gap-3">
       <div className="flex min-w-0 flex-col">
         <dt className={dtClass}>{label}</dt>
-        {help && <span className="text-[10px] text-zinc-600">{help}</span>}
+        {help && <span className="text-sm text-zinc-600">{help}</span>}
       </div>
-      <dd className={ddClass}>{formatAda(value)} ADA</dd>
+      <dd className={`${ddClass} shrink-0 tabular-nums`}>{formatAda(value)} ADA</dd>
     </div>
   );
 }
@@ -294,4 +294,4 @@ export function formatAda(lovelace: bigint): string {
 }
 
 /** Re-export the floor assertion so tests + callers can pull from one site. */
-export { assertBountyFloor };
+export { assertDepositFloor };

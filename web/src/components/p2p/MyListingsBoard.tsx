@@ -350,7 +350,7 @@ function MyListingRow({
   onToggle: () => void;
   disabled: boolean;
 }) {
-  const bountyAda = (Number(listing.lovelace) / 1_000_000).toFixed(2);
+  const depositAda = (Number(listing.lovelace) / 1_000_000).toFixed(2);
   const offered = listing.offered_nft_unit.slice(56);
   return (
     <label
@@ -373,7 +373,7 @@ function MyListingRow({
       <div className="min-w-0 flex-1">
         <p className="truncate font-mono text-sm">{asciiOrShortHex(offered)}</p>
         <p className="text-[10px] text-zinc-500">
-          bounty {bountyAda} ADA · root{" "}
+          deposit {depositAda} ADA · root{" "}
           <span className="font-mono">
             {listing.accepted_merkle_root.slice(0, 8)}…
           </span>

@@ -1,7 +1,8 @@
 /**
  * Build + submit a v3 P2P Fulfill tx — a seller spends a buyer's wanted-
  * listing UTxO, supplies a matching NFT + a BE-issued merkle proof, and
- * receives the offered NFT + bounty ADA.
+ * receives the offered NFT plus the locked ADA (net of the protocol fee
+ * and the buyer's NFT-delivery min-utxo).
  *
  * <p>On-chain validator invariants (see `wanted_listing.ak` W1-W7):
  * <ul>

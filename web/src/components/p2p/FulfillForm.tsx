@@ -179,8 +179,8 @@ function FulfillBody({
   );
 
   // "Exclude pools" — when non-empty, NFTs whose ticker set intersects
-  // these are greyed and unselectable. Mental model: "I want to swap an
-  // NFT for the bounty, but NOT one I also collect for X-pool rewards."
+  // these are greyed and unselectable. Mental model: "I'm fine swapping
+  // most of my NFTs, but NOT ones I keep for X-pool rewards."
   const [excludedTickers, setExcludedTickers] = useState<Set<string>>(
     () => new Set(),
   );
@@ -457,7 +457,7 @@ function FulfillBody({
                 ? proofQuery.isPending
                   ? "checking proof…"
                   : "this NFT doesn't qualify"
-                : "fulfill — take the bounty"}
+                : "fulfill — make the swap"}
         </button>
       )}
       {submitError && (
@@ -476,13 +476,13 @@ function ListingSummary({
   listing: P2pListing;
   targetPoolTicker: string | null;
 }) {
-  const bountyAda = (Number(listing.lovelace) / 1_000_000).toFixed(2);
+  const depositAda = (Number(listing.lovelace) / 1_000_000).toFixed(2);
   return (
     <section className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/30 p-4">
       <h2 className="text-base font-medium">the listing</h2>
       <dl className="space-y-1 text-xs">
         <Row label="offered" value={listing.offered_nft_unit.slice(56) || "(empty asset)"} mono />
-        <Row label="bounty" value={`${bountyAda} ADA`} mono />
+        <Row label="deposit" value={`${depositAda} ADA`} mono />
         <Row label="target pool" value={targetPoolTicker ?? "unknown"} mono />
         <Row label="buyer" value={`${listing.buyer_pkh.slice(0, 12)}…`} mono />
       </dl>
@@ -571,13 +571,13 @@ function FulfillSuccess({
   const explorerUrl = `https://${sub}cardanoscan.io/transaction/${txHash}`;
   const assetNameAscii = asciiOrShortHex(offeredUnit.slice(56));
   return (
-    <div className="space-y-4 rounded-md border border-amber-700/40 bg-amber-950/20 p-4 text-sm">
+    <div className="space-y-4 rounded-md border border-amber-700/40 bg-amber-950/20 p-4 text-lg">
       <p className="text-amber-200">
         ✓ fulfilled. you got{" "}
-        <span className="font-mono text-amber-100">{assetNameAscii}</span>{" "}
-        + the bounty. another idiot is now slightly more delegated.
+        <span className="font-mono text-amber-100">{assetNameAscii}</span>.
+        another idiot is now slightly more delegated.
       </p>
-      <dl className="text-xs text-zinc-400">
+      <dl className="text-base text-zinc-400">
         <div className="flex gap-2">
           <dt className="w-16 text-zinc-500">tx</dt>
           <dd className="font-mono break-all">
@@ -601,19 +601,19 @@ function FulfillSuccess({
       <div className="flex flex-wrap gap-2 pt-1">
         <Link
           href="/p2p"
-          className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-400"
+          className="rounded-md bg-amber-500 px-3 py-1.5 text-base font-semibold text-zinc-950 hover:bg-amber-400"
         >
           browse more listings →
         </Link>
         <Link
           href="/me"
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-base text-zinc-200 hover:bg-zinc-800"
         >
           your s#!t
         </Link>
         <Link
           href="/"
-          className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+          className="rounded-md border border-zinc-800 px-3 py-1.5 text-base text-zinc-400 hover:text-zinc-200"
         >
           home
         </Link>

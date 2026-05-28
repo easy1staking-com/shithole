@@ -21,9 +21,9 @@ import type { AssetPoolMembership, P2pListing, Pool } from "@/types/api";
  * knows about. Optional pool filter narrows by accepted_merkle_root.
  *
  * <p>Cards render the offered NFT's asset_name (ASCII or short hex
- * fallback), the bounty in ADA, and pool ribbons for context (which
- * pool's delegators the listing targets). Clicking a card routes to
- * the fulfill page for that listing.
+ * fallback), the locked deposit in ADA, and pool ribbons for context
+ * (which pool's delegators the listing targets). Clicking a card
+ * routes to the fulfill page for that listing.
  *
  * <p>For v1 we keep filtering FE-side simple: a pool dropdown that
  * narrows via the BE's {@code root} query param when a single pool is
@@ -171,8 +171,8 @@ export function ListingsBoard() {
           open listings — idiots looking to swap
         </h1>
         <p className="text-sm text-zinc-400">
-          someone locked an NFT + bounty, hoping a delegator with matching
-          traits takes it off their hands. that&apos;s you, maybe.
+          someone locked an NFT, hoping a delegator with matching traits
+          takes it off their hands. that&apos;s you, maybe.
         </p>
       </header>
 
@@ -403,19 +403,16 @@ function ListingCard({
     meta.data?.name ?? asciiOrShortHex(listing.offered_nft_unit.slice(56));
   const imageUrl = meta.data?.image_url ?? null;
   const depositAda = (Number(listing.lovelace) / 1_000_000).toFixed(2);
-  // Rough estimate of the swapper's actual ADA take, for the chip
-  // tooltip. Assumes the collection's protocol_fee is ~1 ADA (true for
-  // v1 Hosky; a per-collection lookup would tighten this when more
-  // collections come online). The constants match BountyStep's
-  // ESTIMATED_BUYER_OUTPUT_MIN (1.4) + ESTIMATED_TX_FEE (0.4).
-  const estSwapperTakeAda = Math.max(
-    0,
-    Number(listing.lovelace) / 1_000_000 - (1 + 1.4 + 0.4),
-  );
+  // Tooltip breaks the locked ADA into its actual fates. Assumes the
+  // collection's protocol_fee is ~1 ADA (true for v1 Hosky; a per-
+  // collection lookup would tighten this when more collections come
+  // online). The constants match DepositStep's ESTIMATED_BUYER_OUTPUT_MIN
+  // (1.4) + ESTIMATED_TX_FEE (0.4); anything left over is the seller's
+  // tx-fee cushion (not a tip).
   const chipTitle =
-    `${depositAda} ADA locked by the buyer.\n` +
-    `at swap time: 1 ADA → treasury, ~1.4 → returned to buyer w/ NFT, ~0.4 → tx fee.\n` +
-    `your take: ~${estSwapperTakeAda.toFixed(2)} ADA + their NFT.`;
+    `${depositAda} ADA locked by the buyer — covers chain costs only.\n` +
+    `at swap time: 1 ADA → treasury, ~1.4 → returned to buyer w/ NFT, ~0.4 → seller's tx fee.\n` +
+    `you get their NFT.`;
   // The offered NFT may carry traits for multiple pools; show all of
   // them in the "matches traits of" row. The target pool gets its own
   // row below ("wants traits of") so the two semantics are visually
@@ -444,18 +441,18 @@ function ListingCard({
             …
           </div>
         )}
-        {/* Two-line chip: estimated take + their NFT (what the swapper
-         *  walks away with), then the deposit muted below. Replaces the
-         *  bare "X ADA" chip which conflated locked-ADA with payout. */}
+        {/* Chip shows the locked deposit — the listing's only ADA leg.
+         *  Tooltip explains it covers chain costs only; the actual
+         *  "what you get" is the offered NFT, prominent below. */}
         <span
           title={chipTitle}
           className="absolute right-2 top-2 flex flex-col items-end rounded-md bg-zinc-950/80 px-1.5 py-0.5 font-mono text-[10px] backdrop-blur"
         >
           <span className="font-semibold text-amber-300">
-            ~{estSwapperTakeAda.toFixed(2)} ADA + NFT
+            {depositAda} ADA deposit
           </span>
           <span className="text-[9px] text-zinc-500">
-            from {depositAda} ADA deposit
+            covers chain costs
           </span>
         </span>
       </div>
