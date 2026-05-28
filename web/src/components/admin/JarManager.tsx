@@ -12,6 +12,7 @@ import {
 } from "@/lib/tx/jarCreate";
 import {
   LEAVE_BEHIND_LOVELACE,
+  submitJarBulkCollect,
   submitJarCollect,
 } from "@/lib/tx/jarCollect";
 import { submitJarMerge } from "@/lib/tx/jarMerge";
@@ -109,7 +110,7 @@ export function JarManager() {
   };
 
   const onMerge = async () => {
-    if (!walletApi || !walletPkh) return;
+    if (!walletApi || !walletPkh || !walletAddress) return;
     const consumed = jars.filter((j) => selected.has(jarKey(j))).map((j) => j.utxo);
     if (consumed.length < 2) {
       setErr("select at least two jars to merge");
@@ -124,6 +125,36 @@ export function JarManager() {
         network: toEvolutionNetwork(getNetworkName()),
         adminPkhHex: walletPkh,
         consumed,
+        payoutBech32Address: walletAddress,
+      });
+      setLastTx(res.txHash);
+      await refresh();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const onBulkCollect = async () => {
+    if (!walletApi || !walletPkh || !walletAddress) return;
+    const consumed = jars
+      .filter((j) => selected.has(jarKey(j)))
+      .map((j) => j.utxo);
+    if (consumed.length < 2) {
+      setErr("select at least two jars to bulk-collect");
+      return;
+    }
+    setBusyAction("bulk-collect");
+    setErr(null);
+    setLastTx(null);
+    try {
+      const client = await makeClient(walletApi);
+      const res = await submitJarBulkCollect(client, {
+        network: toEvolutionNetwork(getNetworkName()),
+        adminPkhHex: walletPkh,
+        consumed,
+        payoutBech32Address: walletAddress,
       });
       setLastTx(res.txHash);
       await refresh();
@@ -295,8 +326,23 @@ export function JarManager() {
                   ? "signing…"
                   : `merge ${totalSelected || ""} selected`}
               </button>
-              <p className="text-[10px] text-zinc-500">
-                merge N → 1: sums all values into a single new jar.
+              <button
+                type="button"
+                onClick={onBulkCollect}
+                disabled={totalSelected < 2 || busyAction !== null}
+                className="rounded bg-amber-700 px-3 py-1 text-xs font-semibold text-zinc-100 disabled:bg-zinc-800 disabled:text-zinc-500"
+              >
+                {busyAction === "bulk-collect"
+                  ? "signing…"
+                  : `collect ${totalSelected || ""} selected`}
+              </button>
+              <p className="basis-full text-[10px] text-zinc-500">
+                <strong className="text-zinc-400">merge</strong> N → 1: one
+                fresh jar at {formatAda(LEAVE_BEHIND_LOVELACE)} ADA, all
+                excess + CNTs to your wallet.{" "}
+                <strong className="text-zinc-400">collect</strong> N → N:
+                each jar recreated at {formatAda(LEAVE_BEHIND_LOVELACE)} ADA,
+                combined excess + CNTs to your wallet.
               </p>
             </div>
           </>

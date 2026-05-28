@@ -34,6 +34,19 @@ export type JarCollectInput = {
 
 export const LEAVE_BEHIND_LOVELACE = 5_000_000n;
 
+/**
+ * Conservative min-UTxO floor for an output bagging both lovelace AND CNTs.
+ * Real min-UTxO depends on the asset bag (a few NFTs + a fee token usually
+ * needs ~1.4-1.6 ADA); 2 ADA covers typical Hosky-flavoured multi-token
+ * payouts with headroom. If the actual min is lower Evolution still accepts;
+ * we never undershoot.
+ *
+ * <p>Only used when the payout output carries at least one non-ADA asset.
+ * ADA-only excess is routed via the wallet's change output instead, so the
+ * Evolution balancer handles min-UTxO sizing for us.
+ */
+export const MIN_TOKEN_PAYOUT_LOVELACE = 2_000_000n;
+
 export async function submitJarCollect(
   client: EvolutionClient,
   input: JarCollectInput,
@@ -50,18 +63,18 @@ export async function submitJarCollect(
     );
   }
 
-  const payout: Record<string, bigint> = {
-    lovelace: totalLovelace - LEAVE_BEHIND_LOVELACE,
-  };
+  const tokens: Record<string, bigint> = {};
   for (const [unit, qty] of Object.entries(inAssets)) {
     if (unit === "lovelace") continue;
-    if (qty > 0n) payout[unit] = qty;
+    if (qty > 0n) tokens[unit] = qty;
   }
+  const extraLovelace = totalLovelace - LEAVE_BEHIND_LOVELACE;
+  const hasTokens = Object.keys(tokens).length > 0;
 
   // Sweep { output_index: 0 } — continuing jar at index 0.
   const sweepRedeemer: Data.Data = Data.constr(1n, [Data.int(0n)]);
 
-  const built = await client
+  let builder = client
     .newTx()
     .attachScript({ script: jar.validator })
     .addSigner({ keyHash: toKeyHash(input.adminPkhHex) })
@@ -73,13 +86,140 @@ export async function submitJarCollect(
       address: toAddress(jar.address),
       assets: toAssets({ lovelace: LEAVE_BEHIND_LOVELACE }),
       datum: inlineDatum(buildJarDatum()),
-    })
-    .payToAddress({
-      address: toAddress(input.payoutBech32Address),
-      assets: toAssets(payout),
-    })
-    .build();
+    });
 
+  // Token payout output is only emitted when there are tokens to ship —
+  // otherwise the excess lovelace flows back as change to the connected
+  // wallet (Evolution balancer auto-sizes that against min-UTxO).
+  if (hasTokens) {
+    if (extraLovelace < MIN_TOKEN_PAYOUT_LOVELACE) {
+      throw new Error(
+        `not enough excess ADA to sweep tokens: have ${extraLovelace} lovelace above the ${LEAVE_BEHIND_LOVELACE}-lovelace floor, need >= ${MIN_TOKEN_PAYOUT_LOVELACE} to satisfy the token payout's min-UTxO`,
+      );
+    }
+    builder = builder.payToAddress({
+      address: toAddress(input.payoutBech32Address),
+      assets: toAssets({ lovelace: extraLovelace, ...tokens }),
+    });
+  }
+
+  const built = await builder.build();
+  const signed = await built.sign();
+  return { txHash: txHashHex(await signed.submit()) };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Bulk collect — N jars, N continuing jars, ONE combined payout              */
+/* -------------------------------------------------------------------------- */
+
+export type JarBulkCollectInput = {
+  network: Network;
+  adminPkhHex: string;
+  /**
+   * Jar UTxOs to sweep in one tx. Each one is recreated at the jar
+   * address with exactly {@link LEAVE_BEHIND_LOVELACE} ADA + sentinel
+   * datum; everything else (extra ADA + non-ADA assets) is aggregated
+   * into a single payout to {@code payoutBech32Address}.
+   */
+  consumed: UTxO[];
+  /** Bech32 destination for the swept profit — typically the connected admin. */
+  payoutBech32Address: string;
+};
+
+/**
+ * Spend N jar UTxOs in one tx, recreate N fresh continuing jars (each at
+ * {@link LEAVE_BEHIND_LOVELACE} + sentinel datum), and route the combined
+ * surplus (excess ADA + every CNT) to a single admin output.
+ *
+ * <p>Each input's Sweep redeemer carries its OWN
+ * {@code output_index} pointing at its dedicated continuing-jar output:
+ * input 0 → output 0, input 1 → output 1, …, input N-1 → output N-1.
+ * The combined admin payout sits at output N. The validator runs once
+ * per script input; each instance verifies the output at its declared
+ * index is a valid continuing jar.
+ *
+ * <p>Requires the admin signature. Fails fast if any input lacks the
+ * 5 ADA floor (the continuing jar must be fundable from its source
+ * input — we don't try to cross-subsidise between inputs since that
+ * would risk the validator's per-input integrity check).
+ */
+export async function submitJarBulkCollect(
+  client: EvolutionClient,
+  input: JarBulkCollectInput,
+): Promise<{ txHash: string }> {
+  if (input.consumed.length === 0) {
+    throw new Error("bulk collect requires at least one jar");
+  }
+  const jar = await applyJarScript(input.network, input.adminPkhHex);
+
+  // Validate each input independently — every continuing jar must be
+  // funded out of its OWN source UTxO so the per-input validator check
+  // can verify the leave-behind amount without cross-input bookkeeping.
+  let totalLovelace = 0n;
+  const totalNonAda: Record<string, bigint> = {};
+  for (const u of input.consumed) {
+    const lov = u.assets.lovelace ?? 0n;
+    if (lov < LEAVE_BEHIND_LOVELACE) {
+      throw new Error(
+        `jar ${u.txHash}#${u.outputIndex} has only ${lov} lovelace, need >= ${LEAVE_BEHIND_LOVELACE}`,
+      );
+    }
+    totalLovelace += lov;
+    for (const [unit, qty] of Object.entries(u.assets)) {
+      if (unit === "lovelace") continue;
+      if (qty > 0n) totalNonAda[unit] = (totalNonAda[unit] ?? 0n) + qty;
+    }
+  }
+
+  // Admin payout = totalLovelace − N × LEAVE_BEHIND + every non-ADA asset.
+  const n = BigInt(input.consumed.length);
+  const extraLovelace = totalLovelace - LEAVE_BEHIND_LOVELACE * n;
+  const hasTokens = Object.keys(totalNonAda).length > 0;
+
+  let builder = client
+    .newTx()
+    .attachScript({ script: jar.validator })
+    .addSigner({ keyHash: toKeyHash(input.adminPkhHex) });
+
+  // Each input gets its own Sweep redeemer pointing at its dedicated
+  // continuing-jar output. Index assignments mirror the order in which
+  // we'll emit the payToAddress calls below.
+  for (let i = 0; i < input.consumed.length; i++) {
+    const u = input.consumed[i];
+    const sweepRedeemer: Data.Data = Data.constr(1n, [Data.int(BigInt(i))]);
+    builder = builder.collectFrom({
+      inputs: [u._evolution],
+      redeemer: sweepRedeemer,
+    });
+  }
+
+  // Outputs 0..N-1: continuing jars, each exactly 5 ADA + sentinel.
+  for (let i = 0; i < input.consumed.length; i++) {
+    builder = builder.payToAddress({
+      address: toAddress(jar.address),
+      assets: toAssets({ lovelace: LEAVE_BEHIND_LOVELACE }),
+      datum: inlineDatum(buildJarDatum()),
+    });
+  }
+
+  // Token payout: only when there's something non-ADA to ship. ADA-only
+  // surplus flows back via change to the wallet (Evolution balancer
+  // handles min-UTxO for us); avoids the bug where extraLovelace = 0
+  // (e.g., every selected jar at the 5 ADA floor) would have produced an
+  // output of {lovelace: 0n} and failed at build.
+  if (hasTokens) {
+    if (extraLovelace < MIN_TOKEN_PAYOUT_LOVELACE) {
+      throw new Error(
+        `not enough excess ADA to sweep tokens: have ${extraLovelace} lovelace above ${LEAVE_BEHIND_LOVELACE * n}, need >= ${MIN_TOKEN_PAYOUT_LOVELACE} to satisfy the token payout's min-UTxO`,
+      );
+    }
+    builder = builder.payToAddress({
+      address: toAddress(input.payoutBech32Address),
+      assets: toAssets({ lovelace: extraLovelace, ...totalNonAda }),
+    });
+  }
+
+  const built = await builder.build();
   const signed = await built.sign();
   return { txHash: txHashHex(await signed.submit()) };
 }
