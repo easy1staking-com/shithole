@@ -1,5 +1,5 @@
 {
-  "network": "",
-  "adminPkhHex": "",
-  "deployedAt": ""
+  "network": "mainnet",
+  "adminPkhHex": "3b3b77f9220778f8aa950893e01a526ae1aabd04bd511311c37a7e50",
+  "deployedAt": "2026-05-28T22:01:56Z"
 }
