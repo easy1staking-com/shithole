@@ -4,11 +4,15 @@ import { useQueries } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { FilterBar, type FilterState } from "@/components/market/FilterBar";
+import {
+  ADA_PRICE_UNIT_SENTINEL,
+  FilterBar,
+  type FilterState,
+} from "@/components/market/FilterBar";
 import { ListingCard } from "@/components/market/ListingCard";
 import { fetchNftMetadata } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/hooks";
-import { marketplaceManifest } from "@/lib/market/config";
+import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import {
   fetchMarketListings,
   type DecodedListing,
@@ -31,7 +35,7 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
  *   5. Render filtered listings.
  */
 export function MarketBrowse() {
-  const manifest = useMemo(() => marketplaceManifest(), []);
+  const { data: manifest } = useDerivedMarketplaceManifest();
   const walletApi = useWalletStore((s) => s.api);
 
   const [listings, setListings] = useState<DecodedListing[] | null>(null);
@@ -99,9 +103,14 @@ export function MarketBrowse() {
   const visible = useMemo(() => {
     let xs = decorated;
 
-    // Currency filter.
+    // Currency filter. ADA's registry unit is empty hex, so we keep a
+    // dedicated sentinel to distinguish "ADA only" from "all currencies"
+    // (both would otherwise compare against an empty string).
     if (filters.priceUnit !== "") {
-      const want = filters.priceUnit.toLowerCase();
+      const want =
+        filters.priceUnit === ADA_PRICE_UNIT_SENTINEL
+          ? ""
+          : filters.priceUnit.toLowerCase();
       xs = xs.filter(
         (e) =>
           (

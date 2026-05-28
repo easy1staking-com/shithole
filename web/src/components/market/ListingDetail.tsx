@@ -4,7 +4,7 @@ import { Address } from "@evolution-sdk/evolution";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { marketplaceManifest } from "@/lib/market/config";
+import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import {
   fetchMarketListings,
   type DecodedListing,
@@ -29,10 +29,10 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
  *   - no wallet → read-only display.
  */
 export function ListingDetail({ unit }: { unit: string }) {
-  // marketplaceManifest() reads localStorage / committed JSON on every
-  // call; snapshot once to keep useEffect deps stable. Same pattern as
-  // MarketBrowse.
-  const manifest = useMemo(() => marketplaceManifest(), []);
+  // Manifest fields (jar hash, marketplace address) are re-derived from
+  // the current bytecode + admin pkh on every hook call. A contract
+  // rebuild therefore updates these without any manifest editing.
+  const { data: manifest } = useDerivedMarketplaceManifest();
   const walletApi = useWalletStore((s) => s.api);
   const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
   const walletAddress = useWalletStore((s) => s.addressBech32);

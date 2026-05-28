@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { NavMenu } from "@/components/NavMenu";
 import { isMarketplaceEnabled } from "@/lib/market/config";
@@ -30,6 +31,12 @@ import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
  * local.
  */
 export function AppHeader() {
+  const pathname = usePathname();
+  // Admin sub-nav surfaces only when the user is already inside /admin.
+  // Keeps the global header free of operator-only noise for normal users
+  // while giving the admin a single landing spot for the related tooling
+  // once they're in that flow.
+  const showAdminMenu = pathname?.startsWith("/admin") ?? false;
   return (
     <header
       className="fixed inset-x-0 top-0 z-30 border-b border-zinc-900 bg-zinc-950/85 backdrop-blur"
@@ -80,7 +87,18 @@ export function AppHeader() {
                 items={[
                   { label: "browse", href: "/market" },
                   { label: "list something", href: "/market/new" },
-                  { label: "dev tools", href: "/market/dev-tools" },
+                  { label: "your listings", href: "/market/me" },
+                ]}
+              />
+            ) : null}
+            {showAdminMenu ? (
+              <NavMenu
+                label="admin"
+                items={[
+                  { label: "register config", href: "/admin/register-config" },
+                  { label: "update config", href: "/admin/update-config" },
+                  { label: "manage jars", href: "/admin/jars" },
+                  { label: "market dev tools", href: "/market/dev-tools" },
                 ]}
               />
             ) : null}

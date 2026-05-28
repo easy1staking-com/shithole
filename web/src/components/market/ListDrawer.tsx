@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { MyListings } from "@/components/market/MyListings";
-import { marketplaceManifest } from "@/lib/market/config";
+import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { supportedCollections } from "@/lib/market/supportedCollections";
 import {
   splitUnit,
@@ -31,7 +30,7 @@ const DEFAULT_BOND_LOVELACE = 2_000_000n;
  * top of the page picks a collection if we ever add more.
  */
 export function ListDrawer() {
-  const manifest = useMemo(() => marketplaceManifest(), []);
+  const { data: manifest } = useDerivedMarketplaceManifest();
   const walletApi = useWalletStore((s) => s.api);
   const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
   const walletAddress = useWalletStore((s) => s.addressBech32);
@@ -289,9 +288,6 @@ export function ListDrawer() {
               ↗ {tx}
             </p>
           ) : null}
-
-          {/* ---- My current listings (cancel from here) ---- */}
-          <MyListings />
         </>
       )}
     </main>

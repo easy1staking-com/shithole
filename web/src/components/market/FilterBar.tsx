@@ -14,7 +14,16 @@ import {
 export type SortOrder = "none" | "asc" | "desc";
 
 export type FilterState = {
-  /** Empty string = ALL (no filter); otherwise the price-token unit hex. */
+  /**
+   * Empty string = ALL (no filter); {@link ADA_PRICE_UNIT_SENTINEL} = ADA
+   * only (matches listings whose pricePolicy+priceName are both empty hex);
+   * any other value is a literal price-token unit hex.
+   *
+   * <p>Why ADA needs its own sentinel: in the supportedPriceTokens registry
+   * ADA's {@code unit} is the empty string (since ADA has no policy/name).
+   * Without a dedicated sentinel it collides with "no filter" and silently
+   * widens the result set.
+   */
   priceUnit: string;
   /** Empty string = no pool filter; otherwise the pool ticker. */
   poolTicker: string;
@@ -23,6 +32,7 @@ export type FilterState = {
 };
 
 export const ALL_PRICE_UNIT_SENTINEL = "__all__";
+export const ADA_PRICE_UNIT_SENTINEL = "__ada__";
 
 export function FilterBar({
   filters,
@@ -56,7 +66,10 @@ export function FilterBar({
         >
           <option value={ALL_PRICE_UNIT_SENTINEL}>all currencies</option>
           {priceTokens.map((t) => (
-            <option key={t.unit || "ada"} value={t.unit}>
+            <option
+              key={t.unit || "ada"}
+              value={t.unit || ADA_PRICE_UNIT_SENTINEL}
+            >
               {labelOf(t)}
             </option>
           ))}
