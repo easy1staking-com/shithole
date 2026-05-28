@@ -45,6 +45,11 @@ use shithole/utils
 //
 // Per-spend (everyone):
 //   - B1   price_qty > 0
+//   - B2   own_input.lovelace >= datum.accompanying_lovelace — pins the
+//          seller's bond claim to reality. Without this, a seller could
+//          declare a high accompanying_lovelace in the datum but lock less
+//          in the UTxO, forcing the buyer to fund the gap as a hidden
+//          surcharge beyond the advertised price_qty.
 //   - B3   seller output: address, datum tag, value (strict non-ADA equality
 //          on the price token + `>=` lovelace, fused into one assets.match)
 //   - B4   jar_input at jar_script_hash       \
@@ -167,6 +172,15 @@ fn validate_buy(
   expect Some(own_input) = find_input(inputs, own_ref)
   let own_address = own_input.output.address
 
+  // ---- B2: input lovelace covers the declared accompanying bond ----
+  // Pins the seller's `accompanying_lovelace` claim to the actual UTxO
+  // value. Without this, a seller could declare a high bond in the datum
+  // while locking less in the UTxO — the seller_out check below would
+  // then force the buyer to fund the gap from their own wallet as a
+  // hidden surcharge on top of the advertised `price_qty`.
+  expect
+    assets.expect_lovelace_of(own_input.output.value) >= input_datum.accompanying_lovelace
+
   // Fee math (per-listing): expected_fee is the integer ceiling of 2 % of
   // price_qty; seller_amount is what THIS listing's payout owes the seller.
   let expected_fee = ( input_datum.price_qty * 2 + 99 ) / 100
@@ -179,14 +193,13 @@ fn validate_buy(
   // `actual >= seller_amount + accompanying_lovelace` in one shot.
   let seller_out = list.expect_at(outputs, seller_output_index)
   let own_tag = utils.compute_output_tag(own_ref)
-  let expected_seller_payment = assets.from_lovelace(
-    input_datum.accompanying_lovelace,
-  )
-    |> assets.add(
-        input_datum.price_policy,
-        input_datum.price_name,
-        seller_amount,
-      )
+  let expected_seller_payment =
+    assets.from_lovelace(input_datum.accompanying_lovelace)
+      |> assets.add(
+          input_datum.price_policy,
+          input_datum.price_name,
+          seller_amount,
+        )
   let expected_payment_data: Data = expected_seller_payment
   expect input_datum.price_qty > 0
   expect seller_out.address == input_datum.seller_address
@@ -205,10 +218,8 @@ fn validate_buy(
   // returns the lowest-outref marketplace input — deterministically the
   // same input no matter which spend is running. Exactly one spend will
   // find that this input IS itself.
-  expect Some(first_marketplace) = list.find(
-    inputs,
-    fn(i) { i.output.address == own_address },
-  )
+  expect Some(first_marketplace) =
+    list.find(inputs, fn(i) { i.output.address == own_address })
 
   if first_marketplace.output_reference == own_ref {
     // ---- B4 + B5: jar leg sanity (per-spend) ----
@@ -250,20 +261,21 @@ fn validate_aggregate_fee(
   jar_in: Input,
   jar_out: Output,
 ) -> Bool {
-  let expected_jar_output_value = list.foldr(
-    inputs,
-    jar_in.output.value,
-    fn(input, acc) {
-      if input.output.address == marketplace_address {
-        expect InlineDatum(input_data) = input.output.datum
-        expect md: MarketDatum = input_data
-        let fee = ( md.price_qty * 2 + 99 ) / 100
-        assets.add(acc, md.price_policy, md.price_name, fee)
-      } else {
-        acc
-      }
-    },
-  )
+  let expected_jar_output_value =
+    list.foldr(
+      inputs,
+      jar_in.output.value,
+      fn(input, acc) {
+        if input.output.address == marketplace_address {
+          expect InlineDatum(input_data) = input.output.datum
+          expect md: MarketDatum = input_data
+          let fee = ( md.price_qty * 2 + 99 ) / 100
+          assets.add(acc, md.price_policy, md.price_name, fee)
+        } else {
+          acc
+        }
+      },
+    )
 
   assets.match(jar_out.value, expected_jar_output_value, fn(a, b) { a >= b })
 }

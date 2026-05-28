@@ -68,6 +68,52 @@ For Aiken contracts specifically, **also reference the performance tips in `card
 - **Aiken**: `/Users/giovanni/Development/workspace/jpgstore-sniper/src/jpgstore-sniper-onchain/` — `validators/settings.ak` is the multi-handler template for our `config.ak`; `validators/snipe.ak` for our `listing.ak`; `lib/utils.ak` exports `compute_output_tag` and `signed_by` (copy verbatim).
 - **BE**: `/Users/giovanni/Development/workspace/ada-watch/` — Spring Boot 3.3.4 + Java 21 + Yaci Store + Postgres + Flyway. Strip telegram/discord/scalus/notification deps for our use; keep Lombok, CCL, CCL annotation processor, Spring Boot starters.
 
+## Contract change checklist (READ BEFORE TOUCHING `contracts/`)
+
+ANY edit to a `.ak` validator changes its compiled bytecode and therefore
+its script hash. Every layer that derives an address, script hash, or
+parameterized hash from that bytecode is now stale. Walk through this
+list whenever you change a validator:
+
+1. **Recompile**: `make contracts-build` — regenerates `contracts/plutus.json`
+   and copies it to `web/public/contracts/plutus.json` (FE reads this at
+   runtime via `loadBlueprint()`).
+2. **Rebuild BE**: `cd api && ./gradlew build` — the CCL annotation
+   processor regenerates Java types from `plutus.json`. Required when the
+   datum/redeemer shape changes; safe to skip when only validator logic
+   changes (but cheaper to just rebuild).
+3. **Recompute parameterized hashes**: parameterized scripts
+   (marketplace ← jar_script_hash, listing ← config_nft_policy, etc.)
+   have new applied hashes even when the parameter is unchanged. Anywhere
+   the OLD hash was persisted is now wrong:
+   - **`web/src/lib/market/manifest.json`** (jar + marketplace addresses)
+     — the dev-tools page persists a fresh manifest in localStorage; the
+     committed JSON has to be re-exported after a redeploy.
+   - **`api/src/main/resources/p2p/pools.json.gz`** — built by
+     `p2pBuildPoolMerkle`; doesn't depend on contract bytes, safe.
+   - **Per-collection `configs.config_nft_policy`** in the BE DB — the
+     config NFT policy id == config validator's script hash. Old rows
+     point at the previous hash and won't match new on-chain configs.
+4. **Existing on-chain UTxOs become orphans**: anything locked at the
+   OLD script address (listings, jars, configs) can ONLY be spent by the
+   OLD compiled validator. The FE now compiles to the NEW hash, so it
+   builds txs that attach the NEW script — Blockfrost script eval fails
+   with "script hash mismatch / evaluation failed". On preprod just
+   redeploy fresh + abandon the orphans. On mainnet this is a migration.
+5. **Re-register, re-deploy**:
+   - Configs: re-run `/admin/register-config` (admin-signed `POST /api/configs`).
+   - Jars + marketplace: `/market/dev-tools` → deploy → `persistManifestLocally`
+     fires automatically.
+   - Pool merkle: only if `pools.json` regeneration was needed.
+6. **BE indexer**: a contract-hash change moves activity to a NEW script
+   address; the indexer's WatchAddressRegistry derives the watched
+   addresses from `plutus.json` at startup, so a BE restart picks up
+   the new addresses automatically. No manual cursor reset needed
+   unless you're also bumping `SHITHOLE_INDEXER_START_SLOT`.
+
+When in doubt during dev: rebuild contracts, restart BE, redeploy
+jar+marketplace, re-register configs, treat old UTxOs as lost.
+
 <!-- BEGIN cardano-dev-skills v1 -->
 ## Cardano Development Context
 

@@ -862,6 +862,51 @@ test prop_fee_ceiling(price via fuzz.int_between(1, 1_000_000)) {
 }
 
 // ============================================================================
+// B2: input lovelace >= datum.accompanying_lovelace
+// ============================================================================
+
+test buy_fails_when_listing_underlocks_accompanying_lovelace() fail {
+  // Seller declares 5 ADA accompanying_lovelace in the datum but only locks
+  // 1.5 ADA in the listing UTxO. Without B2, the seller_out check would
+  // require the buyer to fund the 3.5 ADA gap from their own wallet — a
+  // hidden surcharge on top of the advertised price_qty. B2 rejects this.
+  let mischievous_datum = MarketDatum {
+    seller_pkh: test_seller_pkh,
+    seller_address: test_seller_addr(),
+    price_policy: test_price_policy,
+    price_name: test_price_name,
+    price_qty: 100,
+    accompanying_lovelace: 5_000_000,
+  }
+  let underlocked_listing = Input {
+    output_reference: listing_outref(),
+    output: Output {
+      address: test_marketplace_addr(),
+      value: assets.from_lovelace(1_500_000)
+        |> assets.add(test_listed_policy, test_listed_name, 1),
+      datum: InlineDatum(mischievous_datum),
+      reference_script: None,
+    },
+  }
+  let own_tag = utils.compute_output_tag(listing_outref())
+  // Seller payout sized to honour the over-stated 5 ADA bond — exactly
+  // the case B2 prevents (buyer would otherwise top up the 3.5 ADA gap).
+  let seller_out = Output {
+    address: test_seller_addr(),
+    value: assets.from_lovelace(5_000_000)
+      |> assets.add(test_price_policy, test_price_name, 98),
+    datum: InlineDatum(own_tag),
+    reference_script: None,
+  }
+  let tx = Transaction {
+    ..transaction.placeholder,
+    inputs: [underlocked_listing, buyer_funding_input(), cnt_jar_input()],
+    outputs: [seller_out, cnt_jar_output(0, 2)],
+  }
+  invoke_buy_with_datum(mischievous_datum, tx, happy_cnt_buy_redeemer())
+}
+
+// ============================================================================
 // B7: seller-output lovelace >= datum.accompanying_lovelace
 // ============================================================================
 
