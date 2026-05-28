@@ -68,24 +68,6 @@ export function isMarketplaceEnabled(): boolean {
 }
 
 /**
- * Separate nav-visibility gate so we can ship the marketplace code to prod
- * (routes reachable by direct URL for admin testing) WITHOUT surfacing the
- * 'market' submenu in the public header.
- *
- * <p>Reads {@code NEXT_PUBLIC_FEATURE_MARKETPLACE_NAV}. When unset, falls
- * back to {@link isMarketplaceEnabled} so existing dev/preprod envs that
- * only set the master flag continue to show the nav. Explicit values
- * 'off' / 'false' / '0' hide the nav; anything else surfaces it.
- */
-export function isMarketplaceNavEnabled(): boolean {
-  if (!isMarketplaceEnabled()) return false;
-  const v = process.env.NEXT_PUBLIC_FEATURE_MARKETPLACE_NAV;
-  if (v === undefined || v === null || v === "") return true;
-  const norm = v.toLowerCase().trim();
-  return norm !== "off" && norm !== "false" && norm !== "0";
-}
-
-/**
  * Resolve the slim manifest. Browser: localStorage override first, then
  * committed JSON. Server/build: committed JSON only. Returns null when no
  * manifest is populated (committed template has empty values; treat as
