@@ -6,6 +6,7 @@ import com.bloxbean.cardano.client.backend.api.BackendService;
 import com.bloxbean.cardano.client.backend.model.Asset;
 import com.easy1staking.shithole.entity.NftMetadataEntity;
 import com.easy1staking.shithole.model.NftMetadataDto;
+import com.easy1staking.shithole.model.TraitWithRarity;
 import com.easy1staking.shithole.repository.NftMetadataRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +24,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+// `Map` retained for parseTraits's transient handling of CIP-25-style
+// single-entry objects.
+
+// Known dialect keys we've seen in mainnet metadata. "-----Traits-----" is
+// HOSKY CashGrab's literal nested-object key (mirrors the chain of
+// fallbacks the .local/backfill-hosky-traits.py aggregator uses).
 
 /**
  * NFT metadata resolution + cache. First sight of a {@code unit} triggers a
@@ -48,9 +56,32 @@ import java.util.Optional;
 @Slf4j
 public class NftMetadataService {
 
+    private static final List<String> NESTED_TRAIT_KEYS = List.of(
+            "-----Traits-----",
+            "traits",
+            "Traits",
+            "properties",
+            "Properties"
+    );
+
+    private static final List<String> ATTRIBUTES_ARRAY_KEYS = List.of(
+            "attributes",
+            "Attributes"
+    );
+
+    private static final Set<String> FLAT_SKIP_KEYS = Set.of(
+            // Standard CIP-25 scalar fields — mapped to dedicated columns.
+            "name", "image", "mediaType", "description", "files",
+            // Already drained by NESTED_TRAIT_KEYS / ATTRIBUTES_ARRAY_KEYS;
+            // skip in the flat-scan pass to avoid double-counting.
+            "-----Traits-----", "traits", "Traits", "properties", "Properties",
+            "attributes", "Attributes"
+    );
+
     private final NftMetadataRepository repository;
     private final BackendService backendService;
     private final ObjectMapper objectMapper;
+    private final RarityService rarityService;
 
     /**
      * Resolve metadata for {@code unit}. Returns empty if Blockfrost has no
@@ -146,7 +177,7 @@ public class NftMetadataService {
     }
 
     private NftMetadataDto toDto(NftMetadataEntity e) {
-        List<Map<String, String>> traits = parseTraits(e.getTraitsJson());
+        List<TraitWithRarity> traits = parseTraits(e.getTraitsJson(), e.getPolicyId());
         return NftMetadataDto.builder()
                 .unit(e.getUnit())
                 .policyId(e.getPolicyId())
@@ -219,32 +250,34 @@ public class NftMetadataService {
     }
 
     /**
-     * Build a {@code List<{key:value}>} JSON for non-standard CIP-25
-     * fields, covering the dialects we've seen in mainnet + preprod:
+     * Build a List&lt;{key:value}&gt; JSON for non-standard CIP-25 fields, covering
+     * the three dialects we've seen in mainnet metadata:
      *
      * <ul>
-     *   <li>Nested-object container ({@code "traits": {Fur: "Original",
-     *       Eyes: "Original"}}) — older mainnet CNFT collections.</li>
-     *   <li>Nested-array container of single-key dicts ({@code "traits":
-     *       [{Fur: "Original"}, {Eyes: "Original"}]}) — CIP-25 v1
-     *       recommended shape, used by the preprod HOSKY mimic and many
-     *       mainnet collections under ornate keys like
-     *       "-----Traits-----".</li>
-     *   <li>OpenSea-style "attributes" array of {trait_type, value}.</li>
-     *   <li>Flat top-level fields — older convention where each trait is
-     *       a top-level field alongside name / image.</li>
+     *   <li><b>Nested "traits" object</b> — HOSKY CashGrab and many CNFT
+     *       collections store properties under {@code "traits": {Fur: "...",
+     *       Eyes: "..."}}.</li>
+     *   <li><b>OpenSea-style "attributes" array</b> — {@code [{trait_type: "Fur",
+     *       value: "Original"}, ...]}.</li>
+     *   <li><b>Flat top-level fields</b> — older convention where each trait is a
+     *       top-level field alongside name/image (e.g. {@code {Fur: "Original",
+     *       image: "ipfs://..."}}).</li>
      * </ul>
      *
-     * <p>All four are tried per call so a collection mixing two
-     * dialects still surfaces sensibly.
+     * All three dialects are scanned per call; an NFT using two of them at once
+     * is unusual but handled (entries merge into one list).
      */
     private String extractTraits(JsonNode onchain) {
         if (!(onchain instanceof ObjectNode obj)) return null;
         var traits = objectMapper.createArrayNode();
 
-        // Dialects 1 & 2: nested container under any of the known keys.
-        // The mainnet HOSKY's ornate "-----Traits-----" key is included
-        // so the dev branch shares the same recognition surface as main.
+        // Dialect 1: traits container under any of the known nested keys.
+        // Two sub-shapes can appear:
+        //   (a) flat object  — {Background: "Cyan", Fur: "Original", ...}
+        //   (b) array of single-key dicts — [{Background: "Cyan"}, ...]
+        //       CIP-25 v1's recommended shape; HOSKY CashGrab uses this
+        //       under the literal "-----Traits-----" key.
+        // ".local/backfill-hosky-traits.py" mirrors the same fallback chain.
         for (String key : NESTED_TRAIT_KEYS) {
             JsonNode container = obj.get(key);
             if (container == null) continue;
@@ -274,24 +307,25 @@ public class NftMetadataService {
             }
         }
 
-        // Dialect 3: OpenSea "attributes" array.
-        for (String key : ATTRIBUTES_KEYS) {
+        // Dialect 2: OpenSea-style "attributes" array.
+        for (String key : ATTRIBUTES_ARRAY_KEYS) {
             JsonNode attrs = obj.get(key);
-            if (attrs == null || !attrs.isArray()) continue;
-            for (JsonNode attr : attrs) {
-                JsonNode tt = attr.get("trait_type");
-                if (tt == null || !tt.isTextual()) continue;
-                String txt = textOrJoined(attr.get("value"));
-                if (txt == null) continue;
-                ObjectNode pair = objectMapper.createObjectNode();
-                pair.put(tt.asText(), txt);
-                traits.add(pair);
+            if (attrs != null && attrs.isArray()) {
+                for (JsonNode attr : attrs) {
+                    JsonNode tt = attr.get("trait_type");
+                    if (tt == null || !tt.isTextual()) continue;
+                    String txt = textOrJoined(attr.get("value"));
+                    if (txt == null) continue;
+                    ObjectNode pair = objectMapper.createObjectNode();
+                    pair.put(tt.asText(), txt);
+                    traits.add(pair);
+                }
             }
         }
 
-        // Dialect 4: flat top-level fields (fallback). Skip standard
-        // CIP-25 fields AND any key we already drained as a container
-        // above, to avoid double-counting.
+        // Dialect 3: flat top-level fields. Skip the standard CIP-25 fields
+        // (they map to dedicated columns) AND any key we already drained as
+        // a nested container above, to avoid double-counting.
         Iterator<String> names = obj.fieldNames();
         while (names.hasNext()) {
             String k = names.next();
@@ -306,36 +340,24 @@ public class NftMetadataService {
         return traits.isEmpty() ? null : traits.toString();
     }
 
-    private static final List<String> NESTED_TRAIT_KEYS = List.of(
-            "-----Traits-----",
-            "traits",
-            "Traits",
-            "properties",
-            "Properties"
-    );
-
-    private static final List<String> ATTRIBUTES_KEYS = List.of(
-            "attributes",
-            "Attributes"
-    );
-
-    private static final java.util.Set<String> FLAT_SKIP_KEYS = java.util.Set.of(
-            "name", "image", "mediaType", "description", "files",
-            "-----Traits-----", "traits", "Traits", "properties", "Properties",
-            "attributes", "Attributes"
-    );
-
-    private List<Map<String, String>> parseTraits(String traitsJson) {
+    /**
+     * Parse the cached traits JSON (a {@code List<{key:value}>} produced by
+     * {@link #extractTraits}) into the API response shape. Each entry is enriched
+     * via {@link RarityService#enrich} so callers see collection-wide count/pct
+     * when available — for collections without rarity data the rarity fields
+     * stay null and the FE renders without a rarity chip.
+     */
+    private List<TraitWithRarity> parseTraits(String traitsJson, String policyId) {
         if (traitsJson == null || traitsJson.isBlank()) return new ArrayList<>();
         try {
             JsonNode root = objectMapper.readTree(traitsJson);
-            List<Map<String, String>> out = new ArrayList<>(root.size());
+            List<TraitWithRarity> out = new ArrayList<>(root.size());
             for (JsonNode pair : root) {
                 if (!pair.isObject()) continue;
                 Iterator<Map.Entry<String, JsonNode>> it = pair.fields();
                 if (it.hasNext()) {
                     Map.Entry<String, JsonNode> e = it.next();
-                    out.add(Map.of(e.getKey(), e.getValue().asText()));
+                    out.add(rarityService.enrich(policyId, e.getKey(), e.getValue().asText()));
                 }
             }
             return out;

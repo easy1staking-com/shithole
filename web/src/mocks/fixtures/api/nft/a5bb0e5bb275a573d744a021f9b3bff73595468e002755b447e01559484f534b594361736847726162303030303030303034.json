@@ -11,25 +11,46 @@
   "image_url": "/mocks/fixtures/hosky/images/HOSKYCashGrab000000004.png",
   "traits": [
     {
-      "Background": "Peach"
+      "category": "Background",
+      "value": "Peach",
+      "count": 9180,
+      "pct": 2.1835
     },
     {
-      "Fur": "Original"
+      "category": "Fur",
+      "value": "Original",
+      "count": 151663,
+      "pct": 36.0742
     },
     {
-      "Eyes": "Pink Eye"
+      "category": "Eyes",
+      "value": "Pink Eye",
+      "count": 22217,
+      "pct": 5.2845
     },
     {
-      "Hat": "Spin Top Error"
+      "category": "Hat",
+      "value": "Spin Top Error",
+      "count": 374,
+      "pct": 0.089
     },
     {
-      "Neck": "Red Collar"
+      "category": "Neck",
+      "value": "Red Collar",
+      "count": 16516,
+      "pct": 3.9285
     },
     {
-      "Mouth": "Sad-Ish"
+      "category": "Mouth",
+      "value": "Sad-Ish",
+      "count": 17193,
+      "pct": 4.0895
     },
     {
-      "Frame": "Check Mate"
+      "category": "Frame",
+      "value": "Check Mate",
+      "count": 26421,
+      "pct": 6.2844
     }
   ],
   "description": null

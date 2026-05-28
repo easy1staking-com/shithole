@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { EternlBridgeInit } from "@/lib/wallet/EternlBridgeInit";
 import { installWalletFocusListeners } from "@/lib/wallet/walletStore";
 
 import { MswGate } from "./MswBootstrap";
@@ -40,6 +41,11 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={client}>
+      {/* Eternl dApp-browser bridge (postMessage shim). No-op when the
+          extension is installed or when SSR; only takes effect inside
+          eternl.io and the iOS/Android in-wallet browsers, where
+          window.cardano.eternl isn't injected directly. */}
+      <EternlBridgeInit />
       <MswGate>{children}</MswGate>
     </QueryClientProvider>
   );

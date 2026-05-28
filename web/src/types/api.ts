@@ -129,11 +129,18 @@ export type ListingsResponse = {
 /* ------------------------------------------------------------------ */
 
 /**
- * A single trait entry from CIP-25 metadata. The shape is intentionally
- * loose because CIP-25 v1 lets minters use arbitrary string keys with
- * arbitrary scalar values. The BE passes traits through unchanged.
+ * A single trait entry on an NFT, optionally annotated with collection-wide
+ * rarity. The BE's {@link com.easy1staking.shithole.service.RarityService}
+ * fills in {@code count} + {@code pct} when it has a rarity table loaded for
+ * the NFT's policy; otherwise both rarity fields are null and the FE renders
+ * without a rarity chip.
  */
-export type NftTrait = Record<string, string | number | boolean | null | undefined>;
+export type NftTrait = {
+  category: string;
+  value: string;
+  count: number | null;
+  pct: number | null;
+};
 
 /**
  * NFT metadata as cached by the BE from Blockfrost /assets/{unit}.
