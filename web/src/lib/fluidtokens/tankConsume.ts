@@ -269,18 +269,19 @@ export async function buildAndSubmitBabelConsume(
     })
     .setValidity({ from: validFromMs, to: validToMs });
 
-  const built = await builder.build();
-
-  // Debug visibility — dump everything we can about the built tx so a
-  // bare "validator failed" eval response from Blockfrost can be
-  // diagnosed offline. Logged at info level so it shows in the
-  // browser console without enabling verbose mode.
+  // Pre-build debug visibility — every load-bearing field assembled
+  // BEFORE we hand off to Evolution. .build() runs Blockfrost's
+  // evaluateTx for fee estimation, which is where script failures
+  // surface; logging after .build() means we'd never see the context
+  // when eval fails. Logged at info level so it shows in the browser
+  // console without enabling verbose mode.
   // eslint-disable-next-line no-console
-  console.info("[babel] built tx — debug dump", {
+  console.info("[babel] pre-build context", {
     refInputs: refInputs.map((r, i) => ({
       i,
       outref: `${r.txHash}#${r.outputIndex}`,
       address: r.address.slice(0, 24) + "…",
+      hasInlineDatum: Boolean(r.datum),
     })),
     oracleIndex,
     paramsIndex,
@@ -291,6 +292,7 @@ export async function buildAndSubmitBabelConsume(
       lovelace_in: tankInputLovelace.toString(),
       ada_used: inputs.adaUsedLovelace.toString(),
       continuing: continuingTankLovelace.toString(),
+      datum_cbor_head: inputs.tank.utxo.datum?.slice(0, 80) + "…",
     },
     payment: {
       tankOwner: tankOwnerBech32,
@@ -301,22 +303,29 @@ export async function buildAndSubmitBabelConsume(
     withdraw: {
       stakeCredHex: hashFromCredential(oracleStakeCredential),
       rewardBech32: inputs.oracle.oracleWithdrawAddress,
+      oracleDatumPolicy: inputs.oracle.raw.token?.policyId,
+      oracleDatumName: inputs.oracle.raw.token?.assetName,
+      priceInLovelaces: inputs.oracle.priceInLovelaces.toString(),
+      denominator: inputs.oracle.denominator.toString(),
+      n_signatures: inputs.oracle.signatures.length,
     },
     validity: {
       from: validFromMs.toString(),
       to: validToMs.toString(),
       nowMs: Date.now(),
+      windowSeconds: Number((validToMs - validFromMs) / 1000n),
+      minutesUntilExpiry: Number((validToMs - BigInt(Date.now())) / 60000n),
     },
-    tx_cbor_head: (() => {
-      try {
-        const cbor = (built as unknown as { toCBOR?: () => string }).toCBOR?.() ?? "";
-        return cbor.slice(0, 200) + (cbor.length > 200 ? "…" : "");
-      } catch {
-        return "(toCBOR not available)";
-      }
-    })(),
   });
 
+  let built;
+  try {
+    built = await builder.build();
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("[babel] .build() threw — pre-build context above is the input that caused this", e);
+    throw e;
+  }
   const signed = await built.sign();
   const txHash = await signed.submit();
   return {
