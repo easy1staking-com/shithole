@@ -1,8 +1,13 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  ConfirmationChip,
+  type ChainConfirmation,
+} from "@/components/ConfirmationChip";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { supportedCollections } from "@/lib/market/supportedCollections";
 import {
@@ -10,6 +15,7 @@ import {
   supportedPriceTokens,
   type SupportedPriceToken,
 } from "@/lib/market/supportedPriceTokens";
+import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { submitMarketList } from "@/lib/tx/marketList";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { useNftMetadata } from "@/lib/api/hooks";
@@ -58,7 +64,10 @@ export function ListDrawer() {
 
   const [busy, setBusy] = useState(false);
   const [tx, setTx] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
 
   // Bond default — autoMinUtxo on the submit handles the floor.
   const [bondLovelace] = useState<bigint>(DEFAULT_BOND_LOVELACE);
@@ -122,6 +131,7 @@ export function ListDrawer() {
     setBusy(true);
     setErr(null);
     setTx(null);
+    setConfirmation(null);
     try {
       const client = await makeClient(walletApi);
       const res = await submitMarketList(client, {
@@ -145,6 +155,24 @@ export function ListDrawer() {
       setTx(res.txHash);
       setSelected(new Set());
       setOverrides({});
+      // Submit landed — watch for chain confirmation in the background
+      // so the button can re-enable immediately. Refetch the wallet
+      // picker only after chain confirms; refetching at submit time
+      // returns the same UTxOs that haven't yet been spent.
+      setConfirmation("confirming");
+      awaitTxConfirmation(client, res.txHash)
+        .then(() => {
+          setConfirmation("confirmed");
+          if (collection) {
+            queryClient.invalidateQueries({
+              queryKey: ["walletCollection", walletAddress, collection.policyId],
+            });
+          }
+        })
+        .catch((chainErr) => {
+          console.warn("list tx not confirmed:", chainErr);
+          setConfirmation("rejected");
+        });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -284,9 +312,10 @@ export function ListDrawer() {
             </p>
           ) : null}
           {tx ? (
-            <p className="rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
-              ↗ {tx}
-            </p>
+            <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
+              <p className="break-all">↗ {tx}</p>
+              <ConfirmationChip status={confirmation} />
+            </div>
           ) : null}
         </>
       )}

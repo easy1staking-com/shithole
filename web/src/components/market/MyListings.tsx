@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  ConfirmationChip,
+  type ChainConfirmation,
+} from "@/components/ConfirmationChip";
 import { useNftMetadata } from "@/lib/api/hooks";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { listPools, matchesPool } from "@/lib/market/poolTraits";
@@ -14,6 +18,7 @@ import {
   type SupportedPriceToken,
 } from "@/lib/market/supportedPriceTokens";
 import { isSupportedCollection } from "@/lib/market/supportedCollections";
+import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import {
   submitMarketBulkCancel,
@@ -51,6 +56,7 @@ export function MyListings() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [err, setErr] = useState<string | null>(null);
   const [tx, setTx] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
 
   const marketplaceAddress = manifest?.marketplaceAddress ?? null;
 
@@ -121,6 +127,7 @@ export function MyListings() {
     setBusyKey(k);
     setErr(null);
     setTx(null);
+    setConfirmation(null);
     try {
       const client = await makeClient(walletApi);
       const res = await submitMarketCancel(client, {
@@ -130,7 +137,19 @@ export function MyListings() {
         sellerPkhHex: l.datum.sellerPkhHex,
       });
       setTx(res.txHash);
-      await refresh();
+      // Refresh only AFTER the chain has seen the cancel. Refreshing
+      // at submit time just reads the same not-yet-spent UTxOs and
+      // leaves the cancelled listing stuck in the panel.
+      setConfirmation("confirming");
+      awaitTxConfirmation(client, res.txHash)
+        .then(() => {
+          setConfirmation("confirmed");
+          refresh();
+        })
+        .catch((chainErr) => {
+          console.warn("cancel tx not confirmed:", chainErr);
+          setConfirmation("rejected");
+        });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -145,6 +164,7 @@ export function MyListings() {
     setBulkBusy(true);
     setErr(null);
     setTx(null);
+    setConfirmation(null);
     try {
       const client = await makeClient(walletApi);
       const res = await submitMarketBulkCancel(client, {
@@ -157,7 +177,16 @@ export function MyListings() {
       });
       setTx(res.txHash);
       setSelected(new Set());
-      await refresh();
+      setConfirmation("confirming");
+      awaitTxConfirmation(client, res.txHash)
+        .then(() => {
+          setConfirmation("confirmed");
+          refresh();
+        })
+        .catch((chainErr) => {
+          console.warn("bulk cancel tx not confirmed:", chainErr);
+          setConfirmation("rejected");
+        });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -270,9 +299,10 @@ export function MyListings() {
         </p>
       ) : null}
       {tx ? (
-        <p className="break-all rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-[10px] text-emerald-200">
-          ↗ {tx}
-        </p>
+        <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-[10px] text-emerald-200">
+          <p className="break-all">↗ {tx}</p>
+          <ConfirmationChip status={confirmation} />
+        </div>
       ) : null}
     </section>
   );

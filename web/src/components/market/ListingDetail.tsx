@@ -4,6 +4,10 @@ import { Address } from "@evolution-sdk/evolution";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  ConfirmationChip,
+  type ChainConfirmation,
+} from "@/components/ConfirmationChip";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { listPools, matchesPool } from "@/lib/market/poolTraits";
 import {
@@ -14,6 +18,7 @@ import {
   splitUnit,
   supportedPriceTokens,
 } from "@/lib/market/supportedPriceTokens";
+import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { decodeAddressData } from "@/lib/tx/decodeAddressData";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { submitMarketBuy } from "@/lib/tx/marketBuy";
@@ -42,6 +47,11 @@ export function ListingDetail({ unit }: { unit: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [tx, setTx] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
+  // Bumped after a tx confirms on chain to force the listing fetcher
+  // below to re-run — the just-bought / just-cancelled UTxO should no
+  // longer be in fetchMarketListings's result.
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const marketplaceAddress = manifest?.marketplaceAddress ?? null;
 
@@ -63,7 +73,7 @@ export function ListingDetail({ unit }: { unit: string }) {
     return () => {
       cancelled = true;
     };
-  }, [marketplaceAddress, walletApi, unit]);
+  }, [marketplaceAddress, walletApi, unit, refreshNonce]);
 
   // Decode the seller's bech32 from the on-chain Address Constr in the
   // datum once we have a listing. Used by both the buy flow and the
@@ -117,6 +127,7 @@ export function ListingDetail({ unit }: { unit: string }) {
     setBusy(true);
     setErr(null);
     setTx(null);
+    setConfirmation(null);
     try {
       const client = await makeClient(walletApi);
       // Pick the first jar UTxO. Sharded jars are future work; the
@@ -149,6 +160,16 @@ export function ListingDetail({ unit }: { unit: string }) {
         buyerBech32Address: walletAddress,
       });
       setTx(res.txHash);
+      setConfirmation("confirming");
+      awaitTxConfirmation(client, res.txHash)
+        .then(() => {
+          setConfirmation("confirmed");
+          setRefreshNonce((n) => n + 1);
+        })
+        .catch((chainErr) => {
+          console.warn("buy tx not confirmed:", chainErr);
+          setConfirmation("rejected");
+        });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -161,6 +182,7 @@ export function ListingDetail({ unit }: { unit: string }) {
     setBusy(true);
     setErr(null);
     setTx(null);
+    setConfirmation(null);
     try {
       const client = await makeClient(walletApi);
       const res = await submitMarketCancel(client, {
@@ -170,6 +192,16 @@ export function ListingDetail({ unit }: { unit: string }) {
         sellerPkhHex: listing.datum.sellerPkhHex,
       });
       setTx(res.txHash);
+      setConfirmation("confirming");
+      awaitTxConfirmation(client, res.txHash)
+        .then(() => {
+          setConfirmation("confirmed");
+          setRefreshNonce((n) => n + 1);
+        })
+        .catch((chainErr) => {
+          console.warn("cancel tx not confirmed:", chainErr);
+          setConfirmation("rejected");
+        });
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -267,9 +299,10 @@ export function ListingDetail({ unit }: { unit: string }) {
         </p>
       ) : null}
       {tx ? (
-        <p className="rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
-          ↗ {tx}
-        </p>
+        <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
+          <p className="break-all">↗ {tx}</p>
+          <ConfirmationChip status={confirmation} />
+        </div>
       ) : null}
     </main>
   );
