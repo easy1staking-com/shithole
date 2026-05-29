@@ -399,28 +399,15 @@ export function ListingDetail({ unit }: { unit: string }) {
                 ) : null}
               </label>
             ) : null}
-            {babelProbeError && babelFeatureOn ? (
-              <p className="break-all rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-[10px] text-zinc-400">
-                babel-fee probe failed: {babelProbeError}
-              </p>
-            ) : null}
             {/*
-             * Visible hint when the babel-fee feature flag is on but the toggle
-             * doesn't render. Helps users self-diagnose without the DevTools
-             * console. Cheap to read; rarely shown on prod.
+             * One friendly line when the feature flag is on but the toggle
+             * isn't available (probe still running, probe returned null, or
+             * probe threw). The underlying cause is logged to the console
+             * for support — users only see a plain "not available".
              */}
-            {babelFeatureOn && !isSeller && !babel && !babelProbeError ? (
-              <p className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-[10px] text-zinc-500">
-                babel-fee unavailable:{" "}
-                {!walletApi
-                  ? "wallet not connected"
-                  : !listing
-                    ? "listing not loaded"
-                    : !probeEnabled
-                      ? "feature off in this build"
-                      : !babelProbe
-                        ? "checking…"
-                        : "no live tank or oracle for this token"}
+            {babelFeatureOn && !isSeller && !babel ? (
+              <p className="rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-[10px] text-zinc-500">
+                babel fees not available at the moment.
               </p>
             ) : null}
             <div className="pt-2">
