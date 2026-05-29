@@ -162,16 +162,39 @@ export function ListingDetail({ unit }: { unit: string }) {
   const babel = babelProbe?.forUnit === priceUnit ? babelProbe.result : null;
 
   useEffect(() => {
+    // Diagnostic — the babel-fee toggle has five render-gate AND six on-chain
+    // dependencies; this log makes silent gating visible in DevTools so a user
+    // hitting "no checkbox" can self-diagnose without a code change.
+    // eslint-disable-next-line no-console
+    console.info("[babel-probe] gates", {
+      featureFlag: babelFeatureOn,
+      isSeller,
+      hasWallet: Boolean(walletApi),
+      hasListing: Boolean(listing),
+      priceUnit,
+      probeWillRun: probeEnabled,
+    });
     if (!probeEnabled) return;
     let cancelled = false;
     (async () => {
       try {
         const client = await makeClient(walletApi!);
         const result = await probeBabelAvailability(client, priceUnit);
+        // eslint-disable-next-line no-console
+        console.info("[babel-probe] result", {
+          ok: Boolean(result),
+          priceUnit,
+          tankOutRef: result?.tank.utxo.txHash
+            ? `${result.tank.utxo.txHash}#${result.tank.utxo.outputIndex}`
+            : null,
+        });
         if (!cancelled) setBabelProbe({ forUnit: priceUnit, result });
       } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // eslint-disable-next-line no-console
+        console.error("[babel-probe] threw", msg);
         if (!cancelled) {
-          setBabelProbeError(e instanceof Error ? e.message : String(e));
+          setBabelProbeError(msg);
           setBabelProbe({ forUnit: priceUnit, result: null });
         }
       }
@@ -179,7 +202,7 @@ export function ListingDetail({ unit }: { unit: string }) {
     return () => {
       cancelled = true;
     };
-  }, [probeEnabled, walletApi, priceUnit]);
+  }, [probeEnabled, walletApi, priceUnit, babelFeatureOn, isSeller, listing]);
 
   // Human-readable HOSKY estimate for the opt-in label.
   const babelHoskyEstimate = useMemo(() => {
@@ -379,6 +402,25 @@ export function ListingDetail({ unit }: { unit: string }) {
             {babelProbeError && babelFeatureOn ? (
               <p className="break-all rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-[10px] text-zinc-400">
                 babel-fee probe failed: {babelProbeError}
+              </p>
+            ) : null}
+            {/*
+             * Visible hint when the babel-fee feature flag is on but the toggle
+             * doesn't render. Helps users self-diagnose without the DevTools
+             * console. Cheap to read; rarely shown on prod.
+             */}
+            {babelFeatureOn && !isSeller && !babel && !babelProbeError ? (
+              <p className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-[10px] text-zinc-500">
+                babel-fee unavailable:{" "}
+                {!walletApi
+                  ? "wallet not connected"
+                  : !listing
+                    ? "listing not loaded"
+                    : !probeEnabled
+                      ? "feature off in this build"
+                      : !babelProbe
+                        ? "checking…"
+                        : "no live tank or oracle for this token"}
               </p>
             ) : null}
             <div className="pt-2">
