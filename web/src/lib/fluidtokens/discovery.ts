@@ -75,7 +75,7 @@ export async function findTanksAcceptingToken(
   paymentTokenPolicyHex: string,
   paymentTokenNameHex: string,
 ): Promise<TankUtxo[]> {
-  const addr = aquariumTankBech32(networkIdFromClient(client));
+  const addr = aquariumTankBech32(currentNetworkId());
   const all = await client.getUtxos(Address.fromBech32(addr));
   const out: TankUtxo[] = [];
   const policy = paymentTokenPolicyHex.toLowerCase();
@@ -108,7 +108,7 @@ export async function findTanksAcceptingToken(
 export async function findParametersUtxo(
   client: EvolutionClient,
 ): Promise<UTxO | null> {
-  const addr = parametersBech32(networkIdFromClient(client));
+  const addr = parametersBech32(currentNetworkId());
   const all = await client.getUtxos(Address.fromBech32(addr));
   for (const u of all) {
     const adapted = adaptUtxo(u);
@@ -197,7 +197,7 @@ function parametersBech32(networkId: 0 | 1): string {
   );
 }
 
-function networkIdFromClient(_client: EvolutionClient): 0 | 1 {
+function currentNetworkId(): 0 | 1 {
   // Evolution doesn't expose the network on a typed surface; read the
   // same env var the rest of the FE relies on instead. Mainnet → 1,
   // everything else → 0.

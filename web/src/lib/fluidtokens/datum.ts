@@ -96,9 +96,10 @@ export function decodeDatumTank(data: Data.Data): DatumTank | null {
  * compares input.datum and output.datum byte-by-byte; this MUST
  * produce the same bytes as the input did or the spend fails.
  *
- * <p>For paranoia, the tank-consume tx-builder is allowed to skip this
- * round-trip and simply re-attach the input's raw inline-datum CBOR to
- * the output — see {@code tankConsume.ts}.
+ * <p>For paranoia, callers are allowed to skip this round-trip and
+ * simply re-attach the input's raw inline-datum CBOR to the continuing
+ * output. {@link encodeDatumTank} is provided so a builder *can* verify
+ * round-tripping during dev.
  */
 export function encodeDatumTank(d: DatumTank): Data.Data {
   return Data.constr(0n, [

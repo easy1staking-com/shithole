@@ -1,9 +1,7 @@
 /**
- * Bech32-decoding + credential helpers shared between
- * {@code tankConsume.ts} and the marketBuy babel-fee path.
- *
- * <p>Kept separate so the babel-fee additions to the marketplace tx
- * builder don't drag the whole {@code tankConsume.ts} module along.
+ * Bech32-decoding + credential helpers for the babel-fee marketplace
+ * buy path. Kept in its own module so the FT integration only pulls
+ * what it needs into the marketplace tx builder.
  */
 
 import { Credential as EvCredential } from "@evolution-sdk/evolution";

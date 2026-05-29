@@ -14,10 +14,7 @@ import {
   fetchMarketListings,
   type DecodedListing,
 } from "@/lib/market/queryListings";
-import {
-  splitUnit,
-  supportedPriceTokens,
-} from "@/lib/market/supportedPriceTokens";
+import { supportedPriceTokens } from "@/lib/market/supportedPriceTokens";
 import {
   probeBabelAvailability,
   type BabelAvailability,
@@ -144,36 +141,45 @@ export function ListingDetail({ unit }: { unit: string }) {
     listing && walletPkh && listing.datum.sellerPkhHex === walletPkh;
 
   // ---- Babel-fee availability + opt-in toggle ----
-  const [babel, setBabel] = useState<BabelAvailability | null>(null);
+  /**
+   * Probed availability is stored alongside the price unit it was probed
+   * for, so we can ignore stale results when the user clicks through to
+   * a different listing while a probe is still in flight.
+   */
+  const [babelProbe, setBabelProbe] = useState<{
+    forUnit: string;
+    result: BabelAvailability | null;
+  } | null>(null);
   const [babelEnabled, setBabelEnabled] = useState(false);
   const [babelProbeError, setBabelProbeError] = useState<string | null>(null);
   const babelFeatureOn = isBabelFeeEnabled();
   const priceUnit = listing
     ? (listing.datum.pricePolicyHex + listing.datum.priceNameHex).toLowerCase()
     : "";
+  const probeEnabled =
+    babelFeatureOn && !isSeller && Boolean(walletApi) && Boolean(listing) && Boolean(priceUnit);
+  // Only surface results that match the listing the user is currently looking at.
+  const babel = babelProbe?.forUnit === priceUnit ? babelProbe.result : null;
 
   useEffect(() => {
-    if (!babelFeatureOn || isSeller || !walletApi || !listing || !priceUnit) {
-      setBabel(null);
-      return;
-    }
+    if (!probeEnabled) return;
     let cancelled = false;
     (async () => {
       try {
-        const client = await makeClient(walletApi);
+        const client = await makeClient(walletApi!);
         const result = await probeBabelAvailability(client, priceUnit);
-        if (!cancelled) setBabel(result);
+        if (!cancelled) setBabelProbe({ forUnit: priceUnit, result });
       } catch (e) {
         if (!cancelled) {
           setBabelProbeError(e instanceof Error ? e.message : String(e));
-          setBabel(null);
+          setBabelProbe({ forUnit: priceUnit, result: null });
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [babelFeatureOn, isSeller, walletApi, listing, priceUnit]);
+  }, [probeEnabled, walletApi, priceUnit]);
 
   // Human-readable HOSKY estimate for the opt-in label.
   const babelHoskyEstimate = useMemo(() => {
