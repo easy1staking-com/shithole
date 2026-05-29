@@ -6,10 +6,16 @@ import { fetchOracleTokens, type LiveOraclePrice } from "@/lib/fluidtokens/api";
 import { onChainAddressToBech32 } from "@/lib/fluidtokens/datum";
 import {
   fetchTankByOutRef,
+  findParametersUtxo,
   tankAcceptsToken,
   type TankUtxo,
 } from "@/lib/fluidtokens/discovery";
 import { requiredTokenPayment } from "@/lib/fluidtokens/math";
+import {
+  buildAndSubmitBabelConsume,
+  type BabelConsumeResult,
+} from "@/lib/fluidtokens/tankConsume";
+import { fetchUtxoByOutRef } from "@/lib/tx/swap";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { getNetworkName } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
@@ -40,6 +46,7 @@ const HOSKY_UNIT_HEX =
  */
 export function BabelTestPanel() {
   const walletApi = useWalletStore((s) => s.api);
+  const walletAddress = useWalletStore((s) => s.addressBech32);
 
   const [tankRefInput, setTankRefInput] = useState(
     `${DEFAULT_TANK_OUT_REF.txHash}#${DEFAULT_TANK_OUT_REF.outputIndex}`,
@@ -51,6 +58,11 @@ export function BabelTestPanel() {
   const [oracle, setOracle] = useState<LiveOraclePrice | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Submit-side state.
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [submitResult, setSubmitResult] = useState<BabelConsumeResult | null>(null);
+  const [submitErr, setSubmitErr] = useState<string | null>(null);
 
   const tankAddressBech32 = useMemo(() => {
     if (!tank) return null;
@@ -154,6 +166,78 @@ export function BabelTestPanel() {
     // intentionally narrow deps to "wallet just became available"
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletApi]);
+
+  /**
+   * Build + sign + submit a real tank-consume tx. Walks the full FT
+   * Aquarium babel-fee path: tank input + parameters/oracle/script
+   * ref-inputs + withdraw-zero from the oracle's stake address. The
+   * wallet must hold enough of the paying token AND a small ADA
+   * margin for change min-utxo (~2 ADA suffices).
+   */
+  const onSubmit = useCallback(async () => {
+    if (!walletApi || !walletAddress) {
+      setSubmitErr("connect a wallet first");
+      return;
+    }
+    if (!tank || !oracle || !matchingToken) {
+      setSubmitErr("load the tank + oracle first");
+      return;
+    }
+    setSubmitBusy(true);
+    setSubmitErr(null);
+    setSubmitResult(null);
+    try {
+      const ada = Number(adaUsedAdaInput);
+      if (!Number.isFinite(ada) || ada <= 0) {
+        throw new Error("ada_used must be a positive number");
+      }
+      const adaUsedLovelace = BigInt(Math.round(ada * 1_000_000));
+
+      const client = await makeClient(walletApi);
+
+      // Discover everything we need on chain.
+      const parameters = await findParametersUtxo(client);
+      if (!parameters) {
+        throw new Error("FluidTokens Parameters UTxO not found on chain");
+      }
+      const oracleDataUtxo = await fetchUtxoByOutRef(
+        client,
+        oracle.oracleRefInput.split("#")[0],
+        Number.parseInt(oracle.oracleRefInput.split("#")[1] ?? "0", 10),
+      );
+      // Oracle validator's own CIP-33 ref-script UTxO — referenced
+      // from the FT API entry's fluidOracle.referenceScript field.
+      const oracleRefScriptStr =
+        oracle.raw.fluidOracle?.referenceScript ?? "";
+      if (!oracleRefScriptStr.includes("#")) {
+        throw new Error("FT API entry missing fluidOracle.referenceScript");
+      }
+      const oracleRefScriptUtxo = await fetchUtxoByOutRef(
+        client,
+        oracleRefScriptStr.split("#")[0],
+        Number.parseInt(oracleRefScriptStr.split("#")[1] ?? "0", 10),
+      );
+
+      const res = await buildAndSubmitBabelConsume(client, {
+        buyerBech32Address: walletAddress,
+        tank,
+        paymentTokenUnitHex: tokenUnitInput,
+        adaUsedLovelace,
+        // ~1.2 ADA on the payment output — comfortably above min-utxo
+        // for an output carrying 1 paying-token + ADA.
+        paymentMinLovelace: 1_200_000n,
+        oracle,
+        parameters,
+        oracleDataUtxo,
+        oracleRefScriptUtxo,
+      });
+      setSubmitResult(res);
+    } catch (e) {
+      setSubmitErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitBusy(false);
+    }
+  }, [walletApi, walletAddress, tank, oracle, matchingToken, tokenUnitInput, adaUsedAdaInput]);
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-12">
@@ -322,6 +406,41 @@ export function BabelTestPanel() {
             payment-to-tankOwner output to receive {adaUsedAdaInput} ADA from
             the tank.
           </p>
+        </section>
+      ) : null}
+
+      {requiredHosky && matchingToken && oracle ? (
+        <section className="space-y-3 rounded-lg border border-amber-900 bg-amber-950/30 p-4 text-sm text-amber-100">
+          <header className="text-base font-semibold">submit a real babel tx</header>
+          <p className="text-xs">
+            Pay {requiredHosky.token.toString()} HOSKY → receive{" "}
+            {adaUsedAdaInput} ADA from the tank. Real mainnet tx; your wallet
+            will pop up to sign. Wallet needs at least the HOSKY balance above
+            plus ~2 ADA for change min-utxo.
+          </p>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={submitBusy || !walletApi}
+            className="rounded bg-amber-700 px-4 py-2 text-sm font-semibold text-amber-50 disabled:cursor-not-allowed disabled:bg-zinc-800"
+          >
+            {submitBusy ? "building + signing…" : "submit babel tx"}
+          </button>
+          {submitErr ? (
+            <p className="break-all rounded border border-red-900 bg-red-950/40 px-3 py-2 font-mono text-[10px] text-red-300">
+              {submitErr}
+            </p>
+          ) : null}
+          {submitResult ? (
+            <div className="space-y-1 rounded border border-emerald-900 bg-emerald-950/40 p-3 font-mono text-[11px] text-emerald-200">
+              <p className="break-all">↗ {submitResult.txHash}</p>
+              <p>
+                paid {submitResult.tokenPayment.toString()} HOSKY · tank
+                continues with{" "}
+                {(Number(submitResult.continuingTankLovelace) / 1e6).toFixed(3)} ADA
+              </p>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </main>
