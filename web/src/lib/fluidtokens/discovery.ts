@@ -19,6 +19,7 @@ import { Address, Credential, Data } from "@evolution-sdk/evolution";
 import type { EvolutionClient } from "@/lib/tx/evolutionClient";
 import { toTxInput } from "@/lib/tx/txAdapters";
 import { adaptUtxo, type UTxO } from "@/lib/tx/utxo";
+import { getNetworkName } from "@/lib/wallet/network";
 
 import { decodeDatumTank } from "./datum";
 import {
@@ -196,13 +197,11 @@ function parametersBech32(networkId: 0 | 1): string {
   );
 }
 
-function networkIdFromClient(client: EvolutionClient): 0 | 1 {
-  // The Evolution Client carries its network on `.network.networkId`.
-  // We erase to `unknown` here because pulling Evolution's Network type
-  // into the discovery module is unnecessary for this single read.
-  const id = (client as unknown as { network: { networkId: number } }).network
-    .networkId;
-  return id === 1 ? 1 : 0;
+function networkIdFromClient(_client: EvolutionClient): 0 | 1 {
+  // Evolution doesn't expose the network on a typed surface; read the
+  // same env var the rest of the FE relies on instead. Mainnet → 1,
+  // everything else → 0.
+  return getNetworkName() === "mainnet" ? 1 : 0;
 }
 
 function hexEncodeAscii(s: string): string {

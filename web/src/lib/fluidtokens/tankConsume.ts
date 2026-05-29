@@ -48,6 +48,7 @@ import {
 import type { EvolutionClient } from "@/lib/tx/evolutionClient";
 import { inlineDatum, toAssets, toTxInput } from "@/lib/tx/txAdapters";
 import { adaptUtxo, type UTxO } from "@/lib/tx/utxo";
+import { getNetworkName } from "@/lib/wallet/network";
 
 import type { LiveOraclePrice } from "./api";
 import { onChainAddressToBech32 } from "./datum";
@@ -337,10 +338,12 @@ function stakeCredentialFromRewardAddress(rewardBech32: string) {
   return EvCredential.makeScriptHash(hash);
 }
 
-function networkIdFromClient(client: EvolutionClient): 0 | 1 {
-  const id = (client as unknown as { network: { networkId: number } }).network
-    .networkId;
-  return id === 1 ? 1 : 0;
+function networkIdFromClient(_client: EvolutionClient): 0 | 1 {
+  // The Evolution Client doesn't expose its network on a typed
+  // surface, so we read the same env var the rest of the FE uses
+  // (NEXT_PUBLIC_CARDANO_NETWORK). One-to-one mapping: mainnet → 1,
+  // anything else → 0.
+  return getNetworkName() === "mainnet" ? 1 : 0;
 }
 
 /* -------------------------------------------------------------------------- */
