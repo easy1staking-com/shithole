@@ -20,6 +20,7 @@ import {
   usePools,
   useProof,
 } from "@/lib/api/hooks";
+import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { fetchUtxoByOutRef, findConfigUtxo } from "@/lib/tx/swap";
 import { submitFulfillP2p } from "@/lib/tx/fulfillP2p";
@@ -220,6 +221,7 @@ function FulfillBody({
   // independent chain-side state via Evolution's awaitTx.
   const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
   const queryClient = useQueryClient();
+  const refreshHistory = useRefreshHistory();
 
   // Each wallet NFT is depositable iff (a) the target pool accepts it
   // and (b) none of its other pools are in the user's exclude set.
@@ -307,6 +309,7 @@ function FulfillBody({
           queryClient.invalidateQueries({
             queryKey: ["walletCollection", addressBech32, collectionPolicyHex],
           });
+          refreshHistory();
         })
         .catch((chainErr) => {
           const chainMsg =

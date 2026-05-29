@@ -13,6 +13,7 @@ import { DepositStep } from "@/components/p2p/DepositStep";
 import { NftPickerStep } from "@/components/p2p/NftPickerStep";
 import { PoolPicker, PoolSummary } from "@/components/p2p/PoolPicker";
 import { useCollection, useCurated } from "@/lib/api/hooks";
+import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import {
   submitCreateP2pListing,
@@ -148,6 +149,7 @@ function FlowForCollection({ slug }: { slug: string }) {
   );
   const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
   const queryClient = useQueryClient();
+  const refreshHistory = useRefreshHistory();
 
   const handleSubmitDeposit = useCallback(
     async (lovelaceToLock: bigint) => {
@@ -191,6 +193,7 @@ function FlowForCollection({ slug }: { slug: string }) {
                 collection.data?.collection_policy_id,
               ],
             });
+            refreshHistory();
           })
           .catch((chainErr) => {
             const msg =

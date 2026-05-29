@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ConfirmationChip } from "@/components/ConfirmationChip";
 import { useP2pListingsByBuyer } from "@/lib/api/hooks";
+import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { submitReclaimAllForCollection } from "@/lib/tx/reclaimP2p";
@@ -44,6 +45,7 @@ export function MyListingsBoard() {
   const paymentKeyHashHex = useWalletStore((s) => s.paymentKeyHashHex);
   const api = useWalletStore((s) => s.api);
   const queryClient = useQueryClient();
+  const refreshHistory = useRefreshHistory();
 
   const { data, isPending, isError, error, refetch } = useP2pListingsByBuyer(
     paymentKeyHashHex,
@@ -166,6 +168,7 @@ export function MyListingsBoard() {
       queryClient.invalidateQueries({ queryKey: ["p2pListings"] });
       queryClient.invalidateQueries({ queryKey: ["p2pListingsByBuyer"] });
       queryClient.invalidateQueries({ queryKey: ["walletCollection"] });
+      refreshHistory();
       if (!mountedRef.current) return;
       setSelected(new Set());
       // Brief "confirmed" chip before sliding back to idle. Lingers ~4s

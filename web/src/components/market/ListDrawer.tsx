@@ -15,6 +15,7 @@ import {
   supportedPriceTokens,
   type SupportedPriceToken,
 } from "@/lib/market/supportedPriceTokens";
+import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { submitMarketList } from "@/lib/tx/marketList";
 import { makeClient } from "@/lib/tx/evolutionClient";
@@ -68,6 +69,7 @@ export function ListDrawer() {
   const [err, setErr] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
+  const refreshHistory = useRefreshHistory();
 
   // Bond default — autoMinUtxo on the submit handles the floor.
   const [bondLovelace] = useState<bigint>(DEFAULT_BOND_LOVELACE);
@@ -168,6 +170,7 @@ export function ListDrawer() {
               queryKey: ["walletCollection", walletAddress, collection.policyId],
             });
           }
+          refreshHistory();
         })
         .catch((chainErr) => {
           console.warn("list tx not confirmed:", chainErr);

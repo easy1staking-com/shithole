@@ -21,6 +21,7 @@ import {
 } from "@/lib/fluidtokens/babelDiscovery";
 import { isBabelFeeEnabled } from "@/lib/fluidtokens/feature";
 import { requiredTokenPayment } from "@/lib/fluidtokens/math";
+import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { decodeAddressData } from "@/lib/tx/decodeAddressData";
 import { makeClient } from "@/lib/tx/evolutionClient";
@@ -63,6 +64,7 @@ export function ListingDetail({ unit }: { unit: string }) {
   const walletApi = useWalletStore((s) => s.api);
   const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
   const walletAddress = useWalletStore((s) => s.addressBech32);
+  const refreshHistory = useRefreshHistory();
 
   const [listing, setListing] = useState<DecodedListing | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -277,6 +279,7 @@ export function ListingDetail({ unit }: { unit: string }) {
         .then(() => {
           setConfirmation("confirmed");
           setRefreshNonce((n) => n + 1);
+          refreshHistory();
         })
         .catch((chainErr) => {
           console.warn("buy tx not confirmed:", chainErr);
@@ -309,6 +312,7 @@ export function ListingDetail({ unit }: { unit: string }) {
         .then(() => {
           setConfirmation("confirmed");
           setRefreshNonce((n) => n + 1);
+          refreshHistory();
         })
         .catch((chainErr) => {
           console.warn("cancel tx not confirmed:", chainErr);

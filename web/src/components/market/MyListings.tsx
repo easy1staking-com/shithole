@@ -18,6 +18,7 @@ import {
   type SupportedPriceToken,
 } from "@/lib/market/supportedPriceTokens";
 import { isSupportedCollection } from "@/lib/market/supportedCollections";
+import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import {
@@ -48,6 +49,7 @@ export function MyListings() {
     useDerivedMarketplaceManifest();
   const walletApi = useWalletStore((s) => s.api);
   const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
+  const refreshHistory = useRefreshHistory();
 
   const [all, setAll] = useState<DecodedListing[]>([]);
   const [loading, setLoading] = useState(false);
@@ -145,6 +147,7 @@ export function MyListings() {
         .then(() => {
           setConfirmation("confirmed");
           refresh();
+          refreshHistory();
         })
         .catch((chainErr) => {
           console.warn("cancel tx not confirmed:", chainErr);
@@ -182,6 +185,7 @@ export function MyListings() {
         .then(() => {
           setConfirmation("confirmed");
           refresh();
+          refreshHistory();
         })
         .catch((chainErr) => {
           console.warn("bulk cancel tx not confirmed:", chainErr);
