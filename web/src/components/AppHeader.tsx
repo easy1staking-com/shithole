@@ -69,7 +69,6 @@ export function AppHeader() {
               items={[
                 { label: "the pits", href: "/" },
                 { label: "your stash", href: "/me" },
-                { label: "your history", href: "/me/history?type=pit" },
               ]}
             />
             <NavMenu
@@ -78,7 +77,6 @@ export function AppHeader() {
                 { label: "open offers", href: "/p2p" },
                 { label: "your offers", href: "/me/p2p" },
                 { label: "make offer", href: "/p2p/new" },
-                { label: "your history", href: "/me/history?type=p2p" },
               ]}
             />
             {isMarketplaceEnabled() ? (
@@ -91,6 +89,21 @@ export function AppHeader() {
                 ]}
               />
             ) : null}
+            {/* Unified history feed — one entry per source. Replaces
+                the per-section "your history" links that used to live
+                under pit + p2p (and were missing for market entirely). */}
+            <NavMenu
+              label="history"
+              items={[
+                { label: "all", href: "/me/history" },
+                { label: "pit", href: "/me/history?type=pit" },
+                { label: "p2p", href: "/me/history?type=p2p" },
+                ...(isMarketplaceEnabled()
+                  ? [{ label: "market", href: "/me/history?type=market" }]
+                  : []),
+              ]}
+            />
+
             {showAdminMenu ? (
               <NavMenu
                 label="admin"
