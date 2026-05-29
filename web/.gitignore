@@ -37,6 +37,7 @@ yarn-error.log*
 # / `.env.mainnet` are not (matched by the `.env*` glob above).
 !.env.preprod.example
 !.env.mainnet.example
+!.env.mainnet-dev.example
 !.env.preview.example
 !.env.devnet.example
 
