@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { useNftMetadata } from "@/lib/api/hooks";
+import { PoolChips } from "@/components/PoolChips";
 import type { Listing } from "@/types/api";
 import {
   useWalletCollectionNfts,
@@ -457,7 +458,10 @@ function WalletNftCard({
           </div>
         )}
       </div>
-      <p className="truncate px-2 py-1 text-[0.65rem] text-zinc-300">{name}</p>
+      <div className="space-y-1 px-2 py-1">
+        <p className="truncate text-[0.65rem] text-zinc-300">{name}</p>
+        <PoolChips traits={meta.data?.traits} />
+      </div>
     </div>
   );
 }

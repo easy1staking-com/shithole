@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 
 import { useNftMetadata } from "@/lib/api/hooks";
 import type { WalletCollectionNft } from "@/lib/wallet/useWalletCollectionNfts";
+import { PoolChips } from "@/components/PoolChips";
 
 /**
  * A wallet NFT card with a tap-to-select checkbox overlay. Used in the
@@ -82,7 +83,10 @@ export function SelectableWalletCard({
           </div>
         )}
       </div>
-      <p className="truncate px-2 py-1 text-[0.65rem] text-zinc-300">{name}</p>
+      <div className="space-y-1 px-2 py-1">
+        <p className="truncate text-[0.65rem] text-zinc-300">{name}</p>
+        <PoolChips traits={meta.data?.traits} />
+      </div>
       {/* Checkbox badge */}
       <div
         className="pointer-events-none absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold transition-all"
