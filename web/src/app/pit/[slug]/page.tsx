@@ -6,6 +6,7 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 
 import { PitDropZone } from "@/components/pit/PitDropZone";
 import { PitHeader } from "@/components/pit/PitHeader";
+import { PitPeek } from "@/components/pit/PitPeek";
 import { SwapConfirm } from "@/components/pit/SwapConfirm";
 import {
   SwapRevealOverlay,
@@ -16,6 +17,7 @@ import { WalletDrawer } from "@/components/pit/WalletDrawer";
 import { useCollection, useListings } from "@/lib/api/hooks";
 import { useMatchability } from "@/lib/pit/useMatchability";
 import type { Match } from "@/lib/pit/bucketMath";
+import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { submitList } from "@/lib/tx/list";
 import { makeClient } from "@/lib/tx/evolutionClient";
@@ -65,6 +67,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   const collection = useCollection(slug);
   const listings = useListings(slug, { page: 0, size: 50 });
   const queryClient = useQueryClient();
+  const refreshHistory = useRefreshHistory();
 
   const { api, addressBech32, paymentKeyHashHex } = useWalletStore();
   const collectionPolicyId = collection.data?.collection_policy_id;
@@ -97,6 +100,10 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   const [reveal, setReveal] = useState<
     { depositUnit: string; outcomeUnit: string; txHash?: string } | null
   >(null);
+  // "Peek into the pit" overlay — shows every NFT in the pool with a
+  // pool-ticker filter. Browse-only; the swap output is deterministic
+  // per input UTxO so the user can't pick.
+  const [peekOpen, setPeekOpen] = useState(false);
 
   const handleDragStart = useCallback((nft: WalletCollectionNft) => {
     setSwap({ kind: "dragging", nft });
@@ -234,6 +241,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           });
           queryClient.invalidateQueries({ queryKey: ["listings", slug] });
           queryClient.invalidateQueries({ queryKey: ["collection", slug] });
+          refreshHistory();
         })
         .catch((chainErr) => {
           const chainMsg =
@@ -347,6 +355,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           });
           queryClient.invalidateQueries({ queryKey: ["listings", slug] });
           queryClient.invalidateQueries({ queryKey: ["collection", slug] });
+          refreshHistory();
         } catch (chainErr) {
           const chainMsg =
             chainErr instanceof Error ? chainErr.message : String(chainErr);
@@ -441,15 +450,19 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
             </div>
 
             {listings.data && listings.data.data.length > 0 && (
-              <p className="text-center text-xs text-zinc-500">
-                showing a sample of{" "}
-                <span className="text-zinc-300">
-                  {Math.min(listings.data.data.length, 12)}
-                </span>{" "}
-                from{" "}
-                <span className="text-zinc-300">{listings.data.total}</span>{" "}
-                drowned souls
-              </p>
+              <div className="flex flex-col items-center gap-2 text-xs text-zinc-500">
+                <p>
+                  <span className="text-zinc-300">{listings.data.total}</span>{" "}
+                  drowned souls in the pit
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPeekOpen(true)}
+                  className="rounded-full border border-zinc-700 px-4 py-1.5 text-[11px] uppercase tracking-widest text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                >
+                  peek into the pit ↗
+                </button>
+              </div>
             )}
           </>
         )}
@@ -464,6 +477,17 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           onDragEnd={handleDragEnd}
           onListSubmit={handleListSubmit}
           listing={listing}
+        />
+      )}
+
+      {/* Peek-into-the-pit overlay — browse the pool's contents. */}
+      {collection.data && (
+        <PitPeek
+          open={peekOpen}
+          onClose={() => setPeekOpen(false)}
+          listings={listings.data?.data ?? []}
+          totalInPool={listings.data?.total ?? 0}
+          accentColor={collection.data.theme?.accent_color}
         />
       )}
 
