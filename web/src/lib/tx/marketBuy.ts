@@ -108,10 +108,88 @@ export type MarketBuyInput = {
 
 export type MarketBuyResult = { txHash: string };
 
+/**
+ * Safety buffer added on top of the measured tx fee when rebuilding the
+ * babel tx for the second pass.
+ *
+ * <p>Set to {@code 0n} so {@code ada_used == measuredFee} exactly. The
+ * downside: iter2's HOSKY varint encoding can shift by 1-3 bytes from
+ * iter1 if the amount magnitude crossed a varint boundary, which can
+ * push iter2's actual fee ~50-200 lovelace above the measurement. In
+ * that edge case the buyer's wallet absorbs the difference (well under
+ * one cent today). The upside: buyers don't over-pay HOSKY for a tank
+ * subsidy they never used, matching the "0-ADA buy" property the user
+ * requested.
+ *
+ * <p>If we start seeing iter2 evaluate failures from the size shift, a
+ * third pass — measure fee on iter2, rebuild a final time if it still
+ * shifts — would converge with no over-payment. Two passes ship now;
+ * three-pass is a follow-up if needed.
+ */
+const BABEL_FEE_SAFETY_BUFFER_LOVELACE = 0n;
+
 export async function submitMarketBuy(
   client: EvolutionClient,
   input: MarketBuyInput,
 ): Promise<MarketBuyResult> {
+  // No babel-fee: single build, sign, submit. Standard path.
+  if (!input.babelFee) {
+    const built = await buildMarketBuyTx(client, input, null);
+    const signed = await built.sign();
+    return { txHash: txHashHex(await signed.submit()) };
+  }
+
+  // Babel-fee: two-pass iterative ada_used so the tank covers the
+  // ACTUAL tx fee rather than a hardcoded guess.
+  //
+  // Pass 1: build with the caller-supplied placeholder (~0.68 ADA today).
+  //         Read estimateFee() off the built result — that's the real
+  //         fee for THIS tx shape, including Plutus eval + ref-script
+  //         cost + linear fee on tx size with fake witnesses.
+  // Pass 2: rebuild with ada_used = realFee + safety buffer. This shifts
+  //         the HOSKY amount + the continuing-tank lovelace by exactly
+  //         the right amount so the buyer nets ~0 ADA.
+  //
+  // If the placeholder already covered the fee with margin, pass 2 still
+  // runs to align HOSKY paid with ADA used (otherwise the buyer
+  // over-pays HOSKY for a tank subsidy they don't need).
+  const initial = await buildMarketBuyTx(client, input, input.babelFee.adaUsedLovelace);
+  const measuredFee = await initial.estimateFee();
+  const targetAdaUsed = measuredFee + BABEL_FEE_SAFETY_BUFFER_LOVELACE;
+  // eslint-disable-next-line no-console
+  console.info("[babel-fee] iterative pass", {
+    initialAdaUsed: input.babelFee.adaUsedLovelace.toString(),
+    measuredFee: measuredFee.toString(),
+    safetyBuffer: BABEL_FEE_SAFETY_BUFFER_LOVELACE.toString(),
+    targetAdaUsed: targetAdaUsed.toString(),
+    willRebuild: targetAdaUsed !== input.babelFee.adaUsedLovelace,
+  });
+  const finalBuilt =
+    targetAdaUsed === input.babelFee.adaUsedLovelace
+      ? initial
+      : await buildMarketBuyTx(client, input, targetAdaUsed);
+  const signed = await finalBuilt.sign();
+  return { txHash: txHashHex(await signed.submit()) };
+}
+
+/**
+ * Build (but do not sign) the marketplace Buy tx. Used by both the
+ * single-build (no-babel) path and the two-pass babel-fee path.
+ *
+ * <p>{@code adaUsedOverride} replaces {@code input.babelFee.adaUsedLovelace}
+ * when set. {@code null} = use the caller-supplied value (or no-babel build).
+ */
+async function buildMarketBuyTx(
+  client: EvolutionClient,
+  input: MarketBuyInput,
+  adaUsedOverride: bigint | null,
+) {
+  const babelFee = input.babelFee
+    ? {
+        ...input.babelFee,
+        adaUsedLovelace: adaUsedOverride ?? input.babelFee.adaUsedLovelace,
+      }
+    : undefined;
   const mp = await applyMarketplaceScript(input.network, input.jarScriptHashHex);
   const jar = await applyJarScript(input.network, input.adminPkhHex);
 
@@ -133,7 +211,7 @@ export async function submitMarketBuy(
   const allInputs: UTxO[] = [
     input.listingUtxo,
     input.jarUtxo,
-    ...(input.babelFee ? [input.babelFee.tank.utxo] : []),
+    ...(babelFee ? [babelFee.tank.utxo] : []),
     ...input.buyerInputs,
   ];
   const sortedInputs = [...allInputs].sort(compareOutRefs);
@@ -156,7 +234,7 @@ export async function submitMarketBuy(
   //     2: seller payout                (shifted +2)
   //     3: jar continuing               (shifted +2)
   //     4: buyer NFT                    (shifted +2)
-  const babelOutputOffset = input.babelFee ? 2 : 0;
+  const babelOutputOffset = babelFee ? 2 : 0;
   const sellerOutputIndex = 0 + babelOutputOffset;
   const jarOutputIndex = 1 + babelOutputOffset;
 
@@ -247,8 +325,8 @@ export async function submitMarketBuy(
   // inputs + withdraw-zero from the oracle stake address carrying the
   // signed OraclePriceFeed payload. Outputs[0..1] are reserved for the
   // tank's continuing + payment outputs (added below).
-  if (input.babelFee) {
-    const bf = input.babelFee;
+  if (babelFee) {
+    const bf = babelFee;
     const payingTokenIndex = tankAcceptsToken(
       bf.tank.datum,
       input.listing.pricePolicyHex,
@@ -298,8 +376,8 @@ export async function submitMarketBuy(
 
   // Babel-fee outputs (when set) — MUST be the first two outputs per
   // the tank validator's positional addressing.
-  if (input.babelFee) {
-    const bf = input.babelFee;
+  if (babelFee) {
+    const bf = babelFee;
     if (!bf.tank.utxo.datum) {
       throw new Error("babel tank UTxO has no inline datum — not a real tank");
     }
@@ -370,15 +448,15 @@ export async function submitMarketBuy(
   // pinned from FluidTokens' reference implementation. Required to
   // satisfy the oracle's inclusive validity check without falling foul
   // of Evolution's ms→slot rounding.
-  if (input.babelFee) {
+  if (babelFee) {
     const nowMs = BigInt(Date.now());
     const rawLower = nowMs - 100_000n;
     const rawUpper = nowMs + 100_000n;
     const validFromMs = rawLower - (rawLower % 1000n);
     const validToMs = rawUpper - (rawUpper % 1000n);
     if (
-      validFromMs < input.babelFee.oracle.validFrom ||
-      validToMs > input.babelFee.oracle.validTo
+      validFromMs < babelFee.oracle.validFrom ||
+      validToMs > babelFee.oracle.validTo
     ) {
       throw new Error(
         "babel oracle feed has expired between fetch and submit — refresh the buy page",
@@ -387,9 +465,7 @@ export async function submitMarketBuy(
     txBuilder = txBuilder.setValidity({ from: validFromMs, to: validToMs });
   }
 
-  const built = await txBuilder.build();
-  const signed = await built.sign();
-  return { txHash: txHashHex(await signed.submit()) };
+  return txBuilder.build();
 }
 
 function canonicalRefSort(refs: UTxO[]): UTxO[] {
