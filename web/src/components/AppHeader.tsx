@@ -89,20 +89,21 @@ export function AppHeader() {
                 ]}
               />
             ) : null}
-            {/* Unified history feed — one entry per source. Replaces
-                the per-section "your history" links that used to live
-                under pit + p2p (and were missing for market entirely). */}
-            <NavMenu
-              label="history"
-              items={[
-                { label: "all", href: "/me/history" },
-                { label: "pit", href: "/me/history?type=pit" },
-                { label: "p2p", href: "/me/history?type=p2p" },
-                ...(isMarketplaceEnabled()
-                  ? [{ label: "market", href: "/me/history?type=market" }]
-                  : []),
-              ]}
-            />
+            {/* Unified history feed. Filtering by source happens via
+                the HistoryTabStrip on the page itself, so this is a
+                top-level link, not a dropdown — no point duplicating
+                what's already a tab on /me/history. */}
+            <Link
+              href="/me/history"
+              className={
+                "rounded-md px-2 py-1 font-mono text-sm lowercase transition-colors " +
+                ((pathname ?? "").startsWith("/me/history")
+                  ? "text-zinc-100"
+                  : "text-zinc-400 hover:text-zinc-200")
+              }
+            >
+              history
+            </Link>
 
             {showAdminMenu ? (
               <NavMenu
