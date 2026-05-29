@@ -59,6 +59,14 @@ dependencies {
     // validator without any algorithmic drift.
     implementation("org.cardanofoundation:merkle-tree-java:0.0.7")
 
+    // Slot ↔ wall-clock conversions, keyed on a network's Shelley genesis
+    // params. Drives SyncStatus's "is the indexer near tip?" check (the
+    // adamatic/cardano-recurring-payment-offchain repo uses the same
+    // dependency at the same major version for the same purpose).
+    implementation("org.cardanofoundation:cf-cardano-conversions-java:1.2.0")
+
+    implementation("com.easy1staking:cardano-client-lib-extensions:0.0.4")
+
     // CCL annotation processor for blueprint-driven model generation from contracts/plutus.json
     compileOnly("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")
     annotationProcessor("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")

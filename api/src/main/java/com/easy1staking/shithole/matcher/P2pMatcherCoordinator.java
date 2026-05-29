@@ -101,10 +101,16 @@ public class P2pMatcherCoordinator {
      * an explicit task-executor; for v1, skipping is acceptable because
      * the next block-event arrives within seconds.
      */
-    @EventListener
+    @EventListener(condition = "!@syncStatus.isSyncing()")
     @Order(100) // runs BEFORE the auto-fulfiller's @Order(200) handler so the
                 // matcher grabs the highest-net pair first; auto-fulfiller
                 // picks from the leftover listings via P2pInFlightTracker.
+                //
+                // The SpEL condition skips this handler entirely during
+                // catch-up sync — submitting a Fulfill while the indexer is
+                // 10k blocks behind tip would build against the stale UTxO
+                // set and the tx would fail script eval on Blockfrost.
+                // SyncStatus uses a 5-minute slot-distance threshold.
     public void onAddressUtxoEvent(AddressUtxoEvent event) {
         if (event == null) return;
         if (!workLock.tryLock()) {

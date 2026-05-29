@@ -8,6 +8,9 @@ import com.bloxbean.cardano.client.backend.blockfrost.service.BFBackendService;
 import com.bloxbean.cardano.client.common.model.Network;
 import com.bloxbean.cardano.client.common.model.Networks;
 import lombok.extern.slf4j.Slf4j;
+import org.cardanofoundation.conversions.CardanoConverters;
+import org.cardanofoundation.conversions.ClasspathConversionsFactory;
+import org.cardanofoundation.conversions.domain.NetworkType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,6 +64,23 @@ public class BlockfrostConfig {
     @Bean
     public UtxoSupplier utxoSupplier(BackendService backendService) {
         return new DefaultUtxoSupplier(backendService.getUtxoService());
+    }
+
+    /**
+     * Slot ↔ wall-clock converter keyed on the active network's Shelley
+     * genesis parameters. Used by {@code SyncStatus} to decide whether the
+     * indexer is near tip (i.e. {@code now_slot - indexer_slot < threshold}).
+     */
+    @Bean
+    public CardanoConverters cardanoConverters() {
+        NetworkType networkType = switch (appNetwork.toLowerCase()) {
+            case "mainnet" -> NetworkType.MAINNET;
+            case "preprod" -> NetworkType.PREPROD;
+            case "preview" -> NetworkType.PREVIEW;
+            default -> throw new IllegalArgumentException(
+                    "Unsupported app.network=" + appNetwork + " for CardanoConverters");
+        };
+        return ClasspathConversionsFactory.createConverters(networkType);
     }
 
     /**

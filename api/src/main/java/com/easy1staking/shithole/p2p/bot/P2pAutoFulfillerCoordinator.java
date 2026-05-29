@@ -82,11 +82,15 @@ public class P2pAutoFulfillerCoordinator {
      * .P2pMatcherCoordinator}'s handler (Spring's {@link Order @Order} on
      * listener beans is honored within the same event-dispatch sequence).
      */
-    @EventListener
+    @EventListener(condition = "!@syncStatus.isSyncing()")
     @Order(200) // runs AFTER P2pMatcherCoordinator's @Order(100) handler so
                 // the matcher's reservations land in P2pInFlightTracker before
                 // the auto-fulfiller scans, and the auto-fulfiller picks from
                 // the leftover listings.
+                //
+                // Gated on SyncStatus for the same reason as the matcher: a
+                // Fulfill built during catch-up replays against the wrong
+                // listing set and burns fees on a guaranteed-fail submit.
     public void onAddressUtxoEvent(AddressUtxoEvent event) {
         if (event == null) return;
         if (!workLock.tryLock()) return; // previous cycle still running
