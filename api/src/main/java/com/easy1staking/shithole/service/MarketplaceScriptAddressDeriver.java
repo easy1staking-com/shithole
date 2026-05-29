@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -56,19 +57,37 @@ public class MarketplaceScriptAddressDeriver {
     @Value("${shithole.market.admin-pkh:}")
     private String adminPkhHex;
 
-    /** Memoize {@code (adminPkh_lowercase || network_id || magic) → bech32}. */
-    private final ConcurrentHashMap<String, String> cache = new ConcurrentHashMap<>();
+    /** Memoize {@code (adminPkh_lowercase || network_id || magic) → full artifacts}. */
+    private final ConcurrentHashMap<String, MarketplaceArtifacts> artifactsCache =
+            new ConcurrentHashMap<>();
 
     /**
-     * Derive the marketplace script address for the configured admin pkh.
-     * Returns {@code null} when no admin pkh is configured (env var unset).
-     *
-     * <p>Throws on a configured-but-malformed pkh; the boot should fail
-     * loudly in that case rather than silently disabling the indexer.
+     * Full set of derived artifacts: applied script hashes for both the
+     * jar and the marketplace validator, plus their bech32 enterprise
+     * addresses on the active network, plus the admin pkh that drove the
+     * derivation. Surfaced via {@link #deriveArtifacts()} so callers that
+     * need more than just the marketplace bech32 (e.g. {@code
+     * ChainAddressManifest}'s boot-time banner, or the future
+     * {@code /api/market/manifest} endpoint) don't have to re-do the
+     * UPLC apply chain.
      */
-    public String deriveAddress() {
+    public record MarketplaceArtifacts(
+            String adminPkhHex,
+            String jarScriptHashHex,
+            String jarAddress,
+            String marketplaceScriptHashHex,
+            String marketplaceAddress) {
+    }
+
+    /**
+     * Derive the full marketplace artifacts for the configured admin pkh.
+     * Returns {@link Optional#empty()} when no admin pkh is configured
+     * (env var unset / blank). Throws on a configured-but-malformed pkh
+     * so the boot fails loudly rather than silently disabling the indexer.
+     */
+    public Optional<MarketplaceArtifacts> deriveArtifacts() {
         if (adminPkhHex == null || adminPkhHex.isBlank()) {
-            return null;
+            return Optional.empty();
         }
         if (!adminPkhHex.matches("^[0-9a-fA-F]{56}$")) {
             throw new IllegalStateException(
@@ -78,7 +97,16 @@ public class MarketplaceScriptAddressDeriver {
         String pkhLower = adminPkhHex.toLowerCase(Locale.ROOT);
         String cacheKey = pkhLower + ":" + appNetwork.getNetworkId()
                 + ":" + appNetwork.getProtocolMagic();
-        return cache.computeIfAbsent(cacheKey, k -> derive(pkhLower));
+        return Optional.of(artifactsCache.computeIfAbsent(cacheKey, k -> derive(pkhLower)));
+    }
+
+    /**
+     * Convenience: just the marketplace bech32, or {@code null} when
+     * marketplace indexing is disabled. Backwards-compatible with the
+     * existing callers in {@link com.easy1staking.shithole.indexer.WatchAddressRegistry}.
+     */
+    public String deriveAddress() {
+        return deriveArtifacts().map(MarketplaceArtifacts::marketplaceAddress).orElse(null);
     }
 
     /** The configured admin pkh as lowercase hex, or null if unset. */
@@ -87,7 +115,7 @@ public class MarketplaceScriptAddressDeriver {
         return adminPkhHex.toLowerCase(Locale.ROOT);
     }
 
-    private String derive(String pkhLower) {
+    private MarketplaceArtifacts derive(String pkhLower) {
         byte[] pkhBytes = HexUtil.decodeHexString(pkhLower);
 
         // Step 1: applyParams(jar.spend, admin_pkh) → applied jar script.
@@ -109,6 +137,7 @@ public class MarketplaceScriptAddressDeriver {
             throw new IllegalStateException(
                     "failed to hash applied jar script, admin_pkh=" + pkhLower, e);
         }
+        String jarAddress = AddressProvider.getEntAddress(jarScript, appNetwork).toBech32();
 
         // Step 2: applyParams(marketplace.spend, jar_script_hash) → applied marketplace script.
         ListPlutusData marketParams = new ListPlutusData();
@@ -124,11 +153,20 @@ public class MarketplaceScriptAddressDeriver {
         }
         PlutusScript marketScript = PlutusBlueprintUtil
                 .getPlutusScriptFromCompiledCode(appliedMarket, PlutusVersion.v3);
-        String address = AddressProvider.getEntAddress(marketScript, appNetwork).toBech32();
-        log.info("derived marketplace script address admin_pkh={} jar_hash={} address={}",
+        byte[] marketScriptHash;
+        try {
+            marketScriptHash = marketScript.getScriptHash();
+        } catch (CborSerializationException e) {
+            throw new IllegalStateException(
+                    "failed to hash applied marketplace script, admin_pkh=" + pkhLower, e);
+        }
+        String marketAddress = AddressProvider.getEntAddress(marketScript, appNetwork).toBech32();
+
+        return new MarketplaceArtifacts(
                 pkhLower,
                 HexUtil.encodeHexString(jarScriptHash),
-                address);
-        return address;
+                jarAddress,
+                HexUtil.encodeHexString(marketScriptHash),
+                marketAddress);
     }
 }

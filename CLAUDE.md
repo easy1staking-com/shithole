@@ -78,10 +78,20 @@ list whenever you change a validator:
 1. **Recompile**: `make contracts-build` — regenerates `contracts/plutus.json`
    and copies it to `web/public/contracts/plutus.json` (FE reads this at
    runtime via `loadBlueprint()`).
-2. **Rebuild BE**: `cd api && ./gradlew build` — the CCL annotation
-   processor regenerates Java types from `plutus.json`. Required when the
-   datum/redeemer shape changes; safe to skip when only validator logic
-   changes (but cheaper to just rebuild).
+2. **Rebuild AND restart BE**: `cd api && ./gradlew build` regenerates
+   `JarSpendValidator.COMPILED_CODE` / `MarketplaceSpendValidator.COMPILED_CODE`
+   / etc. via the CCL annotation processor from `plutus.json`. Required
+   on **ANY** bytecode change, not just datum/redeemer shape changes —
+   `MarketplaceScriptAddressDeriver` UPLC-applies those constants at
+   startup, so a stale `COMPILED_CODE` produces a stale derived
+   address and the indexer watches a phantom. Then **kill and relaunch**
+   any running `./gradlew bootRun` — gradle compilation alone doesn't
+   help if the JVM is holding the old class files in memory (this bit
+   us on 2026-05-29). On boot, watch for the `ChainAddressManifest`
+   banner — it prints every unparameterized hash next to its applied
+   address, making drift instantly visible. If the boot banner's
+   `jar.spend` / `marketplace.spend` hashes don't match
+   `jq '.validators[].hash' contracts/plutus.json`, the BE is stale.
 3. **Recompute parameterized hashes**: parameterized scripts
    (marketplace ← jar_script_hash, listing ← config_nft_policy, etc.)
    have new applied hashes even when the parameter is unchanged. Anywhere
