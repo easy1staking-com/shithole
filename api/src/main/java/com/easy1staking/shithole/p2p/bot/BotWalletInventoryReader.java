@@ -1,17 +1,16 @@
 package com.easy1staking.shithole.p2p.bot;
 
-import com.bloxbean.cardano.client.api.common.OrderEnum;
-import com.bloxbean.cardano.client.api.model.Result;
-import com.bloxbean.cardano.client.api.model.Utxo;
 import com.bloxbean.cardano.client.backend.api.BackendService;
+import com.bloxbean.cardano.yaci.store.utxo.storage.impl.repository.UtxoRepository;
+import com.easy1staking.cardano.util.UtxoUtil;
 import com.easy1staking.shithole.matcher.MatcherHotWallet;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collection;
 
 /**
  * Pages the hot-wallet UTxOs from Blockfrost (or whatever {@link BackendService}
@@ -31,11 +30,8 @@ import java.util.List;
 @Slf4j
 public class BotWalletInventoryReader {
 
-    /** Defensive cap: bot wallet inventory >50 pages * 100 = 5k UTxOs is a sign of bloat. */
-    private static final int MAX_UTXO_PAGES = 50;
-    private static final int UTXO_PAGE_SIZE = 100;
+    private final UtxoRepository utxoRepository;
 
-    private final BackendService backendService;
     private final MatcherHotWallet hotWallet;
 
     /**
@@ -46,33 +42,16 @@ public class BotWalletInventoryReader {
      */
     public BotWalletInventory read() {
         String address = hotWallet.getAddress();
-        List<Utxo> all = new ArrayList<>();
-        try {
-            int page = 1;
-            while (page <= MAX_UTXO_PAGES) {
-                Result<List<Utxo>> result = backendService.getUtxoService()
-                        .getUtxos(address, UTXO_PAGE_SIZE, page, OrderEnum.asc);
-                if (result == null || !result.isSuccessful()) {
-                    if (result != null && result.code() == 404) break;
-                    log.warn("BotWalletInventoryReader: backend error code={} msg={}",
-                            result == null ? "?" : result.code(),
-                            result == null ? "(null)" : result.getResponse());
-                    return BotWalletInventory.empty();
-                }
-                List<Utxo> batch = result.getValue();
-                if (batch == null || batch.isEmpty()) break;
-                all.addAll(batch);
-                if (batch.size() < UTXO_PAGE_SIZE) break;
-                page++;
-            }
-        } catch (Exception e) {
-            log.warn("BotWalletInventoryReader: error reading wallet inventory at {}: {}",
-                    address, e.getMessage());
-            return BotWalletInventory.empty();
-        }
+
+        var all = utxoRepository.findUnspentByOwnerAddr(address, Pageable.unpaged())
+            .stream()
+            .flatMap(Collection::stream)
+            .map(UtxoUtil::toUtxo)
+            .toList();
+
         BotWalletInventory inventory = BotWalletInventory.from(all);
         log.debug("BotWalletInventoryReader: address={} utxos={} nfts={}",
-                address, all.size(), inventory.totalCount());
+            address, all.size(), inventory.totalCount());
         return inventory;
     }
 }
