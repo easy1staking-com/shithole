@@ -221,10 +221,31 @@ export async function buildAndSubmitBabelConsume(
     inputs.oracle.oracleWithdrawAddress,
   );
 
-  // Tx validity range — must fall within the oracle feed's window.
-  // Evolution's setValidity takes UnixTime (bigint ms).
-  const validFromMs = inputs.oracle.validFrom;
-  const validToMs = inputs.oracle.validTo;
+  // Tx validity range — STRICTLY INSIDE the oracle feed's window
+  // and second-aligned. Pattern pinned verbatim from FluidTokens'
+  // Mesh-based reference implementation: {@code Date.now() ± 100s}
+  // with millisecond truncation to second boundaries.
+  //
+  // The validator's `common.valid_to >= tx.valid_to` /
+  // `common.valid_from <= tx.valid_from` checks are inclusive, but
+  // Cardano slots are integer seconds. Setting tx bounds to the EXACT
+  // ms of the oracle feed leaves no margin for Evolution's ms→slot
+  // conversion to either rounding direction; FT's tighter 200-second
+  // tx window sits comfortably inside the typical 50-minute oracle
+  // window and leaves room for ledger clock skew.
+  const nowMs = BigInt(Date.now());
+  const rawLower = nowMs - 100_000n;
+  const rawUpper = nowMs + 100_000n;
+  const validFromMs = rawLower - (rawLower % 1000n);
+  const validToMs = rawUpper - (rawUpper % 1000n);
+  if (
+    validFromMs < inputs.oracle.validFrom ||
+    validToMs > inputs.oracle.validTo
+  ) {
+    throw new Error(
+      `derived tx validity [${validFromMs}, ${validToMs}] is outside oracle window [${inputs.oracle.validFrom}, ${inputs.oracle.validTo}] — fetch a fresh oracle feed`,
+    );
+  }
 
   // Sanity: bound check on ada_used is mostly informational here —
   // the validator will fail loudly if violated.
