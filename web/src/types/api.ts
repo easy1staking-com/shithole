@@ -283,3 +283,43 @@ export type ListingEvent = {
   /** Payment-key hash of the swapper (V1_0_6+); stamped on the predecessor on a swap. */
   swapper_pkh?: string | null;
 };
+
+/* ------------------------------------------------------------------ */
+/* GET /api/market/listings/by-pkh/{pkh}                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A full {@code marketplace_events} row, as served by the marketplace
+ * wallet-history endpoint. Carries the listing datum fields (seller,
+ * price, bond) plus the terminal {@code spent_*} columns and
+ * {@code buyer_pkh} so the FE can synthesise both a "listed" event at
+ * created_at and a follow-up "sold" / "cancelled" event at spent_at.
+ *
+ * <p>Both {@code price_policy} and {@code price_name} are hex strings;
+ * empty string for ADA-priced listings. {@code price_qty} is the raw
+ * smallest-unit count as a string (BE serialises NUMERIC as a string so
+ * BigInteger values survive transit without precision loss).
+ */
+export type MarketplaceListing = {
+  tx_hash: string;
+  output_index: number;
+  seller_pkh: string;
+  seller_address_bech32: string;
+  price_policy: string;
+  price_name: string;
+  /** Smallest-unit count. BE serialises NUMERIC as a string for safety. */
+  price_qty: string;
+  accompanying_lovelace: number;
+  /** policy_id (28) + asset_name (0..32 bytes), concatenated hex. */
+  listed_nft_unit: string;
+  lovelace: number;
+  created_at_slot: number;
+  created_at: string;
+  spent_at_slot?: number | null;
+  spent_at?: string | null;
+  spent_by_tx_hash?: string | null;
+  /** 'sold' | 'cancelled' | 'spent_unknown' when consumed; null = active. */
+  spent_action?: string | null;
+  /** Payment-key hash of the buyer on a sold row; null otherwise. */
+  buyer_pkh?: string | null;
+};

@@ -18,7 +18,7 @@
  * both streams by atSlot DESC for a unified feed.
  */
 
-import type { ListingEvent, P2pListing } from "@/types/api";
+import type { ListingEvent, MarketplaceListing, P2pListing } from "@/types/api";
 
 export type EventKind =
   | "listed"
@@ -30,11 +30,16 @@ export type EventKind =
   | "fulfilled"
   | "reclaimed"
   | "rescued"
-  | "spent_unknown_p2p";
+  | "spent_unknown_p2p"
+  | "market_listed"
+  | "market_sold"
+  | "market_cancelled"
+  | "market_bought"
+  | "spent_unknown_market";
 
-export type EventSource = "pit" | "p2p";
+export type EventSource = "pit" | "p2p" | "market";
 
-export type EventRole = "lister" | "swapper" | "buyer" | "fulfiller";
+export type EventRole = "lister" | "swapper" | "buyer" | "fulfiller" | "seller";
 
 export type WalletHistoryEvent = {
   /** `${kind}:${txHash}#${outputIndex}:${atSlot}` — stable + unique even when a row emits two events. */
@@ -59,6 +64,12 @@ export type WalletHistoryEvent = {
   acceptedMerkleRoot?: string;
   /** P2p only — bech32 of the buyer's delivery address. */
   buyerAddressBech32?: string;
+  /** Market only — price-token policy hex (empty for ADA). */
+  pricePolicy?: string;
+  /** Market only — price-token asset_name hex (empty for ADA). */
+  priceName?: string;
+  /** Market only — asking price in smallest units (BigInt string). */
+  priceQty?: string;
 };
 
 /**
@@ -285,6 +296,122 @@ function p2pTerminalKind(action: string): EventKind | null {
     default:
       return null;
   }
+}
+
+/**
+ * Marketplace row → 0..2 events. A row contributes:
+ *
+ *   - "market_listed" if {@code seller_pkh === myPkh} (seller-side
+ *     creation).
+ *   - if spent with action 'sold':
+ *       * seller perspective → "market_sold" (your listing was bought).
+ *       * buyer  perspective → "market_bought" (you bought a listing).
+ *   - if spent with action 'cancelled' AND viewer is seller →
+ *     "market_cancelled".
+ *   - spent_unknown → "spent_unknown_market" (seller-side only).
+ */
+export function synthesizeMarketEvents(
+  rows: MarketplaceListing[],
+  myPkhHex: string,
+): WalletHistoryEvent[] {
+  const me = myPkhHex.toLowerCase();
+  const out: WalletHistoryEvent[] = [];
+  for (const row of rows) {
+    const isSeller = row.seller_pkh?.toLowerCase() === me;
+    const isBuyer = row.buyer_pkh?.toLowerCase() === me;
+
+    if (isSeller) {
+      out.push({
+        id: `market_listed:${row.tx_hash}#${row.output_index}:${row.created_at_slot}`,
+        kind: "market_listed",
+        source: "market",
+        role: "seller",
+        at: row.created_at,
+        atSlot: row.created_at_slot,
+        txHash: row.tx_hash,
+        outputIndex: row.output_index,
+        nftUnit: row.listed_nft_unit,
+        lovelace: row.lovelace,
+        pricePolicy: row.price_policy,
+        priceName: row.price_name,
+        priceQty: row.price_qty,
+      });
+    }
+
+    if (row.spent_action && row.spent_at && row.spent_at_slot != null) {
+      const action = row.spent_action;
+      const spentTx = row.spent_by_tx_hash ?? row.tx_hash;
+
+      if (action === "sold") {
+        if (isSeller) {
+          out.push({
+            id: `market_sold:seller:${row.tx_hash}#${row.output_index}:${row.spent_at_slot}`,
+            kind: "market_sold",
+            source: "market",
+            role: "seller",
+            at: row.spent_at,
+            atSlot: row.spent_at_slot,
+            txHash: spentTx,
+            outputIndex: row.output_index,
+            nftUnit: row.listed_nft_unit,
+            lovelace: row.lovelace,
+            pricePolicy: row.price_policy,
+            priceName: row.price_name,
+            priceQty: row.price_qty,
+          });
+        } else if (isBuyer) {
+          out.push({
+            id: `market_bought:buyer:${row.tx_hash}#${row.output_index}:${row.spent_at_slot}`,
+            kind: "market_bought",
+            source: "market",
+            role: "buyer",
+            at: row.spent_at,
+            atSlot: row.spent_at_slot,
+            txHash: spentTx,
+            outputIndex: row.output_index,
+            nftUnit: row.listed_nft_unit,
+            lovelace: row.lovelace,
+            pricePolicy: row.price_policy,
+            priceName: row.price_name,
+            priceQty: row.price_qty,
+          });
+        }
+      } else if (action === "cancelled" && isSeller) {
+        out.push({
+          id: `market_cancelled:${row.tx_hash}#${row.output_index}:${row.spent_at_slot}`,
+          kind: "market_cancelled",
+          source: "market",
+          role: "seller",
+          at: row.spent_at,
+          atSlot: row.spent_at_slot,
+          txHash: spentTx,
+          outputIndex: row.output_index,
+          nftUnit: row.listed_nft_unit,
+          lovelace: row.lovelace,
+          pricePolicy: row.price_policy,
+          priceName: row.price_name,
+          priceQty: row.price_qty,
+        });
+      } else if (action === "spent_unknown" && isSeller) {
+        out.push({
+          id: `spent_unknown_market:${row.tx_hash}#${row.output_index}:${row.spent_at_slot}`,
+          kind: "spent_unknown_market",
+          source: "market",
+          role: "seller",
+          at: row.spent_at,
+          atSlot: row.spent_at_slot,
+          txHash: spentTx,
+          outputIndex: row.output_index,
+          nftUnit: row.listed_nft_unit,
+          lovelace: row.lovelace,
+          pricePolicy: row.price_policy,
+          priceName: row.price_name,
+          priceQty: row.price_qty,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 /**

@@ -4,6 +4,7 @@ import com.bloxbean.cardano.client.common.model.Networks;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
 import com.easy1staking.shithole.repository.ConfigRepository;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
+import com.easy1staking.shithole.service.MarketplaceScriptAddressDeriver;
 import com.easy1staking.shithole.service.WantedListingScriptAddressDeriver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class WatchAddressRegistryTest {
     @Mock
     private WantedListingScriptAddressDeriver wantedDeriver;
 
+    @Mock
+    private MarketplaceScriptAddressDeriver marketDeriver;
+
     private WatchAddressRegistry registry;
 
     @BeforeEach
@@ -47,7 +51,11 @@ class WatchAddressRegistryTest {
         // the registry still publishes the WatchedCollection — those fields
         // are non-load-bearing for "is this address watched" semantics.
         lenient().when(configRepo.findById(anyString())).thenReturn(Optional.empty());
-        registry = new WatchAddressRegistry(repo, configRepo, Networks.preprod(), wantedDeriver);
+        // Marketplace deriver returns null in these tests — they exercise the
+        // per-collection registry, not the singleton marketplace branch.
+        lenient().when(marketDeriver.deriveAddress()).thenReturn(null);
+        registry = new WatchAddressRegistry(
+                repo, configRepo, Networks.preprod(), wantedDeriver, marketDeriver);
     }
 
     @Test

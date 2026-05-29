@@ -15,6 +15,7 @@ import type {
   CuratedCollection,
   ListingEvent,
   ListingsResponse,
+  MarketplaceListing,
   NftMetadata,
   P2pListing,
   Pool,
@@ -312,6 +313,22 @@ export function fetchP2pListingsByPkh(
   qs.set("page", String(query.page ?? 0));
   return getJson<P2pListing[]>(
     `/api/p2p/listings/by-pkh/${encodeURIComponent(pkhHex)}?${qs.toString()}`,
+  );
+}
+
+/**
+ * All marketplace listings a wallet participated in (as seller OR buyer).
+ * Drives the marketplace side of /me/history.
+ */
+export function fetchMarketListingsByPkh(
+  pkhHex: string,
+  query: ByPkhQuery = {},
+): Promise<MarketplaceListing[]> {
+  const qs = new URLSearchParams();
+  qs.set("size", String(query.size ?? 100));
+  qs.set("page", String(query.page ?? 0));
+  return getJson<MarketplaceListing[]>(
+    `/api/market/listings/by-pkh/${encodeURIComponent(pkhHex)}?${qs.toString()}`,
   );
 }
 

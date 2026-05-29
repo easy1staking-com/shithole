@@ -122,6 +122,15 @@ shithole:
   curation:
     operator-pkhs: ${OPERATOR_PKHS:}
 
+  # Marketplace indexer / address deriver. The marketplace is a SINGLE
+  # script address parameterized on (admin_pkh, jar_script_hash) where
+  # jar_script_hash itself depends on admin_pkh. Today the marketplace
+  # admin shares its pkh with the pit/p2p admin — but the indexer wires
+  # against this property independently so the two can diverge later.
+  # Leave empty to disable marketplace indexing entirely.
+  market:
+    admin-pkh: ${SHITHOLE_MARKET_ADMIN_PKH:}
+
   # v3 wanted-listing pool-merkle service. The seeder reads `pools-resource`
   # at boot, recomputes every claimed root, and FAILS THE BOOT on mismatch
   # (catches resource tampering / merkle-tree-java drift before any in-flight

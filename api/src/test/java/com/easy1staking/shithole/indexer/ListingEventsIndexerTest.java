@@ -17,6 +17,7 @@ import com.easy1staking.shithole.entity.ListingEventId;
 import com.easy1staking.shithole.repository.ConfigRepository;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import com.easy1staking.shithole.repository.ListingEventRepository;
+import com.easy1staking.shithole.service.MarketplaceScriptAddressDeriver;
 import com.easy1staking.shithole.service.WantedListingScriptAddressDeriver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,7 @@ class ListingEventsIndexerTest {
     @Mock private ConfigRepository configRepo;
     @Mock private ListingEventRepository listingRepo;
     @Mock private WantedListingScriptAddressDeriver wantedDeriver;
+    @Mock private MarketplaceScriptAddressDeriver marketDeriver;
 
     private WatchAddressRegistry registry;
     private ListingDatumDecoder decoder;
@@ -83,7 +85,10 @@ class ListingEventsIndexerTest {
         // runs, the classifier just produces nulls / spent_unknown.
         lenient().when(configRepo.findById(org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(Optional.empty());
-        registry = new WatchAddressRegistry(curatedRepo, configRepo, Networks.preprod(), wantedDeriver);
+        // Marketplace deriver returns null — v2 indexer tests don't touch it.
+        lenient().when(marketDeriver.deriveAddress()).thenReturn(null);
+        registry = new WatchAddressRegistry(
+                curatedRepo, configRepo, Networks.preprod(), wantedDeriver, marketDeriver);
         registry.reconcile(); // load synchronously
 
         decoder = new ListingDatumDecoder();
@@ -367,7 +372,8 @@ class ListingEventsIndexerTest {
         CuratedCollectionRepository emptyRepo = org.mockito.Mockito.mock(CuratedCollectionRepository.class);
         when(emptyRepo.findAll()).thenReturn(List.of());
         WatchAddressRegistry emptyRegistry =
-                new WatchAddressRegistry(emptyRepo, configRepo, Networks.preprod(), wantedDeriver);
+                new WatchAddressRegistry(
+                        emptyRepo, configRepo, Networks.preprod(), wantedDeriver, marketDeriver);
         emptyRegistry.reconcile();
         assertThat(emptyRegistry.size()).isZero();
 

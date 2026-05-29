@@ -2,9 +2,14 @@
 
 import { useMemo } from "react";
 
-import { useListingsByPkh, useP2pListingsByPkh } from "@/lib/api/hooks";
+import {
+  useListingsByPkh,
+  useMarketListingsByPkh,
+  useP2pListingsByPkh,
+} from "@/lib/api/hooks";
 import {
   mergeChronological,
+  synthesizeMarketEvents,
   synthesizeP2pEvents,
   synthesizePitEvents,
   type WalletHistoryEvent,
@@ -16,10 +21,10 @@ import { getNetworkName } from "@/lib/wallet/network";
 /* Types + filter helpers                                              */
 /* ------------------------------------------------------------------ */
 
-export type HistoryFilter = "all" | "pit" | "p2p";
+export type HistoryFilter = "all" | "pit" | "p2p" | "market";
 
 export function parseHistoryFilter(raw: string | null): HistoryFilter {
-  if (raw === "pit" || raw === "p2p") return raw;
+  if (raw === "pit" || raw === "p2p" || raw === "market") return raw;
   return "all";
 }
 
@@ -34,24 +39,28 @@ export type HistoryFeed = {
 };
 
 /**
- * Fetch both pit + p2p activity for a wallet, synthesise + merge into
- * a single chronological feed. {@code null} pkh → empty feed.
+ * Fetch pit + p2p + marketplace activity for a wallet, synthesise +
+ * merge into a single chronological feed. {@code null} pkh → empty feed.
  */
 export function useHistoryFeed(pkhHex: string | null): HistoryFeed {
   const pit = useListingsByPkh(pkhHex);
   const p2p = useP2pListingsByPkh(pkhHex);
+  const market = useMarketListingsByPkh(pkhHex);
 
   const events = useMemo<WalletHistoryEvent[]>(() => {
     if (!pkhHex) return [];
     const pitEvents = pit.data ? synthesizePitEvents(pit.data, pkhHex) : [];
     const p2pEvents = p2p.data ? synthesizeP2pEvents(p2p.data, pkhHex) : [];
-    return mergeChronological(pitEvents, p2pEvents);
-  }, [pkhHex, pit.data, p2p.data]);
+    const marketEvents = market.data
+      ? synthesizeMarketEvents(market.data, pkhHex)
+      : [];
+    return mergeChronological(pitEvents, p2pEvents, marketEvents);
+  }, [pkhHex, pit.data, p2p.data, market.data]);
 
   return {
     events,
-    loading: pit.isPending || p2p.isPending,
-    errored: pit.isError || p2p.isError,
+    loading: pit.isPending || p2p.isPending || market.isPending,
+    errored: pit.isError || p2p.isError || market.isError,
   };
 }
 
@@ -70,6 +79,7 @@ export function HistoryTabStrip({
     { id: "all", label: "all" },
     { id: "pit", label: "pit" },
     { id: "p2p", label: "p2p" },
+    { id: "market", label: "market" },
   ];
   return (
     <div
@@ -107,7 +117,9 @@ export function HistoryEmptyState({ filter }: { filter: HistoryFilter }) {
       ? "no pit activity yet."
       : filter === "p2p"
         ? "no p2p activity yet."
-        : "no chain activity on this wallet yet.";
+        : filter === "market"
+          ? "no marketplace activity yet."
+          : "no chain activity on this wallet yet.";
   return (
     <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-6 text-sm text-zinc-400">
       {what} go list, swap, or make an offer — it&apos;ll show up here.
@@ -154,15 +166,23 @@ export function HistoryRow({ event }: { event: WalletHistoryEvent }) {
   );
 }
 
-function SourceBadge({ source }: { source: "pit" | "p2p" }) {
+function SourceBadge({
+  source,
+}: {
+  source: WalletHistoryEvent["source"];
+}) {
+  const cls =
+    source === "pit"
+      ? "bg-zinc-800 text-zinc-300"
+      : source === "p2p"
+        ? "bg-amber-900/40 text-amber-300"
+        : "bg-sky-900/40 text-sky-300";
   return (
     <span
       aria-label={`source ${source}`}
       className={
         "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest " +
-        (source === "pit"
-          ? "bg-zinc-800 text-zinc-300"
-          : "bg-amber-900/40 text-amber-300")
+        cls
       }
     >
       {source}
@@ -216,6 +236,16 @@ function chipLabel(
       return "admin rescued";
     case "spent_unknown_p2p":
       return "offer ended";
+    case "market_listed":
+      return "you listed";
+    case "market_sold":
+      return "your listing sold";
+    case "market_cancelled":
+      return "you cancelled";
+    case "market_bought":
+      return "you bought";
+    case "spent_unknown_market":
+      return "listing ended";
     default:
       return kind;
   }
@@ -225,12 +255,16 @@ function chipClass(kind: WalletHistoryEvent["kind"]): string {
   switch (kind) {
     case "listed":
     case "posted":
+    case "market_listed":
       return "bg-emerald-900/40 text-emerald-300";
     case "swapped":
     case "fulfilled":
+    case "market_sold":
+    case "market_bought":
       return "bg-sky-900/40 text-sky-300";
     case "cancelled":
     case "reclaimed":
+    case "market_cancelled":
       return "bg-zinc-800 text-zinc-300";
     case "recovered":
     case "rescued":

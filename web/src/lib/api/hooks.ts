@@ -12,6 +12,7 @@ import {
   fetchCurated,
   fetchListings,
   fetchListingsByPkh,
+  fetchMarketListingsByPkh,
   fetchNftMetadata,
   fetchP2pListings,
   fetchP2pListingsByBuyer,
@@ -31,6 +32,7 @@ import type {
   CuratedCollection,
   ListingEvent,
   ListingsResponse,
+  MarketplaceListing,
   NftMetadata,
   P2pListing,
   Pool,
@@ -83,6 +85,13 @@ export const queryKeys = {
   p2pListingsByPkh: (pkhHex: string, query: ByPkhQuery) =>
     [
       "p2pListingsByPkh",
+      pkhHex.toLowerCase(),
+      query.page ?? 0,
+      query.size ?? 100,
+    ] as const,
+  marketListingsByPkh: (pkhHex: string, query: ByPkhQuery) =>
+    [
+      "marketListingsByPkh",
       pkhHex.toLowerCase(),
       query.page ?? 0,
       query.size ?? 100,
@@ -274,6 +283,24 @@ export function useP2pListingsByPkh(
   return useQuery({
     queryKey: queryKeys.p2pListingsByPkh(pkhHex ?? "", query),
     queryFn: () => fetchP2pListingsByPkh(pkhHex!, query),
+    enabled: Boolean(pkhHex),
+    staleTime: 15_000,
+    ...options,
+  });
+}
+
+/**
+ * Marketplace listings a wallet participated in — as seller OR buyer.
+ * Drives the marketplace side of /me/history.
+ */
+export function useMarketListingsByPkh(
+  pkhHex: string | null,
+  query: ByPkhQuery = {},
+  options?: QueryOptions<MarketplaceListing[]>,
+): UseQueryResult<MarketplaceListing[], Error> {
+  return useQuery({
+    queryKey: queryKeys.marketListingsByPkh(pkhHex ?? "", query),
+    queryFn: () => fetchMarketListingsByPkh(pkhHex!, query),
     enabled: Boolean(pkhHex),
     staleTime: 15_000,
     ...options,

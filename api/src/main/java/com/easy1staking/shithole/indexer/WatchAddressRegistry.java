@@ -9,6 +9,7 @@ import com.easy1staking.shithole.entity.ConfigEntity;
 import com.easy1staking.shithole.entity.CuratedCollectionEntity;
 import com.easy1staking.shithole.repository.ConfigRepository;
 import com.easy1staking.shithole.repository.CuratedCollectionRepository;
+import com.easy1staking.shithole.service.MarketplaceScriptAddressDeriver;
 import com.easy1staking.shithole.service.WantedListingScriptAddressDeriver;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +57,20 @@ public class WatchAddressRegistry {
     private final ConfigRepository configRepository;
     private final Network appNetwork;
     private final WantedListingScriptAddressDeriver wantedListingScriptAddressDeriver;
+    private final MarketplaceScriptAddressDeriver marketplaceScriptAddressDeriver;
+
+    /**
+     * Singleton marketplace script address. Derived once at startup from
+     * the configured {@code shithole.market.admin-pkh} via UPLC apply
+     * (admin_pkh → jar_script_hash → marketplace addr). {@code null}
+     * when no admin pkh is configured (marketplace indexing disabled).
+     *
+     * <p>Set once in {@link #load()} and never mutated — the address is
+     * a pure function of admin pkh + bytecode, both of which are frozen
+     * for the process lifetime. Volatile so the cross-thread read in
+     * {@link #getMarketplaceAddress()} sees the post-init value.
+     */
+    private volatile String marketplaceAddress;
 
     /**
      * Atomic snapshot of {@code listing_script_address → curated row}. Readers
@@ -86,6 +101,22 @@ public class WatchAddressRegistry {
     @PostConstruct
     void load() {
         reconcile();
+        // The marketplace address depends only on the configured admin
+        // pkh + bundled bytecode; it can't change at runtime, so derive
+        // it once. Failure here doesn't block boot — the indexer just
+        // stays disabled and other flows continue.
+        try {
+            marketplaceAddress = marketplaceScriptAddressDeriver.deriveAddress();
+            if (marketplaceAddress == null) {
+                log.info("WatchAddressRegistry: marketplace indexing disabled (no shithole.market.admin-pkh)");
+            } else {
+                log.info("WatchAddressRegistry: marketplace address={}", marketplaceAddress);
+            }
+        } catch (RuntimeException e) {
+            log.error("WatchAddressRegistry: failed to derive marketplace address — indexing disabled: {}",
+                    e.getMessage(), e);
+            marketplaceAddress = null;
+        }
     }
 
     /**
@@ -272,6 +303,20 @@ public class WatchAddressRegistry {
 
     public Set<String> allWantedAddresses() {
         return watchedByWantedAddress.get().keySet();
+    }
+
+    /**
+     * Singleton marketplace script address (bech32) or {@code null} when
+     * marketplace indexing is disabled (env var unset / derivation
+     * failed at boot).
+     */
+    public String getMarketplaceAddress() {
+        return marketplaceAddress;
+    }
+
+    /** True iff {@code address} equals the configured marketplace address. */
+    public boolean isMarketplaceAddress(String address) {
+        return address != null && address.equals(marketplaceAddress);
     }
 
     public int size() {
