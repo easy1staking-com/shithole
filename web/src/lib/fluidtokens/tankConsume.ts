@@ -50,6 +50,8 @@ import { inlineDatum, toAssets, toTxInput } from "@/lib/tx/txAdapters";
 import { adaptUtxo, type UTxO } from "@/lib/tx/utxo";
 import { getNetworkName } from "@/lib/wallet/network";
 
+import { stakeCredentialFromRewardAddress } from "./credential";
+
 import type { LiveOraclePrice } from "./api";
 import { onChainAddressToBech32 } from "./datum";
 import { type TankUtxo, tankAcceptsToken } from "./discovery";
@@ -397,95 +399,12 @@ function indexOfRef(refs: UTxO[], target: UTxO): number {
   return idx;
 }
 
-function stakeCredentialFromRewardAddress(rewardBech32: string) {
-  // stake1u… / stake_test1u… → header byte tells key vs script. The
-  // simpler portable path: use Evolution's RewardAccount helpers to
-  // decode. We do the minimal manual parse for now since we don't
-  // import RewardAccount elsewhere.
-  // The reward bech32 decodes to: header (1 byte) || credential hash (28 bytes).
-  // Header low-nibble: 0=key, 1=script. High-nibble: network.
-  // We rebuild via Credential.makeScriptHash because the FluidTokens
-  // oracle's reward address IS a script credential (validator-controlled).
-  const decoded = decodeBech32(rewardBech32);
-  if (decoded.length !== 29) {
-    throw new Error(
-      `reward address ${rewardBech32} decodes to ${decoded.length} bytes (expected 29 = header + 28)`,
-    );
-  }
-  const header = decoded[0];
-  const hash = decoded.slice(1);
-  const isScript = (header & 0x0f) === 0x01 || (header & 0x0f) === 0x0f;
-  if (!isScript) {
-    throw new Error(
-      `reward address ${rewardBech32} carries a key credential — FluidTokens oracles use script credentials`,
-    );
-  }
-  return EvCredential.makeScriptHash(hash);
-}
-
 function networkIdFromClient(_client: EvolutionClient): 0 | 1 {
   // The Evolution Client doesn't expose its network on a typed
   // surface, so we read the same env var the rest of the FE uses
   // (NEXT_PUBLIC_CARDANO_NETWORK). One-to-one mapping: mainnet → 1,
   // anything else → 0.
   return getNetworkName() === "mainnet" ? 1 : 0;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Minimal bech32 decoder — Cardano reward addresses                          */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Decode a Cardano-style bech32 string (no length cap) into its raw
- * 5-bit payload converted back to 8-bit bytes. Sufficient for reward
- * addresses (header byte + 28-byte credential hash = 29 bytes).
- *
- * <p>We carry our own decoder so the babel-fee module doesn't pull in
- * a fat bech32 lib for one call.
- */
-function decodeBech32(s: string): Uint8Array {
-  const lower = s.toLowerCase();
-  const sep = lower.lastIndexOf("1");
-  if (sep < 1) throw new Error("bech32: separator not found");
-  const dataPart = lower.slice(sep + 1, lower.length - 6); // last 6 = checksum
-  const fiveBit: number[] = [];
-  for (const c of dataPart) {
-    const v = BECH32_CHARSET.indexOf(c);
-    if (v < 0) throw new Error(`bech32: invalid char ${c}`);
-    fiveBit.push(v);
-  }
-  return convertBits(fiveBit, 5, 8, false);
-}
-
-const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-
-function convertBits(
-  data: number[],
-  fromBits: number,
-  toBits: number,
-  pad: boolean,
-): Uint8Array {
-  let acc = 0;
-  let bits = 0;
-  const out: number[] = [];
-  const maxv = (1 << toBits) - 1;
-  for (const value of data) {
-    if (value < 0 || value >> fromBits !== 0) {
-      throw new Error("convertBits: invalid data");
-    }
-    acc = (acc << fromBits) | value;
-    bits += fromBits;
-    while (bits >= toBits) {
-      bits -= toBits;
-      out.push((acc >> bits) & maxv);
-    }
-  }
-  if (pad) {
-    if (bits > 0) out.push((acc << (toBits - bits)) & maxv);
-  } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv) !== 0) {
-    throw new Error("convertBits: non-zero padding");
-  }
-  return new Uint8Array(out);
 }
 
 // Re-export for any caller that needs a single-asset payment-output

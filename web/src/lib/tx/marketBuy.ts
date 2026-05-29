@@ -19,7 +19,7 @@
  * Buy redeemer's {@code jar_input_index} hint.
  */
 
-import { Data } from "@evolution-sdk/evolution";
+import { Address, Data } from "@evolution-sdk/evolution";
 
 import type { EvolutionClient } from "./evolutionClient";
 import { applyJarScript, applyMarketplaceScript } from "./marketScripts";
@@ -35,6 +35,17 @@ import type { UTxO } from "./utxo";
 import { blake2b } from "@noble/hashes/blake2b";
 import { serialiseOutputReference, hexToBytes } from "@/lib/pit/bucketMath";
 
+import type { LiveOraclePrice } from "@/lib/fluidtokens/api";
+import { onChainAddressToBech32 } from "@/lib/fluidtokens/datum";
+import { tankAcceptsToken, type TankUtxo } from "@/lib/fluidtokens/discovery";
+import { requiredTokenPayment } from "@/lib/fluidtokens/math";
+import {
+  buildConsumeOracleRedeemer,
+  buildOracleRedeemer,
+} from "@/lib/fluidtokens/redeemer";
+import { stakeCredentialFromRewardAddress } from "@/lib/fluidtokens/credential";
+import { getNetworkName } from "@/lib/wallet/network";
+
 function bytesToHex(b: Uint8Array): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
@@ -44,6 +55,30 @@ function computeOutputTag(txHashHex: string, outputIndex: number): string {
   const cbor = serialiseOutputReference(hexToBytes(txHashHex), outputIndex);
   return bytesToHex(blake2b(cbor, { dkLen: 32 }));
 }
+
+/**
+ * Optional babel-fee config. When set, the buy tx ALSO spends a
+ * FluidTokens tank to subsidise the ADA fee, paying the equivalent of
+ * the paying token (HOSKY today) to the tank owner. A buyer holding
+ * the paying token + ~2 ADA for change min-utxo can complete a
+ * token-priced buy without holding the tx fee in ADA on top.
+ *
+ * <p>The 4 reference UTxOs (parameters, oracle data, oracle
+ * ref-script, tank ref-script) are caller-supplied so the buy page
+ * can fetch them in parallel with the listing lookup.
+ */
+export type BabelFeeConfig = {
+  tank: TankUtxo;
+  oracle: LiveOraclePrice;
+  /** Lovelace to extract from the tank (default ~500_000 = 0.5 ADA). */
+  adaUsedLovelace: bigint;
+  /** Lovelace on the payment-to-tankOwner output (~1.2 ADA min-utxo). */
+  paymentMinLovelace: bigint;
+  parameters: UTxO;
+  oracleDataUtxo: UTxO;
+  oracleRefScriptUtxo: UTxO;
+  tankRefScriptUtxo: UTxO;
+};
 
 export type MarketBuyInput = {
   network: Network;
@@ -67,6 +102,8 @@ export type MarketBuyInput = {
   buyerInputs: UTxO[];
   /** Bech32 destination for the listed asset(s) — typically the connected wallet. */
   buyerBech32Address: string;
+  /** Optional FluidTokens babel-fee subsidy. Off by default. */
+  babelFee?: BabelFeeConfig;
 };
 
 export type MarketBuyResult = { txHash: string };
@@ -91,7 +128,14 @@ export async function submitMarketBuy(
   const sellerAmount = priceQty - expectedFee;
 
   // ----- Index resolution (canonical Cardano sort) -----
-  const allInputs: UTxO[] = [input.listingUtxo, input.jarUtxo, ...input.buyerInputs];
+  // When babel-fee is enabled, the tank UTxO joins self.inputs and
+  // shifts the canonical position of everything else.
+  const allInputs: UTxO[] = [
+    input.listingUtxo,
+    input.jarUtxo,
+    ...(input.babelFee ? [input.babelFee.tank.utxo] : []),
+    ...input.buyerInputs,
+  ];
   const sortedInputs = [...allInputs].sort(compareOutRefs);
   const jarInputIndex = sortedInputs.findIndex((u) =>
     sameRef(u, input.jarUtxo),
@@ -102,11 +146,19 @@ export async function submitMarketBuy(
 
   // Outputs are emitted in the order we call payToAddress (Evolution
   // doesn't reorder authored outputs; change goes at the tail).
-  //   0: seller payout
-  //   1: jar continuing
-  //   2: buyer NFT
-  const sellerOutputIndex = 0;
-  const jarOutputIndex = 1;
+  //   Without babel-fee:
+  //     0: seller payout
+  //     1: jar continuing
+  //     2: buyer NFT
+  //   With babel-fee (tank validator demands outputs[0..1]):
+  //     0: continuing tank
+  //     1: payment to tankOwner
+  //     2: seller payout                (shifted +2)
+  //     3: jar continuing               (shifted +2)
+  //     4: buyer NFT                    (shifted +2)
+  const babelOutputOffset = input.babelFee ? 2 : 0;
+  const sellerOutputIndex = 0 + babelOutputOffset;
+  const jarOutputIndex = 1 + babelOutputOffset;
 
   // ----- Anti-double-sat tag for the seller output -----
   const ownTagHex = computeOutputTag(
@@ -191,34 +243,163 @@ export async function submitMarketBuy(
     })
     .attachScript({ script: jar.validator });
 
+  // Babel-fee leg: tank input (with ConsumeOracle redeemer) + 4 ref
+  // inputs + withdraw-zero from the oracle stake address carrying the
+  // signed OraclePriceFeed payload. Outputs[0..1] are reserved for the
+  // tank's continuing + payment outputs (added below).
+  if (input.babelFee) {
+    const bf = input.babelFee;
+    const payingTokenIndex = tankAcceptsToken(
+      bf.tank.datum,
+      input.listing.pricePolicyHex,
+      input.listing.priceNameHex,
+    );
+    if (payingTokenIndex < 0) {
+      throw new Error(
+        "babel tank does not accept the listing's paying token",
+      );
+    }
+    const refInputs = canonicalRefSort([
+      bf.parameters,
+      bf.oracleDataUtxo,
+      bf.oracleRefScriptUtxo,
+      bf.tankRefScriptUtxo,
+    ]);
+    const oracleIndex = refIndex(refInputs, bf.oracleDataUtxo);
+    const paramsIndex = refIndex(refInputs, bf.parameters);
+    const tankSpendRedeemer = buildConsumeOracleRedeemer({
+      payingTokenIndex,
+      inputTankIndex: 0,
+      receivers: 0,
+      oracleIndex,
+      paramsIndex,
+      whitelistIndex: 0,
+    });
+    const oracleWithdrawRedeemer = buildOracleRedeemer(bf.oracle);
+    const oracleStake = stakeCredentialFromRewardAddress(
+      bf.oracle.oracleWithdrawAddress,
+    );
+    txBuilder = txBuilder
+      .collectFrom({
+        inputs: [bf.tank.utxo._evolution],
+        redeemer: tankSpendRedeemer,
+      })
+      .readFrom({ referenceInputs: refInputs.map((r) => r._evolution) })
+      .withdraw({
+        stakeCredential: oracleStake,
+        amount: 0n,
+        redeemer: oracleWithdrawRedeemer,
+      });
+  }
+
   for (const u of input.buyerInputs) {
     txBuilder = txBuilder.collectFrom({ inputs: [u._evolution] });
   }
 
+  // Babel-fee outputs (when set) — MUST be the first two outputs per
+  // the tank validator's positional addressing.
+  if (input.babelFee) {
+    const bf = input.babelFee;
+    if (!bf.tank.utxo.datum) {
+      throw new Error("babel tank UTxO has no inline datum — not a real tank");
+    }
+    const tankInputLovelace = bf.tank.utxo.assets.lovelace ?? 0n;
+    const continuingTankLovelace =
+      tankInputLovelace - bf.adaUsedLovelace - bf.paymentMinLovelace;
+    if (continuingTankLovelace < 0n) {
+      throw new Error(
+        `babel tank under-funded: ${tankInputLovelace} ADA in, want ${bf.adaUsedLovelace + bf.paymentMinLovelace} (ada_used + payment min)`,
+      );
+    }
+    const networkId = getNetworkName() === "mainnet" ? 1 : 0;
+    const payingToken = bf.tank.datum.allowedTokens.find(
+      (t) =>
+        t.policyId.toLowerCase() === input.listing.pricePolicyHex.toLowerCase() &&
+        t.assetName.toLowerCase() === input.listing.priceNameHex.toLowerCase(),
+    );
+    if (!payingToken) {
+      throw new Error("babel: paying token not in tank datum (post-discovery)");
+    }
+    const tokenPayment = requiredTokenPayment({
+      adaUsed: bf.adaUsedLovelace,
+      priceInLovelaces: bf.oracle.priceInLovelaces,
+      denominator: bf.oracle.denominator,
+      amount: payingToken.amount,
+      divider: payingToken.divider,
+    });
+    const tankOwnerBech32 = onChainAddressToBech32(bf.tank.datum.tankOwner, networkId);
+    const paymentUnit = (input.listing.pricePolicyHex + input.listing.priceNameHex).toLowerCase();
+    txBuilder = txBuilder
+      // Output 0: continuing tank (same address + datum, reduced ADA).
+      .payToAddress({
+        address: Address.fromBech32(bf.tank.utxo.address),
+        assets: toAssets({ lovelace: continuingTankLovelace }),
+        datum: inlineDatum(Data.fromCBORHex(bf.tank.utxo.datum)),
+      })
+      // Output 1: payment to tankOwner (paying-token + min-utxo lovelace).
+      .payToAddress({
+        address: Address.fromBech32(tankOwnerBech32),
+        assets: toAssets({
+          lovelace: bf.paymentMinLovelace,
+          [paymentUnit]: tokenPayment,
+        }),
+      });
+  }
+
   txBuilder = txBuilder
-    // Output 0: seller payout (tagged datum).
+    // (Now at outputs[0+offset]: seller payout (tagged datum).
     .payToAddress({
       address: toAddress(input.sellerBech32Address),
       assets: toAssets(sellerAssets),
       datum: inlineDatum(sellerTagDatum),
     })
-    // Output 1: jar continuing.
+    // outputs[1+offset]: jar continuing.
     .payToAddress({
       address: toAddress(input.jarAddress),
       assets: toAssets(jarOutAssets),
       datum: inlineDatum(jarOutDatum),
     })
-    // Output 2: buyer receives the listed asset(s). Bond lovelace stayed
-    // with the seller — buyer covers their own min-UTxO via autoMinUtxo.
+    // outputs[2+offset]: buyer receives the listed asset(s).
     .payToAddress({
       address: toAddress(input.buyerBech32Address),
       assets: toAssets({ lovelace: 0n, ...listedAssets }),
       autoMinUtxo: true,
     });
 
+  // Babel-fee tx validity range: Date.now() ± 100s, second-aligned —
+  // pinned from FluidTokens' reference implementation. Required to
+  // satisfy the oracle's inclusive validity check without falling foul
+  // of Evolution's ms→slot rounding.
+  if (input.babelFee) {
+    const nowMs = BigInt(Date.now());
+    const rawLower = nowMs - 100_000n;
+    const rawUpper = nowMs + 100_000n;
+    const validFromMs = rawLower - (rawLower % 1000n);
+    const validToMs = rawUpper - (rawUpper % 1000n);
+    if (
+      validFromMs < input.babelFee.oracle.validFrom ||
+      validToMs > input.babelFee.oracle.validTo
+    ) {
+      throw new Error(
+        "babel oracle feed has expired between fetch and submit — refresh the buy page",
+      );
+    }
+    txBuilder = txBuilder.setValidity({ from: validFromMs, to: validToMs });
+  }
+
   const built = await txBuilder.build();
   const signed = await built.sign();
   return { txHash: txHashHex(await signed.submit()) };
+}
+
+function canonicalRefSort(refs: UTxO[]): UTxO[] {
+  return [...refs].sort(compareOutRefs);
+}
+
+function refIndex(refs: UTxO[], target: UTxO): number {
+  const i = refs.findIndex((r) => sameRef(r, target));
+  if (i < 0) throw new Error("babel: ref input not found in canonical sort");
+  return i;
 }
 
 function compareOutRefs(a: UTxO, b: UTxO): number {

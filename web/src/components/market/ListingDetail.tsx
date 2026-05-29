@@ -18,6 +18,12 @@ import {
   splitUnit,
   supportedPriceTokens,
 } from "@/lib/market/supportedPriceTokens";
+import {
+  probeBabelAvailability,
+  type BabelAvailability,
+} from "@/lib/fluidtokens/babelDiscovery";
+import { isBabelFeeEnabled } from "@/lib/fluidtokens/feature";
+import { requiredTokenPayment } from "@/lib/fluidtokens/math";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { decodeAddressData } from "@/lib/tx/decodeAddressData";
 import { makeClient } from "@/lib/tx/evolutionClient";
@@ -27,6 +33,15 @@ import { adaptUtxos } from "@/lib/tx/utxo";
 import { useNftMetadata } from "@/lib/api/hooks";
 import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
+
+/**
+ * Default tank-side parameters for the babel-fee leg. ada_used =
+ * 0.5 ADA comfortably covers a Plutus-V3 marketplace buy + tank
+ * consume's fee with margin. paymentMinLovelace = 1.2 ADA is the
+ * usual min-utxo for an output carrying (lovelace + 1 token).
+ */
+const BABEL_ADA_USED_LOVELACE = 500_000n;
+const BABEL_PAYMENT_MIN_LOVELACE = 1_200_000n;
 
 /**
  * Detail page for a single marketplace listing. Three roles:
@@ -119,6 +134,55 @@ export function ListingDetail({ unit }: { unit: string }) {
   const isSeller =
     listing && walletPkh && listing.datum.sellerPkhHex === walletPkh;
 
+  // ---- Babel-fee availability + opt-in toggle ----
+  const [babel, setBabel] = useState<BabelAvailability | null>(null);
+  const [babelEnabled, setBabelEnabled] = useState(false);
+  const [babelProbeError, setBabelProbeError] = useState<string | null>(null);
+  const babelFeatureOn = isBabelFeeEnabled();
+  const priceUnit = listing
+    ? (listing.datum.pricePolicyHex + listing.datum.priceNameHex).toLowerCase()
+    : "";
+
+  useEffect(() => {
+    if (!babelFeatureOn || isSeller || !walletApi || !listing || !priceUnit) {
+      setBabel(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const client = await makeClient(walletApi);
+        const result = await probeBabelAvailability(client, priceUnit);
+        if (!cancelled) setBabel(result);
+      } catch (e) {
+        if (!cancelled) {
+          setBabelProbeError(e instanceof Error ? e.message : String(e));
+          setBabel(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [babelFeatureOn, isSeller, walletApi, listing, priceUnit]);
+
+  // Human-readable HOSKY estimate for the opt-in label.
+  const babelHoskyEstimate = useMemo(() => {
+    if (!babel) return null;
+    const payingToken = babel.tank.datum.allowedTokens[0];
+    try {
+      return requiredTokenPayment({
+        adaUsed: BABEL_ADA_USED_LOVELACE,
+        priceInLovelaces: babel.oracle.priceInLovelaces,
+        denominator: babel.oracle.denominator,
+        amount: payingToken.amount,
+        divider: payingToken.divider,
+      });
+    } catch {
+      return null;
+    }
+  }, [babel]);
+
   const onBuy = async () => {
     if (!manifest || !walletApi || !listing || !walletAddress || !sellerBech32) {
       setErr("missing context to build the buy tx");
@@ -158,6 +222,16 @@ export function ListingDetail({ unit }: { unit: string }) {
         jarUtxo,
         buyerInputs: walletUtxos,
         buyerBech32Address: walletAddress,
+        babelFee: babelEnabled && babel ? {
+          tank: babel.tank,
+          oracle: babel.oracle,
+          adaUsedLovelace: BABEL_ADA_USED_LOVELACE,
+          paymentMinLovelace: BABEL_PAYMENT_MIN_LOVELACE,
+          parameters: babel.parameters,
+          oracleDataUtxo: babel.oracleDataUtxo,
+          oracleRefScriptUtxo: babel.oracleRefScriptUtxo,
+          tankRefScriptUtxo: babel.tankRefScriptUtxo,
+        } : undefined,
       });
       setTx(res.txHash);
       setConfirmation("confirming");
@@ -268,6 +342,29 @@ export function ListingDetail({ unit }: { unit: string }) {
             <Row label="utxo">
               {listing.utxo.txHash}.{listing.utxo.outputIndex}
             </Row>
+            {!isSeller && babelFeatureOn && babel ? (
+              <label className="flex flex-col gap-1 rounded border border-amber-900 bg-amber-950/30 px-3 py-2 text-xs text-amber-100 sm:flex-row sm:items-baseline sm:gap-3">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={babelEnabled}
+                    onChange={(e) => setBabelEnabled(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-amber-500"
+                  />
+                  <span className="font-semibold">babel fees (pay tx fee in HOSKY)</span>
+                </span>
+                {babelHoskyEstimate ? (
+                  <span className="text-[10px] text-amber-200/80">
+                    ≈ {babelHoskyEstimate.toLocaleString()} HOSKY extra · tank covers ~0.5 ADA fee
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
+            {babelProbeError && babelFeatureOn ? (
+              <p className="break-all rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-[10px] text-zinc-400">
+                babel-fee probe failed: {babelProbeError}
+              </p>
+            ) : null}
             <div className="pt-2">
               {isSeller ? (
                 <button
