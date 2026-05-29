@@ -364,7 +364,8 @@ export function ListingDetail({ unit }: { unit: string }) {
                 </span>
                 {babelHoskyEstimate ? (
                   <span className="text-[10px] text-amber-200/80">
-                    ≈ {babelHoskyEstimate.toLocaleString()} HOSKY extra · tank covers ~0.5 ADA fee
+                    ≈ {babelHoskyEstimate.toLocaleString()} HOSKY extra · tank covers ~
+                    {(Number(BABEL_ADA_USED_LOVELACE) / 1_000_000).toFixed(2)} ADA fee
                   </span>
                 ) : null}
               </label>
