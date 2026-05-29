@@ -35,12 +35,21 @@ import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
 /**
- * Default tank-side parameters for the babel-fee leg. ada_used =
- * 0.5 ADA comfortably covers a Plutus-V3 marketplace buy + tank
- * consume's fee with margin. paymentMinLovelace = 1.2 ADA is the
- * usual min-utxo for an output carrying (lovelace + 1 token).
+ * Default tank-side parameters for the babel-fee leg.
+ *
+ * <p>{@code ada_used = 0.68 ADA} — measured on the live mainnet
+ * combined marketplace-buy + tank-consume tx, 2026-05-30. Plutus-V3
+ * eval on the marketplace + jar + tank + oracle scripts in a single
+ * tx + multiple ref-script reads land the protocol fee at ~0.68 ADA;
+ * 0.5 ADA leaves the buyer ~0.18 ADA short. Should drift only if
+ * Plutus pricing changes or a script grows materially. If it does,
+ * bump; medium-term we want iterative fee estimation like
+ * FluidTokens' Mesh reference does.
+ *
+ * <p>{@code paymentMinLovelace = 1.2 ADA} — usual min-utxo for an
+ * output carrying (lovelace + 1 token).
  */
-const BABEL_ADA_USED_LOVELACE = 500_000n;
+const BABEL_ADA_USED_LOVELACE = 680_000n;
 const BABEL_PAYMENT_MIN_LOVELACE = 1_200_000n;
 
 /**
