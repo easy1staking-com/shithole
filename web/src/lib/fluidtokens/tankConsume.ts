@@ -270,6 +270,53 @@ export async function buildAndSubmitBabelConsume(
     .setValidity({ from: validFromMs, to: validToMs });
 
   const built = await builder.build();
+
+  // Debug visibility — dump everything we can about the built tx so a
+  // bare "validator failed" eval response from Blockfrost can be
+  // diagnosed offline. Logged at info level so it shows in the
+  // browser console without enabling verbose mode.
+  // eslint-disable-next-line no-console
+  console.info("[babel] built tx — debug dump", {
+    refInputs: refInputs.map((r, i) => ({
+      i,
+      outref: `${r.txHash}#${r.outputIndex}`,
+      address: r.address.slice(0, 24) + "…",
+    })),
+    oracleIndex,
+    paramsIndex,
+    payingTokenIndex,
+    tank: {
+      outref: `${inputs.tank.utxo.txHash}#${inputs.tank.utxo.outputIndex}`,
+      address: tankBech32,
+      lovelace_in: tankInputLovelace.toString(),
+      ada_used: inputs.adaUsedLovelace.toString(),
+      continuing: continuingTankLovelace.toString(),
+    },
+    payment: {
+      tankOwner: tankOwnerBech32,
+      minAda: inputs.paymentMinLovelace.toString(),
+      tokenUnit: unitLower,
+      tokenAmount: tokenPayment.toString(),
+    },
+    withdraw: {
+      stakeCredHex: hashFromCredential(oracleStakeCredential),
+      rewardBech32: inputs.oracle.oracleWithdrawAddress,
+    },
+    validity: {
+      from: validFromMs.toString(),
+      to: validToMs.toString(),
+      nowMs: Date.now(),
+    },
+    tx_cbor_head: (() => {
+      try {
+        const cbor = (built as unknown as { toCBOR?: () => string }).toCBOR?.() ?? "";
+        return cbor.slice(0, 200) + (cbor.length > 200 ? "…" : "");
+      } catch {
+        return "(toCBOR not available)";
+      }
+    })(),
+  });
+
   const signed = await built.sign();
   const txHash = await signed.submit();
   return {
@@ -277,6 +324,14 @@ export async function buildAndSubmitBabelConsume(
     tokenPayment,
     continuingTankLovelace,
   };
+}
+
+function hashFromCredential(c: ReturnType<typeof EvCredential.makeScriptHash>): string {
+  try {
+    return EvCredential.toHex(c);
+  } catch {
+    return "(toHex failed)";
+  }
 }
 
 /* -------------------------------------------------------------------------- */
