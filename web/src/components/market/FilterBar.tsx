@@ -8,8 +8,9 @@ import {
 
 /**
  * Top-of-page filter bar for /market: currency, stake pool, price sort.
- * Sort is intentionally disabled when "all" currencies are visible —
- * comparing 10 HOSKY against 10 USDM has no meaning.
+ * Sort works across currencies by comparing human-readable amounts
+ * (qty ÷ 10^decimals), so it stays enabled even with "all" currencies
+ * visible — see MarketBrowse's `visible` memo for the comparison.
  */
 export type SortOrder = "none" | "asc" | "desc";
 
@@ -44,8 +45,6 @@ export function FilterBar({
   const priceTokens = supportedPriceTokens();
   const pools: Pool[] = listPools();
 
-  const singleCurrency = filters.priceUnit !== "";
-
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-3">
       <Field label="currency">
@@ -54,13 +53,9 @@ export function FilterBar({
           onChange={(e) => {
             const v = e.target.value;
             const next = v === ALL_PRICE_UNIT_SENTINEL ? "" : v;
-            onChange({
-              ...filters,
-              priceUnit: next,
-              // Sort across currencies is meaningless; reset it when
-              // the user goes back to "all".
-              sort: next === "" ? "none" : filters.sort,
-            });
+            // Sort survives a currency change — it now works across
+            // currencies (human-readable amount), so no reset needed.
+            onChange({ ...filters, priceUnit: next });
           }}
           className="rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 focus:border-sky-700 focus:outline-none"
         >
@@ -94,14 +89,9 @@ export function FilterBar({
       </Field>
 
       <Field label="sort">
-        <div
-          className={`inline-flex overflow-hidden rounded border ${
-            singleCurrency ? "border-zinc-800" : "border-zinc-900 opacity-50"
-          }`}
-        >
+        <div className="inline-flex overflow-hidden rounded border border-zinc-800">
           <SortChip
             active={filters.sort === "asc"}
-            disabled={!singleCurrency}
             onClick={() =>
               onChange({
                 ...filters,
@@ -113,7 +103,6 @@ export function FilterBar({
           </SortChip>
           <SortChip
             active={filters.sort === "desc"}
-            disabled={!singleCurrency}
             onClick={() =>
               onChange({
                 ...filters,
@@ -148,25 +137,22 @@ function Field({
 
 function SortChip({
   active,
-  disabled,
   onClick,
   children,
 }: {
   active: boolean;
-  disabled: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
-      disabled={disabled}
       onClick={onClick}
       className={`px-3 py-2 text-xs ${
         active
           ? "bg-sky-900/60 text-sky-200"
           : "bg-zinc-950 text-zinc-400 hover:text-zinc-200"
-      } disabled:cursor-not-allowed disabled:bg-zinc-950 disabled:text-zinc-600`}
+      }`}
     >
       {children}
     </button>

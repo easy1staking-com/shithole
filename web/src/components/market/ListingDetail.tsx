@@ -71,6 +71,13 @@ export function ListingDetail({ unit }: { unit: string }) {
   const [busy, setBusy] = useState(false);
   const [tx, setTx] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
+  // Drives whether the post-tx panel surfaces the "share" CTA — we
+  // only want it after a successful BUY, not after a Cancel.
+  const [txKind, setTxKind] = useState<"buy" | "cancel" | null>(null);
+  // Human-readable price captured at buy time. The share card needs it,
+  // but by the time the card renders the listing has been refetched away
+  // (the UTxO is spent), so `listing` is null — snapshot it on buy.
+  const [boughtPriceText, setBoughtPriceText] = useState<string | null>(null);
   // Bumped after a tx confirms on chain to force the listing fetcher
   // below to re-run — the just-bought / just-cancelled UTxO should no
   // longer be in fetchMarketListings's result.
@@ -232,6 +239,16 @@ export function ListingDetail({ unit }: { unit: string }) {
     setErr(null);
     setTx(null);
     setConfirmation(null);
+    setTxKind("buy");
+    // Snapshot the price for the share card before the listing is
+    // refetched away post-confirmation.
+    setBoughtPriceText(
+      priceLabel
+        ? `${formatPriceQty(listing.datum.priceQty, priceLabel.decimals)} ${
+            priceLabel.ticker ?? priceLabel.label ?? ""
+          }`.trim()
+        : null,
+    );
     try {
       const client = await makeClient(walletApi);
       // Pick the first jar UTxO. Sharded jars are future work; the
@@ -298,6 +315,7 @@ export function ListingDetail({ unit }: { unit: string }) {
     setErr(null);
     setTx(null);
     setConfirmation(null);
+    setTxKind("cancel");
     try {
       const client = await makeClient(walletApi);
       const res = await submitMarketCancel(client, {
@@ -448,9 +466,71 @@ export function ListingDetail({ unit }: { unit: string }) {
         <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
           <p className="break-all">↗ {tx}</p>
           <ConfirmationChip status={confirmation} />
+          {txKind === "buy" && confirmation === "confirmed" ? (
+            <ShareBuyButton
+              unit={unit}
+              displayName={meta.data?.name ?? null}
+              imageUrl={imageUrl}
+              priceText={boughtPriceText}
+            />
+          ) : null}
         </div>
       ) : null}
     </main>
+  );
+}
+
+/**
+ * "Share the haul" CTA shown only after a successful buy on the
+ * listing detail page. Mirrors the pit's share-the-carnage pattern:
+ * opens a Twitter/X intent prefilled with brand-voice copy and a link
+ * to the {@code /share/buy} landing page. Hidden after a Cancel because
+ * there's nothing to brag about.
+ *
+ * <p>The shared link points at {@code /share/buy} (not the raw listing
+ * page) so crawlers resolve a rich OG card — the bought NFT's image,
+ * name, and price — painted by {@code /api/og/buy}, exactly like the
+ * pit's {@code /share/swap} → {@code /api/og/swap} pairing.
+ */
+function ShareBuyButton({
+  unit,
+  displayName,
+  imageUrl,
+  priceText,
+}: {
+  unit: string;
+  displayName: string | null;
+  imageUrl: string | null;
+  priceText: string | null;
+}) {
+  if (typeof window === "undefined") return null;
+  // Allow per-environment override (e.g. preprod points at a staging
+  // host) so the shared tweet doesn't carry a localhost link when the
+  // tester is hitting the app from `next dev`. Falls back to the live
+  // origin when the var is unset — same as the prod behaviour was.
+  const base =
+    process.env.NEXT_PUBLIC_SHARE_BASE_URL?.replace(/\/$/, "") ??
+    window.location.origin;
+  const qs = new URLSearchParams({ unit });
+  if (displayName) qs.set("name", displayName);
+  if (imageUrl) qs.set("img", imageUrl);
+  if (priceText) qs.set("price", priceText);
+  const url = `${base}/share/buy?${qs.toString()}`;
+  const subject = displayName
+    ? `i just fished ${displayName} out of @Shithole_App`
+    : "i just fished some worthless s#!t out of @Shithole_App";
+  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+    subject,
+  )}&url=${encodeURIComponent(url)}`;
+  return (
+    <a
+      href={tweetUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 rounded-md border border-sky-700 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sky-300 hover:border-sky-500 hover:text-sky-200"
+    >
+      share the haul →
+    </a>
   );
 }
 

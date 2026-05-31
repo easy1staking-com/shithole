@@ -19,6 +19,7 @@ import {
 } from "@/lib/market/queryListings";
 import { matchesPool, poolByTicker } from "@/lib/market/poolTraits";
 import { isSupportedCollection } from "@/lib/market/supportedCollections";
+import { supportedPriceTokens } from "@/lib/market/supportedPriceTokens";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
@@ -41,10 +42,13 @@ export function MarketBrowse() {
   const [listings, setListings] = useState<DecodedListing[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Default the browse view to all currencies, cheapest first. The sort
+  // works across currencies by comparing human-readable amounts (see the
+  // `visible` memo below), so it no longer needs a single currency picked.
   const [filters, setFilters] = useState<FilterState>({
     priceUnit: "",
     poolTicker: "",
-    sort: "none",
+    sort: "asc",
   });
 
   const marketplaceAddress = manifest?.marketplaceAddress ?? null;
@@ -127,13 +131,28 @@ export function MarketBrowse() {
       }
     }
 
-    // Sort — only when one currency. Across currencies it's nonsense.
-    if (filters.sort !== "none" && filters.priceUnit !== "") {
-      const factor = filters.sort === "asc" ? 1n : -1n;
-      xs = [...xs].sort((a, b) => {
-        const d = (a.listing.datum.priceQty - b.listing.datum.priceQty) * factor;
-        return d > 0n ? 1 : d < 0n ? -1 : 0;
-      });
+    // Sort by price. Works across currencies by comparing the
+    // *human-readable* amount (raw on-chain qty ÷ 10^decimals) rather
+    // than the raw qty — otherwise a 0-decimal token (HOSKY) and a
+    // 6-decimal one (ADA/USDM) aren't comparable at all (10 ADA is
+    // 10_000_000 raw lovelace vs 100 HOSKY at 100 raw). This is still
+    // apples-to-oranges across tokens (no FX conversion), but it gives a
+    // stable, intuitive cheapest-first ordering instead of creation order.
+    if (filters.sort !== "none") {
+      const decByUnit = new Map(
+        supportedPriceTokens().map((t) => [t.unit.toLowerCase(), t.decimals]),
+      );
+      const amountOf = (l: DecodedListing): number => {
+        const unit = (
+          l.datum.pricePolicyHex + l.datum.priceNameHex
+        ).toLowerCase();
+        const decimals = decByUnit.get(unit) ?? 0;
+        return Number(l.datum.priceQty) / 10 ** decimals;
+      };
+      const factor = filters.sort === "asc" ? 1 : -1;
+      xs = [...xs].sort(
+        (a, b) => (amountOf(a.listing) - amountOf(b.listing)) * factor,
+      );
     }
 
     return xs;
