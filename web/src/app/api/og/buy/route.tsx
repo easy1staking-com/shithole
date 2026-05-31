@@ -87,6 +87,22 @@ export async function GET(req: Request): Promise<Response> {
   const accentParam = sp.get("accent") || "ff8c1a";
   const accent = `#${accentParam}`;
 
+  // Shrink the title to fit the right-hand column (~656px wide). At a
+  // fixed 64px a long CashGrab name like "HOSKYCashGrab000216939" (22
+  // chars) overran the canvas edge. Bucket the font size by length so
+  // short names stay punchy and long ones still fit on one line.
+  const displayTitle = trim(name, 26);
+  const titleFontSize =
+    displayTitle.length <= 10
+      ? 64
+      : displayTitle.length <= 14
+        ? 54
+        : displayTitle.length <= 18
+          ? 46
+          : displayTitle.length <= 22
+            ? 40
+            : 34;
+
   // Prefer the image URL passed in the query (the FE has it in memory
   // from the React Query cache). Fall back to a BE fetch for callers
   // that only know the unit hex.
@@ -140,13 +156,11 @@ export async function GET(req: Request): Promise<Response> {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text */}
-            <img
-              src={`${url.origin}/brand/logo-v8-pixel-poop.svg`}
-              width={56}
-              height={56}
-              style={{ width: 56, height: 56 }}
-            />
+            {/* Brand glyph as a tinted poop emoji rather than the SVG —
+             *  Satori doesn't render the pixel-poop SVG's features, which
+             *  left a blank gap on the live card. The emoji renders
+             *  reliably and keeps the brand cue. */}
+            <div style={{ fontSize: 48, display: "flex" }}>💩</div>
             <div style={{ display: "flex", flexDirection: "column" }}>
               <div
                 style={{
@@ -246,7 +260,7 @@ export async function GET(req: Request): Promise<Response> {
             </div>
             <div
               style={{
-                fontSize: 64,
+                fontSize: titleFontSize,
                 fontWeight: 700,
                 letterSpacing: "-0.02em",
                 color: "#fafafa",
@@ -255,7 +269,7 @@ export async function GET(req: Request): Promise<Response> {
                 display: "flex",
               }}
             >
-              {trim(name, 22)}
+              {displayTitle}
             </div>
             {price ? (
               <div
