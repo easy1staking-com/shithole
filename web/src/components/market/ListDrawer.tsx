@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   ConfirmationChip,
@@ -73,6 +73,66 @@ export function ListDrawer() {
 
   // Bond default — autoMinUtxo on the submit handles the floor.
   const [bondLovelace] = useState<bigint>(DEFAULT_BOND_LOVELACE);
+
+  // Two-step submit: "review & list" → confirmation div → "confirm & sign".
+  const [confirming, setConfirming] = useState(false);
+
+  // Live receipt for the current selection. Groups by price currency so
+  // bulk listings with per-row currency overrides total correctly; the
+  // 2 ADA bond is always ADA and scales with the NFT count.
+  const summary = useMemo<ListingSummaryData>(() => {
+    const groups = new Map<string, SummaryGroup>();
+    let hasInvalid = false;
+    for (const unit of selected) {
+      const rowDisplay = sameForAll
+        ? sharedPrice
+        : overrides[unit]?.displayPrice ?? sharedPrice;
+      const rowUnit = sameForAll
+        ? sharedTokenUnit
+        : overrides[unit]?.tokenUnit ?? sharedTokenUnit;
+      const token = priceTokens.find((t) => t.unit === rowUnit);
+      if (!token) {
+        hasInvalid = true;
+        continue;
+      }
+      const priceQty = parseDecimal(rowDisplay, token.decimals);
+      if (priceQty === null || priceQty <= 0n) {
+        hasInvalid = true;
+        continue;
+      }
+      const fee = feeOf(priceQty);
+      let g = groups.get(token.unit);
+      if (!g) {
+        g = {
+          token,
+          count: 0,
+          uniformPrice: priceQty,
+          totalFee: 0n,
+          totalReceive: 0n,
+        };
+        groups.set(token.unit, g);
+      } else if (g.uniformPrice !== priceQty) {
+        g.uniformPrice = null;
+      }
+      g.count += 1;
+      g.totalFee += fee;
+      g.totalReceive += priceQty - fee;
+    }
+    return {
+      count: selected.size,
+      groups: [...groups.values()],
+      depositLovelace: bondLovelace * BigInt(selected.size),
+      hasInvalid,
+    };
+  }, [
+    selected,
+    overrides,
+    sameForAll,
+    sharedPrice,
+    sharedTokenUnit,
+    priceTokens,
+    bondLovelace,
+  ]);
 
   const toggleSelect = useCallback((unit: string) => {
     setSelected((prev) => {
@@ -180,7 +240,14 @@ export function ListDrawer() {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setConfirming(false);
     }
+  };
+
+  // Validate, then move to the confirmation step (no wallet prompt yet).
+  const onReview = () => {
+    setErr(null);
+    if (buildSubmission()) setConfirming(true);
   };
 
   return (
@@ -296,18 +363,45 @@ export function ListDrawer() {
             )}
           </section>
 
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={busy || selected.size === 0}
-            className="self-start rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-800"
-          >
-            {busy
-              ? "signing…"
-              : selected.size === 0
-              ? "list nothing"
-              : `list ${selected.size} NFT${selected.size === 1 ? "" : "s"}`}
-          </button>
+          {selected.size > 0 ? (
+            <ListingSummary data={summary} confirming={confirming} />
+          ) : null}
+
+          {!confirming ? (
+            <button
+              type="button"
+              onClick={onReview}
+              disabled={busy || selected.size === 0 || summary.hasInvalid}
+              className="self-start rounded bg-sky-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:bg-zinc-800"
+            >
+              {selected.size === 0
+                ? "select NFTs to list"
+                : summary.hasInvalid
+                ? "fix invalid prices"
+                : `review & list ${selected.size} NFT${selected.size === 1 ? "" : "s"}`}
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={busy}
+                className="rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:bg-zinc-800"
+              >
+                {busy
+                  ? "signing…"
+                  : `confirm & sign — list ${selected.size} NFT${selected.size === 1 ? "" : "s"}`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={busy}
+                className="rounded border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500 disabled:opacity-50"
+              >
+                ← back
+              </button>
+            </div>
+          )}
 
           {err ? (
             <p className="rounded border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
@@ -332,6 +426,150 @@ type SubmissionEntry = {
   token: SupportedPriceToken;
   priceQty: bigint;
 };
+
+/** 2% protocol fee, rounded up — mirrors the marketplace validator's fee math. */
+function feeOf(priceQty: bigint): bigint {
+  return (priceQty * 2n + 99n) / 100n;
+}
+
+type SummaryGroup = {
+  token: SupportedPriceToken;
+  count: number;
+  /** Shared price if every NFT in this currency uses it; null when they differ. */
+  uniformPrice: bigint | null;
+  totalFee: bigint;
+  totalReceive: bigint;
+};
+
+type ListingSummaryData = {
+  count: number;
+  groups: SummaryGroup[];
+  depositLovelace: bigint;
+  hasInvalid: boolean;
+};
+
+/**
+ * Listing receipt — makes the economics explicit before signing: prices
+ * are PER NFT, the 2% protocol fee in the sell currency, and the total
+ * refundable ADA deposit (2 ADA × N). Doubles as the confirmation panel.
+ */
+function ListingSummary({
+  data,
+  confirming,
+}: {
+  data: ListingSummaryData;
+  confirming: boolean;
+}) {
+  const n = data.count;
+  return (
+    <section
+      className={`space-y-3 rounded-lg border p-4 ${
+        confirming
+          ? "border-sky-600 bg-sky-950/30"
+          : "border-zinc-800 bg-zinc-950"
+      }`}
+    >
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-200">
+          {confirming ? "confirm listing" : "review"}
+        </h3>
+        <span className="text-[11px] uppercase tracking-widest text-sky-400">
+          {n} NFT{n === 1 ? "" : "s"} · price is PER NFT
+        </span>
+      </div>
+
+      {data.groups.map((g) => {
+        const fee = g.uniformPrice !== null ? feeOf(g.uniformPrice) : null;
+        return (
+          <div
+            key={g.token.unit}
+            className="space-y-1 border-t border-zinc-800/60 pt-2 text-xs first:border-t-0 first:pt-0"
+          >
+            {g.uniformPrice !== null && fee !== null ? (
+              <>
+                <SummaryLine
+                  k="price / NFT"
+                  v={`${formatPriceQty(g.uniformPrice, g.token.decimals)} ${g.token.label}`}
+                />
+                <SummaryLine
+                  k="− 2% protocol fee"
+                  v={`${formatPriceQty(fee, g.token.decimals)} ${g.token.label}`}
+                  muted
+                />
+                <SummaryLine
+                  k="= you receive / NFT"
+                  v={`${formatPriceQty(g.uniformPrice - fee, g.token.decimals)} ${g.token.label}`}
+                  strong
+                />
+                {g.count > 1 ? (
+                  <SummaryLine
+                    k={`proceeds if all ${g.count} sell`}
+                    v={`${formatPriceQty(g.totalReceive, g.token.decimals)} ${g.token.label}`}
+                    strong
+                  />
+                ) : null}
+              </>
+            ) : (
+              <>
+                <SummaryLine
+                  k={`${g.count} NFTs priced in ${g.token.label} (mixed)`}
+                  v=""
+                />
+                <SummaryLine
+                  k="− 2% protocol fee (total)"
+                  v={`${formatPriceQty(g.totalFee, g.token.decimals)} ${g.token.label}`}
+                  muted
+                />
+                <SummaryLine
+                  k="= you receive if all sell"
+                  v={`${formatPriceQty(g.totalReceive, g.token.decimals)} ${g.token.label}`}
+                  strong
+                />
+              </>
+            )}
+          </div>
+        );
+      })}
+
+      <div className="border-t border-zinc-800 pt-2 text-xs">
+        <SummaryLine
+          k="🔒 deposit locked"
+          v={`${formatPriceQty(data.depositLovelace, 6)} ADA  (2 ADA × ${n})`}
+          strong
+        />
+        <p className="mt-1 text-[10px] text-zinc-500">
+          2 ADA per NFT is locked in each listing and returned to you when it
+          sells or you cancel.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function SummaryLine({
+  k,
+  v,
+  muted,
+  strong,
+}: {
+  k: string;
+  v: string;
+  muted?: boolean;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-zinc-500">{k}</span>
+      <span
+        className={`font-mono ${
+          strong ? "text-zinc-100" : muted ? "text-zinc-400" : "text-zinc-300"
+        }`}
+      >
+        {v}
+      </span>
+    </div>
+  );
+}
 
 function NftPickRow({
   nft,
@@ -362,9 +600,7 @@ function NftPickRow({
     ? parseDecimal(override.displayPrice, token.decimals)
     : null;
   const previewFee =
-    previewQty !== null && previewQty > 0n
-      ? (previewQty * 2n + 99n) / 100n
-      : null;
+    previewQty !== null && previewQty > 0n ? feeOf(previewQty) : null;
   const previewReceive =
     previewQty !== null && previewFee !== null ? previewQty - previewFee : null;
 
@@ -437,12 +673,23 @@ function NftPickRow({
           )}
         </div>
       ) : isSelected && token ? (
-        <div className="border-t border-zinc-900 p-2 text-[10px] text-zinc-500">
-          {formatPriceQty(
-            parseDecimal(override.displayPrice, token.decimals) ?? 0n,
-            token.decimals,
-          )}{" "}
-          {token.label}
+        <div className="space-y-0.5 border-t border-zinc-900 p-2 text-[10px] text-zinc-500">
+          <div className="flex items-baseline justify-between">
+            <span className="text-zinc-300">
+              {formatPriceQty(
+                parseDecimal(override.displayPrice, token.decimals) ?? 0n,
+                token.decimals,
+              )}{" "}
+              {token.label}
+            </span>
+            <span className="uppercase tracking-wider text-zinc-600">/ nft</span>
+          </div>
+          {previewFee !== null && previewReceive !== null ? (
+            <div className="text-zinc-600">
+              −2% {formatPriceQty(previewFee, token.decimals)} · you get{" "}
+              {formatPriceQty(previewReceive, token.decimals)} {token.label}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </li>
