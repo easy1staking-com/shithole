@@ -463,81 +463,60 @@ function ListingSummary({
   const n = data.count;
   return (
     <section
-      className={`space-y-3 rounded-lg border p-4 ${
+      className={`space-y-3 rounded-lg border p-4 text-base ${
         confirming
           ? "border-sky-600 bg-sky-950/30"
           : "border-zinc-800 bg-zinc-950"
       }`}
     >
       <div className="flex items-baseline justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-200">
-          {confirming ? "confirm listing" : "review"}
+        <h3 className="text-base font-semibold uppercase tracking-widest text-zinc-100">
+          {confirming ? "confirm listing" : "receipt"}
         </h3>
-        <span className="text-[11px] uppercase tracking-widest text-sky-400">
+        <span className="text-sm uppercase tracking-widest text-sky-400">
           {n} NFT{n === 1 ? "" : "s"} · price is PER NFT
         </span>
       </div>
 
       {data.groups.map((g) => {
         const fee = g.uniformPrice !== null ? feeOf(g.uniformPrice) : null;
+        const dec = g.token.decimals;
+        const lbl = g.token.label;
         return (
           <div
             key={g.token.unit}
-            className="space-y-1 border-t border-zinc-800/60 pt-2 text-xs first:border-t-0 first:pt-0"
+            className="space-y-1 border-t border-zinc-800/60 pt-2 first:border-t-0 first:pt-0"
           >
             {g.uniformPrice !== null && fee !== null ? (
               <>
-                <SummaryLine
-                  k="price / NFT"
-                  v={`${formatPriceQty(g.uniformPrice, g.token.decimals)} ${g.token.label}`}
-                />
-                <SummaryLine
-                  k="− 2% protocol fee"
-                  v={`${formatPriceQty(fee, g.token.decimals)} ${g.token.label}`}
-                  muted
-                />
-                <SummaryLine
-                  k="= you receive / NFT"
-                  v={`${formatPriceQty(g.uniformPrice - fee, g.token.decimals)} ${g.token.label}`}
-                  strong
-                />
+                <SummaryLine k="price / NFT" amount={g.uniformPrice} dec={dec} label={lbl} />
+                <SummaryLine k="− 2% protocol fee" amount={fee} dec={dec} label={lbl} tone="fee" />
+                <SummaryLine k="= you receive / NFT" amount={g.uniformPrice - fee} dec={dec} label={lbl} tone="receive" />
                 {g.count > 1 ? (
-                  <SummaryLine
-                    k={`proceeds if all ${g.count} sell`}
-                    v={`${formatPriceQty(g.totalReceive, g.token.decimals)} ${g.token.label}`}
-                    strong
-                  />
+                  <SummaryLine k={`proceeds if all ${g.count} sell`} amount={g.totalReceive} dec={dec} label={lbl} tone="receive" />
                 ) : null}
               </>
             ) : (
               <>
-                <SummaryLine
-                  k={`${g.count} NFTs priced in ${g.token.label} (mixed)`}
-                  v=""
-                />
-                <SummaryLine
-                  k="− 2% protocol fee (total)"
-                  v={`${formatPriceQty(g.totalFee, g.token.decimals)} ${g.token.label}`}
-                  muted
-                />
-                <SummaryLine
-                  k="= you receive if all sell"
-                  v={`${formatPriceQty(g.totalReceive, g.token.decimals)} ${g.token.label}`}
-                  strong
-                />
+                <SummaryLine k={`${g.count} NFTs priced in ${lbl} (mixed)`} text="" />
+                <SummaryLine k="− 2% protocol fee (total)" amount={g.totalFee} dec={dec} label={lbl} tone="fee" />
+                <SummaryLine k="= you receive if all sell" amount={g.totalReceive} dec={dec} label={lbl} tone="receive" />
               </>
             )}
           </div>
         );
       })}
 
-      <div className="border-t border-zinc-800 pt-2 text-xs">
+      <div className="border-t border-zinc-800 pt-2">
         <SummaryLine
           k="🔒 deposit locked"
-          v={`${formatPriceQty(data.depositLovelace, 6)} ADA  (2 ADA × ${n})`}
-          strong
+          amount={data.depositLovelace}
+          dec={6}
+          label="ADA"
+          suffix={`(2 ADA × ${n})`}
+          tone="deposit"
         />
-        <p className="mt-1 text-[10px] text-zinc-500">
+        <p className="mt-1 text-sm text-zinc-500">
           2 ADA per NFT is locked in each listing and returned to you when it
           sells or you cancel.
         </p>
@@ -548,27 +527,85 @@ function ListingSummary({
 
 function SummaryLine({
   k,
-  v,
-  muted,
-  strong,
+  amount,
+  dec,
+  label,
+  text,
+  suffix,
+  tone = "neutral",
 }: {
   k: string;
-  v: string;
-  muted?: boolean;
-  strong?: boolean;
+  amount?: bigint;
+  dec?: number;
+  label?: string;
+  /** Pre-rendered value (used for header-only rows); ignored if `amount` set. */
+  text?: string;
+  suffix?: string;
+  tone?: "neutral" | "fee" | "receive" | "deposit";
 }) {
+  const color = {
+    neutral: "text-zinc-100",
+    fee: "text-amber-400",
+    receive: "text-emerald-400",
+    deposit: "text-sky-300",
+  }[tone];
+  let display = text ?? "";
+  let title: string | undefined;
+  if (amount !== undefined && dec !== undefined) {
+    const f = formatAmount(amount, dec);
+    const suf = label ? ` ${label}` : "";
+    display = `${f.text}${suf}`;
+    title = `${f.exact}${suf}`;
+  }
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="text-zinc-500">{k}</span>
-      <span
-        className={`font-mono ${
-          strong ? "text-zinc-100" : muted ? "text-zinc-400" : "text-zinc-300"
-        }`}
-      >
-        {v}
+      <span className="text-zinc-400">{k}</span>
+      <span className={`font-mono ${color}`} title={title}>
+        {display}
+        {suffix ? <span className="ml-1 text-sm text-zinc-500">{suffix}</span> : null}
       </span>
     </div>
   );
+}
+
+/** Comma-group an integer string: "1234567" → "1,234,567". */
+function groupThousands(intStr: string): string {
+  return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/**
+ * Human amount for the receipt: comma-grouped, with K/M/B abbreviation
+ * for big magnitudes (≥ 10,000 — common with HOSKY) to cut zero-walls.
+ * Returns the compact `text` plus the full comma-grouped `exact` so the
+ * caller can keep precision on a money figure via a hover title.
+ */
+function formatAmount(qty: bigint, decimals: number): { text: string; exact: string } {
+  const divisor = 10n ** BigInt(decimals);
+  const whole = qty / divisor;
+  const frac = qty % divisor;
+  let exact = groupThousands(whole.toString());
+  if (frac !== 0n) {
+    const f = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+    if (f) exact += `.${f}`;
+  }
+  return { text: abbreviate(whole) ?? exact, exact };
+}
+
+function abbreviate(whole: bigint): string | null {
+  if (whole < 10_000n) return null; // small amounts stay exact + comma-grouped
+  for (const [scale, suf] of [
+    [1_000_000_000n, "B"],
+    [1_000_000n, "M"],
+    [1_000n, "K"],
+  ] as Array<[bigint, string]>) {
+    if (whole >= scale) {
+      const scaled = (whole * 100n) / scale; // 2 decimal places, truncated
+      const ip = scaled / 100n;
+      const fp = (scaled % 100n).toString().padStart(2, "0").replace(/0+$/, "");
+      return `${ip}${fp ? `.${fp}` : ""}${suf}`;
+    }
+  }
+  return null;
 }
 
 function NftPickRow({
