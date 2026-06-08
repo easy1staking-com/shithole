@@ -89,21 +89,16 @@ export function AppHeader() {
                 ]}
               />
             ) : null}
-            {/* Unified history feed. Filtering by source happens via
-                the HistoryTabStrip on the page itself, so this is a
-                top-level link, not a dropdown — no point duplicating
-                what's already a tab on /me/history. */}
-            <Link
-              href="/me/history"
-              className={
-                "rounded-md px-2 py-1 font-mono text-sm lowercase transition-colors " +
-                ((pathname ?? "").startsWith("/me/history")
-                  ? "text-zinc-100"
-                  : "text-zinc-400 hover:text-zinc-200")
-              }
-            >
-              history
-            </Link>
+            {/* Tools — read-only utilities: History (the unified feed) +
+                Inspect (look up any CashGrab's traits / matching pools by
+                serial number, no wallet needed). */}
+            <NavMenu
+              label="tools"
+              items={[
+                { label: "history", href: "/me/history" },
+                { label: "inspect", href: "/inspect" },
+              ]}
+            />
 
             {showAdminMenu ? (
               <NavMenu
