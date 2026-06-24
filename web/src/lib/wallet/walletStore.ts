@@ -10,6 +10,8 @@
 
 import { create } from "zustand";
 
+import { describeError } from "@/lib/errors";
+
 import {
   detectInstalledWallets,
   type Cip30Api,
@@ -141,7 +143,7 @@ export const useWalletStore = create<WalletState & WalletActions>(
           /* localStorage unavailable — non-fatal */
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = describeError(err);
         set({
           connecting: false,
           error: message,

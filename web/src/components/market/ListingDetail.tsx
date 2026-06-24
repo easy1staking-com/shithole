@@ -19,6 +19,8 @@ import {
   probeBabelAvailability,
   type BabelAvailability,
 } from "@/lib/fluidtokens/babelDiscovery";
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { describeError } from "@/lib/errors";
 import { isBabelFeeEnabled } from "@/lib/fluidtokens/feature";
 import { requiredTokenPayment } from "@/lib/fluidtokens/math";
 import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
@@ -97,7 +99,7 @@ export function ListingDetail({ unit }: { unit: string }) {
         );
         if (!cancelled) setListing(match ?? null);
       } catch (e) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setErr(describeError(e));
       }
     })();
     return () => {
@@ -199,7 +201,7 @@ export function ListingDetail({ unit }: { unit: string }) {
         });
         if (!cancelled) setBabelProbe({ forUnit: priceUnit, result });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = describeError(e);
         // eslint-disable-next-line no-console
         console.error("[babel-probe] threw", msg);
         if (!cancelled) {
@@ -303,7 +305,7 @@ export function ListingDetail({ unit }: { unit: string }) {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -337,7 +339,7 @@ export function ListingDetail({ unit }: { unit: string }) {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -361,7 +363,7 @@ export function ListingDetail({ unit }: { unit: string }) {
         <p className="text-sm text-amber-300">marketplace not deployed.</p>
       ) : !listing ? (
         err ? (
-          <p className="text-sm text-red-300">{err}</p>
+          <ErrorNotice message={err} />
         ) : (
           <p className="text-sm text-zinc-500">looking up the listing…</p>
         )
@@ -457,11 +459,7 @@ export function ListingDetail({ unit }: { unit: string }) {
         </div>
       )}
 
-      {err && listing ? (
-        <p className="rounded border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-          {err}
-        </p>
-      ) : null}
+      {err && listing ? <ErrorNotice message={err} /> : null}
       {tx ? (
         <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
           <p className="break-all">↗ {tx}</p>

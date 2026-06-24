@@ -19,6 +19,8 @@ import {
   toEvolutionNetwork,
 } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { describeError } from "@/lib/errors";
 
 // Heavy lucid-dependent helpers are loaded lazily inside `onSubmit` —
 // keeps the WASM-backed CML out of the SSR bundle. See
@@ -215,7 +217,7 @@ export default function RegisterConfigPage() {
       setStep({
         kind: "error",
         at: "loading SDK",
-        message: err instanceof Error ? err.message : String(err),
+        message: describeError(err),
       });
       return;
     }
@@ -227,7 +229,7 @@ export default function RegisterConfigPage() {
       setStep({
         kind: "error",
         at: "wallet",
-        message: err instanceof Error ? err.message : String(err),
+        message: describeError(err),
       });
       return;
     }
@@ -248,7 +250,7 @@ export default function RegisterConfigPage() {
       setStep({
         kind: "error",
         at: "wallet",
-        message: err instanceof Error ? err.message : String(err),
+        message: describeError(err),
       });
       return;
     }
@@ -272,7 +274,7 @@ export default function RegisterConfigPage() {
       setStep({
         kind: "error",
         at: "deploy",
-        message: err instanceof Error ? err.message : String(err),
+        message: describeError(err),
       });
       return;
     }
@@ -285,7 +287,7 @@ export default function RegisterConfigPage() {
       setStep({
         kind: "error",
         at: "confirmation",
-        message: err instanceof Error ? err.message : String(err),
+        message: describeError(err),
       });
       return;
     }
@@ -327,7 +329,7 @@ export default function RegisterConfigPage() {
       setStep({
         kind: "error",
         at: "signing",
-        message: err instanceof Error ? err.message : String(err),
+        message: describeError(err),
       });
       return;
     }
@@ -713,7 +715,7 @@ function StepStatus({ step }: { step: Step }) {
         role="alert"
       >
         <p className="font-semibold text-red-200">failed during {step.at}.</p>
-        <p className="mt-1 break-all text-red-100">{step.message}</p>
+        <ErrorNotice message={step.message} className="mt-2" />
       </div>
     );
   }

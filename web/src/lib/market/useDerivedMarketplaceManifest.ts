@@ -8,6 +8,7 @@ import {
   marketplaceManifest,
   type DerivedMarketplaceManifest,
 } from "@/lib/market/config";
+import { describeError } from "@/lib/errors";
 
 /**
  * React hook: returns the derived manifest, recomputing whenever the slim
@@ -60,7 +61,7 @@ export function useDerivedMarketplaceManifest(): {
         setState({
           data: null,
           loading: false,
-          error: e instanceof Error ? e.message : String(e),
+          error: describeError(e),
         });
       });
     return () => {

@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { describeError } from "@/lib/errors";
 import { useNftMetadata } from "@/lib/api/hooks";
 import { useMyListings, type MyListingRow } from "@/lib/me/useMyListings";
 import type { ListingsResponse } from "@/types/api";
@@ -172,9 +174,9 @@ export default function MePage() {
       setSelected(new Set());
       setBulkState({ kind: "idle" });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = describeError(err);
       console.error("bulk withdraw failed:", message);
-      setBulkState({ kind: "error", message: message.slice(0, 300) });
+      setBulkState({ kind: "error", message });
     }
   }, [api, rows, effectiveSelected, queryClient]);
 
@@ -261,12 +263,7 @@ export default function MePage() {
       )}
 
       {bulkState.kind === "error" && (
-        <p
-          className="rounded-lg border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm text-red-300"
-          role="alert"
-        >
-          bulk withdraw failed: {bulkState.message}
-        </p>
+        <ErrorNotice message={bulkState.message} title="Bulk withdraw failed" />
       )}
 
       {rows.length > 0 && (
@@ -417,9 +414,9 @@ function MyListingCard({
         invalidate();
         setState({ kind: "idle" });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = describeError(err);
         console.error(`${label} failed:`, message);
-        setState({ kind: "error", message: message.slice(0, 200) });
+        setState({ kind: "error", message });
       }
     },
     [api, invalidate],
@@ -550,11 +547,8 @@ function MyListingCard({
         </div>
       )}
       {state.kind === "error" && (
-        <div
-          className="border-t border-red-900/40 bg-red-950/30 px-4 py-2 text-xs text-red-300"
-          role="alert"
-        >
-          {state.message}
+        <div className="border-t border-red-900/40 px-4 py-2">
+          <ErrorNotice message={state.message} />
         </div>
       )}
     </li>

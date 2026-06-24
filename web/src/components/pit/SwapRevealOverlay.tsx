@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { useNftMetadata } from "@/lib/api/hooks";
 
 /**
@@ -604,7 +605,9 @@ function StuckPhase({
           your s#!t got stuck in the pipes
         </p>
         {message && (
-          <p className="mt-2 max-w-xs text-xs text-red-300/80">{message}</p>
+          <div className="mx-auto mt-3 w-full max-w-sm text-left">
+            <ErrorNotice message={message} />
+          </div>
         )}
         <p className="mt-3 text-xs text-zinc-500">
           your wallet and the pit are unchanged. try again.

@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { fetchCollection, fetchCurated } from "@/lib/api/client";
+import { describeError } from "@/lib/errors";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { submitConfigUpdate } from "@/lib/tx/updateConfig";
@@ -126,8 +128,7 @@ export default function UpdateConfigPage() {
       await awaitTxConfirmation(client, result.txHash);
       setStep({ kind: "success", txHash: result.txHash });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setStep({ kind: "error", message: message.slice(0, 400) });
+      setStep({ kind: "error", message: describeError(err) });
     }
   }, [api, collection.data, values, networkName, isAdmin]);
 
@@ -304,11 +305,7 @@ export default function UpdateConfigPage() {
               <span className="font-mono">{step.txHash}</span>
             </p>
           )}
-          {step.kind === "error" && (
-            <p className="rounded-md border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-300">
-              {step.message}
-            </p>
-          )}
+          {step.kind === "error" && <ErrorNotice message={step.message} />}
         </>
       )}
     </main>

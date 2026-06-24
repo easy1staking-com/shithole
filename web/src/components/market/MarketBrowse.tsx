@@ -10,7 +10,9 @@ import {
   type FilterState,
 } from "@/components/market/FilterBar";
 import { ListingCard } from "@/components/market/ListingCard";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { fetchNftMetadata } from "@/lib/api/client";
+import { describeError } from "@/lib/errors";
 import { queryKeys } from "@/lib/api/hooks";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import {
@@ -62,7 +64,7 @@ export function MarketBrowse() {
       const found = await fetchMarketListings(client, marketplaceAddress);
       setListings(found);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setLoading(false);
     }
@@ -186,11 +188,7 @@ export function MarketBrowse() {
         <>
           <FilterBar filters={filters} onChange={setFilters} />
 
-          {err ? (
-            <p className="rounded border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-              {err}
-            </p>
-          ) : null}
+          {err ? <ErrorNotice message={err} /> : null}
 
           {!walletApi ? (
             <p className="text-sm text-zinc-500">connect a wallet to browse.</p>

@@ -8,6 +8,8 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { describeError } from "@/lib/errors";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { supportedCollections } from "@/lib/market/supportedCollections";
 import {
@@ -237,7 +239,7 @@ export function ListDrawer() {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBusy(false);
       setConfirming(false);
@@ -330,7 +332,7 @@ export function ListDrawer() {
             </header>
 
             {nftsError ? (
-              <p className="text-xs text-red-300">{String(nftsError)}</p>
+              <ErrorNotice error={nftsError} title="Couldn't load wallet NFTs" />
             ) : !walletNfts || walletNfts.length === 0 ? (
               <p className="text-xs text-zinc-500">
                 {nftsLoading
@@ -403,11 +405,7 @@ export function ListDrawer() {
             </div>
           )}
 
-          {err ? (
-            <p className="rounded border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-              {err}
-            </p>
-          ) : null}
+          {err ? <ErrorNotice message={err} /> : null}
           {tx ? (
             <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
               <p className="break-all">↗ {tx}</p>

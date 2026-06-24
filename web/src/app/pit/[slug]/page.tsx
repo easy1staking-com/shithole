@@ -15,6 +15,7 @@ import {
 } from "@/components/pit/SwapRevealOverlay";
 import { WalletDrawer } from "@/components/pit/WalletDrawer";
 import { useCollection, useListings } from "@/lib/api/hooks";
+import { describeError } from "@/lib/errors";
 import { useMatchability } from "@/lib/pit/useMatchability";
 import type { Match } from "@/lib/pit/bucketMath";
 import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
@@ -245,13 +246,12 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
         })
         .catch((chainErr) => {
           const chainMsg =
-            chainErr instanceof Error ? chainErr.message : String(chainErr);
+            describeError(chainErr);
           console.warn("chain did not confirm:", chainMsg);
           setConfirmation("rejected");
         });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : String(err);
+      const message = describeError(err);
       console.error("swap failed:", message);
       // Submit-side failure → the "stuck in the pipes" overlay. Chain
       // never saw the tx, so wallet/pool state is unchanged — no
@@ -358,7 +358,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           refreshHistory();
         } catch (chainErr) {
           const chainMsg =
-            chainErr instanceof Error ? chainErr.message : String(chainErr);
+            describeError(chainErr);
           console.warn("list did not confirm:", chainMsg);
           // Roll back the optimistic remove so the user sees their NFTs
           // back in the drawer after a chain rejection.
@@ -368,7 +368,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           setToast("chain didn't accept the listing — try again");
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = describeError(err);
         console.error("list failed:", message);
         // Submit-side failure (wallet refused, tx-build threw, etc.) —
         // the optimistic remove didn't fire because we hadn't gotten to

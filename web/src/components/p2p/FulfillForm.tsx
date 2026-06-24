@@ -9,8 +9,10 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { MultiSelectPopover } from "@/components/p2p/MultiSelectPopover";
 import { SelectableWalletCard } from "@/components/pit/SelectableWalletCard";
+import { describeError } from "@/lib/errors";
 import {
   useAssetPoolMembership,
   useCurated,
@@ -313,12 +315,12 @@ function FulfillBody({
         })
         .catch((chainErr) => {
           const chainMsg =
-            chainErr instanceof Error ? chainErr.message : String(chainErr);
+            describeError(chainErr);
           console.warn("p2p fulfill chain did not confirm:", chainMsg);
           setConfirmation("rejected");
         });
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : String(e));
+      setSubmitError(describeError(e));
     } finally {
       setSubmitting(false);
     }
@@ -463,11 +465,7 @@ function FulfillBody({
                 : "fulfill — make the swap"}
         </button>
       )}
-      {submitError && (
-        <p className="text-xs text-red-400" role="alert">
-          {submitError}
-        </p>
-      )}
+      {submitError && <ErrorNotice message={submitError} />}
     </div>
   );
 }

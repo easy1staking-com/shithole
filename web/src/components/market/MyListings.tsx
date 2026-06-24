@@ -6,7 +6,9 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { useNftMetadata } from "@/lib/api/hooks";
+import { describeError } from "@/lib/errors";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { listPools, matchesPool } from "@/lib/market/poolTraits";
 import {
@@ -71,7 +73,7 @@ export function MyListings() {
       const list = await fetchMarketListings(client, marketplaceAddress);
       setAll(list);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setLoading(false);
     }
@@ -154,7 +156,7 @@ export function MyListings() {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBusyKey(null);
     }
@@ -192,7 +194,7 @@ export function MyListings() {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBulkBusy(false);
     }
@@ -297,11 +299,7 @@ export function MyListings() {
         </>
       )}
 
-      {err ? (
-        <p className="rounded border border-red-900 bg-red-950/40 px-3 py-2 text-xs text-red-300">
-          {err}
-        </p>
-      ) : null}
+      {err ? <ErrorNotice message={err} /> : null}
       {tx ? (
         <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-[10px] text-emerald-200">
           <p className="break-all">↗ {tx}</p>

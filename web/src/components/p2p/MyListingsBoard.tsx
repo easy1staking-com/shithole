@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ConfirmationChip } from "@/components/ConfirmationChip";
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { describeError } from "@/lib/errors";
 import { useP2pListingsByBuyer } from "@/lib/api/hooks";
 import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
@@ -180,10 +182,10 @@ export function MyListingsBoard() {
         setBulkState((s) => (s.kind === "confirmed" ? { kind: "idle" } : s));
       }, 4000);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = describeError(err);
       console.error("bulk reclaim failed:", message);
       if (!mountedRef.current) return;
-      setBulkState({ kind: "error", message: message.slice(0, 300) });
+      setBulkState({ kind: "error", message });
     }
   }, [
     api,
@@ -329,12 +331,9 @@ export function MyListingsBoard() {
             )}
           </div>
           {bulkState.kind === "error" && (
-            <p
-              className="mx-auto max-w-4xl px-6 pb-3 text-[11px] text-red-400"
-              role="alert"
-            >
-              {bulkState.message}
-            </p>
+            <div className="mx-auto max-w-4xl px-6 pb-3">
+              <ErrorNotice message={bulkState.message} title="Bulk reclaim failed" />
+            </div>
           )}
         </div>
       )}

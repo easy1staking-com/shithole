@@ -9,10 +9,12 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
+import { ErrorNotice } from "@/components/ErrorNotice";
 import { DepositStep } from "@/components/p2p/DepositStep";
 import { NftPickerStep } from "@/components/p2p/NftPickerStep";
 import { PoolPicker, PoolSummary } from "@/components/p2p/PoolPicker";
 import { useCollection, useCurated } from "@/lib/api/hooks";
+import { describeError } from "@/lib/errors";
 import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import {
@@ -197,12 +199,12 @@ function FlowForCollection({ slug }: { slug: string }) {
           })
           .catch((chainErr) => {
             const msg =
-              chainErr instanceof Error ? chainErr.message : String(chainErr);
+              describeError(chainErr);
             console.warn("p2p create-listing chain did not confirm:", msg);
             setConfirmation("rejected");
           });
       } catch (e) {
-        setSubmitError(e instanceof Error ? e.message : String(e));
+        setSubmitError(describeError(e));
       } finally {
         setSubmitting(false);
       }
@@ -317,11 +319,7 @@ function FlowForCollection({ slug }: { slug: string }) {
               onSubmit={handleSubmitDeposit}
               submitting={submitting}
             />
-            {submitError && (
-              <p className="mt-3 text-xs text-red-400" role="alert">
-                {submitError}
-              </p>
-            )}
+            {submitError && <ErrorNotice message={submitError} className="mt-3" />}
           </>
         )}
       </Step>

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ErrorNotice } from "@/components/ErrorNotice";
+import { describeError } from "@/lib/errors";
 import { fetchJars, type Jar } from "@/lib/jar/queryJars";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { applyJarScript } from "@/lib/tx/marketScripts";
@@ -57,7 +59,7 @@ export function JarManager() {
         const jar = await applyJarScript(network, walletPkh);
         setJarAddress(jar.address);
       } catch (e) {
-        setErr(e instanceof Error ? e.message : String(e));
+        setErr(describeError(e));
       }
     })();
   }, [walletPkh]);
@@ -73,7 +75,7 @@ export function JarManager() {
       setJunk(jk);
       setSelected(new Set());
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setLoading(false);
     }
@@ -103,7 +105,7 @@ export function JarManager() {
       setLastTx(res.txHash);
       await refresh();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBusyAction(null);
     }
@@ -130,7 +132,7 @@ export function JarManager() {
       setLastTx(res.txHash);
       await refresh();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBusyAction(null);
     }
@@ -159,7 +161,7 @@ export function JarManager() {
       setLastTx(res.txHash);
       await refresh();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBusyAction(null);
     }
@@ -181,7 +183,7 @@ export function JarManager() {
       setLastTx(res.txHash);
       await refresh();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(describeError(e));
     } finally {
       setBusyAction(null);
     }
@@ -215,11 +217,7 @@ export function JarManager() {
         )}
       </header>
 
-      {err ? (
-        <p className="rounded border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-          {err}
-        </p>
-      ) : null}
+      {err ? <ErrorNotice message={err} /> : null}
       {lastTx ? (
         <p className="rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
           ↗ {lastTx}
