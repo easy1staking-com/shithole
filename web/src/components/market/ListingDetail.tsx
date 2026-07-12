@@ -265,11 +265,9 @@ export function ListingDetail({ unit }: { unit: string }) {
         );
       }
       const jarUtxo = jarUtxos[0];
-      // Pull the connected wallet's UTxOs — Evolution will balance,
-      // picking what it needs to cover the price token + tx fee.
-      const walletUtxos = adaptUtxos(
-        await client.getUtxos(Address.fromBech32(walletAddress)),
-      );
+      // No wallet UTxOs are passed: submitMarketBuy lets Evolution coin-select
+      // the buyer's funding during .build(), and the deferred jar_input_index
+      // redeemer resolves against the final input order.
       const res = await submitMarketBuy(client, {
         network: toEvolutionNetwork(getNetworkName()),
         jarAddress: manifest.jarAddress,
@@ -279,7 +277,6 @@ export function ListingDetail({ unit }: { unit: string }) {
         listing: listing.datum,
         sellerBech32Address: sellerBech32,
         jarUtxo,
-        buyerInputs: walletUtxos,
         buyerBech32Address: walletAddress,
         babelFee: babelEnabled && babel ? {
           tank: babel.tank,

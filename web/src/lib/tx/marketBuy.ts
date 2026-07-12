@@ -97,9 +97,6 @@ export type MarketBuyInput = {
   sellerBech32Address: string;
   /** Jar UTxO the fee will be deposited to. */
   jarUtxo: UTxO;
-  /** Buyer wallet UTxOs to consume (must collectively carry enough of the
-   *  price token + tx fee + min-UTxO for the buyer-NFT output). */
-  buyerInputs: UTxO[];
   /** Bech32 destination for the listed asset(s) — typically the connected wallet. */
   buyerBech32Address: string;
   /** Optional FluidTokens babel-fee subsidy. Off by default. */
@@ -205,22 +202,15 @@ async function buildMarketBuyTx(
   const expectedFee = (priceQty * 2n + 99n) / 100n;
   const sellerAmount = priceQty - expectedFee;
 
-  // ----- Index resolution (canonical Cardano sort) -----
-  // When babel-fee is enabled, the tank UTxO joins self.inputs and
-  // shifts the canonical position of everything else.
-  const allInputs: UTxO[] = [
-    input.listingUtxo,
-    input.jarUtxo,
-    ...(babelFee ? [babelFee.tank.utxo] : []),
-    ...input.buyerInputs,
-  ];
-  const sortedInputs = [...allInputs].sort(compareOutRefs);
-  const jarInputIndex = sortedInputs.findIndex((u) =>
-    sameRef(u, input.jarUtxo),
-  );
-  if (jarInputIndex < 0) {
-    throw new Error("could not locate jar input after sort — bug");
-  }
+  // ----- Input-index resolution -----
+  // The jar INPUT index depends on the final canonical (tx_hash,
+  // output_index) sort of ALL inputs — which isn't known until coin
+  // selection has added funding UTxOs. Rather than pin the whole wallet
+  // to force a deterministic order, we defer the Buy redeemer: Evolution
+  // resolves the jar's final index after selection (see the batch-mode
+  // redeemer on the listing collectFrom below). OUTPUT indices, by
+  // contrast, are stable — Evolution appends change at the tail and never
+  // reorders authored outputs — so they're computed here directly.
 
   // Outputs are emitted in the order we call payToAddress (Evolution
   // doesn't reorder authored outputs; change goes at the tail).
@@ -282,11 +272,15 @@ async function buildMarketBuyTx(
   const jarOutDatum: Data.Data = Data.constr(0n, [Data.bytearray(jarTagHex)]);
 
   // ----- Redeemers -----
-  const buyRedeemer: Data.Data = Data.constr(0n, [
-    Data.int(BigInt(jarInputIndex)),
-    Data.int(BigInt(jarOutputIndex)),
-    Data.int(BigInt(sellerOutputIndex)),
-  ]);
+  // Buy: [jar_input_index, jar_output_index, seller_output_index]. The
+  // input index is filled in by the deferred (batch) redeemer once coin
+  // selection settles the final input order; output indices are stable.
+  const buildBuyRedeemer = (jarInputIndex: number): Data.Data =>
+    Data.constr(0n, [
+      Data.int(BigInt(jarInputIndex)),
+      Data.int(BigInt(jarOutputIndex)),
+      Data.int(BigInt(sellerOutputIndex)),
+    ]);
 
   // Jar Deposit redeemer: {fee_token_policy, fee_token_name, qty, output_index}.
   const depositRedeemer: Data.Data = Data.constr(0n, [
@@ -312,7 +306,13 @@ async function buildMarketBuyTx(
     .newTx()
     .collectFrom({
       inputs: [input.listingUtxo._evolution],
-      redeemer: buyRedeemer,
+      // Batch mode: the visibility set ([jar]) is decoupled from the input
+      // this redeemer is attached to (the listing). Evolution resolves the
+      // jar's final sorted index after coin selection and hands it here.
+      redeemer: {
+        inputs: [input.jarUtxo._evolution],
+        all: (indexed) => buildBuyRedeemer(indexed[0].index),
+      },
     })
     .attachScript({ script: mp.validator })
     .collectFrom({
@@ -343,16 +343,22 @@ async function buildMarketBuyTx(
       bf.oracleRefScriptUtxo,
       bf.tankRefScriptUtxo,
     ]);
+    // oracleIndex/paramsIndex are REFERENCE-input positions — coin
+    // selection never touches ref inputs, so these are stable and computed
+    // directly. inputTankIndex is a SPEND-input position (the tank hint the
+    // validator uses to fetch itself via tx.inputs[i]); it depends on the
+    // final input sort, so we defer it via a Self redeemer.
     const oracleIndex = refIndex(refInputs, bf.oracleDataUtxo);
     const paramsIndex = refIndex(refInputs, bf.parameters);
-    const tankSpendRedeemer = buildConsumeOracleRedeemer({
-      payingTokenIndex,
-      inputTankIndex: 0,
-      receivers: 0,
-      oracleIndex,
-      paramsIndex,
-      whitelistIndex: 0,
-    });
+    const buildTankRedeemer = (inputTankIndex: number): Data.Data =>
+      buildConsumeOracleRedeemer({
+        payingTokenIndex,
+        inputTankIndex,
+        receivers: 0,
+        oracleIndex,
+        paramsIndex,
+        whitelistIndex: 0,
+      });
     const oracleWithdrawRedeemer = buildOracleRedeemer(bf.oracle);
     const oracleStake = stakeCredentialFromRewardAddress(
       bf.oracle.oracleWithdrawAddress,
@@ -360,7 +366,7 @@ async function buildMarketBuyTx(
     txBuilder = txBuilder
       .collectFrom({
         inputs: [bf.tank.utxo._evolution],
-        redeemer: tankSpendRedeemer,
+        redeemer: (self) => buildTankRedeemer(self.index),
       })
       .readFrom({ referenceInputs: refInputs.map((r) => r._evolution) })
       .withdraw({
@@ -370,9 +376,10 @@ async function buildMarketBuyTx(
       });
   }
 
-  for (const u of input.buyerInputs) {
-    txBuilder = txBuilder.collectFrom({ inputs: [u._evolution] });
-  }
+  // No wallet inputs are pinned here: coin selection during .build() pulls
+  // exactly the buyer UTxOs needed to cover the price token + fee + min-UTxO
+  // and returns the rest as change. The jar_input_index / inputTankIndex
+  // redeemers resolve against whatever inputs selection settles on.
 
   // Babel-fee outputs (when set) — MUST be the first two outputs per
   // the tank validator's positional addressing.
