@@ -173,39 +173,16 @@ export function ListingDetail({ unit }: { unit: string }) {
   const babel = babelProbe?.forUnit === priceUnit ? babelProbe.result : null;
 
   useEffect(() => {
-    // Diagnostic — the babel-fee toggle has five render-gate AND six on-chain
-    // dependencies; this log makes silent gating visible in DevTools so a user
-    // hitting "no checkbox" can self-diagnose without a code change.
-    // eslint-disable-next-line no-console
-    console.info("[babel-probe] gates", {
-      featureFlag: babelFeatureOn,
-      isSeller,
-      hasWallet: Boolean(walletApi),
-      hasListing: Boolean(listing),
-      priceUnit,
-      probeWillRun: probeEnabled,
-    });
     if (!probeEnabled) return;
     let cancelled = false;
     (async () => {
       try {
         const client = await makeClient(walletApi!);
         const result = await probeBabelAvailability(client, priceUnit);
-        // eslint-disable-next-line no-console
-        console.info("[babel-probe] result", {
-          ok: Boolean(result),
-          priceUnit,
-          tankOutRef: result?.tank.utxo.txHash
-            ? `${result.tank.utxo.txHash}#${result.tank.utxo.outputIndex}`
-            : null,
-        });
         if (!cancelled) setBabelProbe({ forUnit: priceUnit, result });
       } catch (e) {
-        const msg = describeError(e);
-        // eslint-disable-next-line no-console
-        console.error("[babel-probe] threw", msg);
         if (!cancelled) {
-          setBabelProbeError(msg);
+          setBabelProbeError(describeError(e));
           setBabelProbe({ forUnit: priceUnit, result: null });
         }
       }

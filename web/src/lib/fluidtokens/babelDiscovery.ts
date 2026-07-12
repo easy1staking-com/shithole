@@ -89,30 +89,12 @@ export async function probeBabelAvailability(
   const name = unit.slice(56);
 
   const [oracleEntries, tank, parameters] = await Promise.all([
-    fetchOracleTokens().catch((e) => {
-      // eslint-disable-next-line no-console
-      console.error("[babel-probe] fetchOracleTokens threw", e);
-      return [] as LiveOraclePrice[];
-    }),
+    fetchOracleTokens().catch(() => [] as LiveOraclePrice[]),
     findLiveTank(client, policy, name),
-    findParametersUtxo(client).catch((e) => {
-      // eslint-disable-next-line no-console
-      console.error("[babel-probe] findParametersUtxo threw", e);
-      return null;
-    }),
+    findParametersUtxo(client).catch(() => null),
   ]);
 
   const oracle = oracleEntries.find((e) => e.unit === unit) ?? null;
-  // eslint-disable-next-line no-console
-  console.info("[babel-probe] pieces", {
-    oracleEntries: oracleEntries.length,
-    oracleMatched: Boolean(oracle),
-    oracleUnitsAvailable: oracleEntries
-      .map((e) => e.unit.slice(0, 8) + "…" + e.unit.slice(-6))
-      .slice(0, 5),
-    tank: Boolean(tank),
-    parameters: Boolean(parameters),
-  });
   if (!oracle || !tank || !parameters) return null;
 
   const oracleRefInputStr = oracle.raw.fluidOracle?.referenceInput ?? "";
@@ -157,51 +139,23 @@ async function findLiveTank(
   let raw: ReturnType<EvolutionClient["getUtxos"]> extends Promise<infer T> ? T : never;
   try {
     raw = await client.getUtxos(Address.fromBech32(TANK_BECH32_MAINNET));
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error("[babel-probe] findLiveTank getUtxos threw", e);
+  } catch {
     return null;
   }
-  // eslint-disable-next-line no-console
-  console.info("[babel-probe] tank addr utxos", { count: raw.length });
   for (const u of raw) {
     const adapted = adaptUtxo(u);
-    if (!adapted.datum) {
-      // eslint-disable-next-line no-console
-      console.info("[babel-probe] tank candidate skipped — no datum");
-      continue;
-    }
+    if (!adapted.datum) continue;
     let datum;
     try {
       const { Data } = await import("@evolution-sdk/evolution");
       datum = Data.fromCBORHex(adapted.datum);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn("[babel-probe] tank candidate datum fromCBORHex threw", e);
+    } catch {
       continue;
     }
     const decoded = decodeDatumTank(datum);
-    if (!decoded) {
-      // eslint-disable-next-line no-console
-      console.warn("[babel-probe] tank candidate decodeDatumTank returned null", {
-        outRef: `${adapted.txHash}#${adapted.outputIndex}`,
-        datumHexPrefix: adapted.datum.slice(0, 80),
-      });
-      continue;
-    }
+    if (!decoded) continue;
     const idx = tankAcceptsToken(decoded, paymentTokenPolicyHex, paymentTokenNameHex);
-    if (idx < 0) {
-      // eslint-disable-next-line no-console
-      console.warn("[babel-probe] tank candidate has no matching paying token", {
-        outRef: `${adapted.txHash}#${adapted.outputIndex}`,
-        allowedTokens: decoded.allowedTokens.map((t) => ({
-          policy: t.policyId,
-          name: t.assetName,
-        })),
-        wanted: { policy: paymentTokenPolicyHex, name: paymentTokenNameHex },
-      });
-      continue;
-    }
+    if (idx < 0) continue;
     return { utxo: adapted, datum: decoded };
   }
   return null;

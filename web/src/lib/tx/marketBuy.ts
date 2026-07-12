@@ -154,18 +154,14 @@ export async function submitMarketBuy(
   const initial = await buildMarketBuyTx(client, input, input.babelFee.adaUsedLovelace);
   const measuredFee = await initial.estimateFee();
   const targetAdaUsed = measuredFee + BABEL_FEE_SAFETY_BUFFER_LOVELACE;
-  // eslint-disable-next-line no-console
-  console.info("[babel-fee] iterative pass", {
-    initialAdaUsed: input.babelFee.adaUsedLovelace.toString(),
-    measuredFee: measuredFee.toString(),
-    safetyBuffer: BABEL_FEE_SAFETY_BUFFER_LOVELACE.toString(),
-    targetAdaUsed: targetAdaUsed.toString(),
-    willRebuild: targetAdaUsed !== input.babelFee.adaUsedLovelace,
-  });
-  const finalBuilt =
-    targetAdaUsed === input.babelFee.adaUsedLovelace
-      ? initial
-      : await buildMarketBuyTx(client, input, targetAdaUsed);
+  const willRebuild = targetAdaUsed !== input.babelFee.adaUsedLovelace;
+  console.info(
+    `[babel-fee] pass 1 built (adaUsed=${input.babelFee.adaUsedLovelace}, measuredFee=${measuredFee}); ` +
+      `pass 2 ${willRebuild ? `rebuild (adaUsed=${targetAdaUsed})` : "skipped — reusing pass 1"}`,
+  );
+  const finalBuilt = willRebuild
+    ? await buildMarketBuyTx(client, input, targetAdaUsed)
+    : initial;
   const signed = await finalBuilt.sign();
   return { txHash: txHashHex(await signed.submit()) };
 }
@@ -344,22 +340,26 @@ async function buildMarketBuyTx(
       bf.oracleRefScriptUtxo,
       bf.tankRefScriptUtxo,
     ]);
-    // oracleIndex/paramsIndex are REFERENCE-input positions — coin
-    // selection never touches ref inputs, so these are stable and computed
-    // directly. inputTankIndex is a SPEND-input position (the tank hint the
-    // validator uses to fetch itself via tx.inputs[i]); it depends on the
-    // final input sort, so we defer it via a Self redeemer.
+    // oracleIndex/paramsIndex are REFERENCE-input positions — coin selection
+    // never touches ref inputs, so these are stable and computed directly.
+    //
+    // inputTankIndex is NOT the absolute tx.inputs position — it's the index
+    // within the TANK-filtered inputs. We spend exactly one tank, so it is
+    // always 0, regardless of where the tank lands in the canonical sort.
+    // Empirically confirmed against mainnet consume tx 2a07cb2d…: the
+    // ConsumeOracle redeemer carried inputTankIndex=0 while the ledger placed
+    // the tank at absolute input index 3. (An earlier attempt to "fix" this
+    // with the tank's Self index broke every babel buy — do NOT reintroduce.)
     const oracleIndex = refIndex(refInputs, bf.oracleDataUtxo);
     const paramsIndex = refIndex(refInputs, bf.parameters);
-    const buildTankRedeemer = (inputTankIndex: number): Data.Data =>
-      buildConsumeOracleRedeemer({
-        payingTokenIndex,
-        inputTankIndex,
-        receivers: 0,
-        oracleIndex,
-        paramsIndex,
-        whitelistIndex: 0,
-      });
+    const tankSpendRedeemer = buildConsumeOracleRedeemer({
+      payingTokenIndex,
+      inputTankIndex: 0,
+      receivers: 0,
+      oracleIndex,
+      paramsIndex,
+      whitelistIndex: 0,
+    });
     const oracleWithdrawRedeemer = buildOracleRedeemer(bf.oracle);
     const oracleStake = stakeCredentialFromRewardAddress(
       bf.oracle.oracleWithdrawAddress,
@@ -367,7 +367,7 @@ async function buildMarketBuyTx(
     txBuilder = txBuilder
       .collectFrom({
         inputs: [bf.tank.utxo._evolution],
-        redeemer: (self) => buildTankRedeemer(self.index),
+        redeemer: tankSpendRedeemer,
       })
       .readFrom({ referenceInputs: refInputs.map((r) => r._evolution) })
       .withdraw({
