@@ -32,6 +32,7 @@ import {
   txHashHex,
 } from "./txAdapters";
 import type { UTxO } from "./utxo";
+import { tokenAwareLargestFirst } from "./coinSelection";
 import { blake2b } from "@noble/hashes/blake2b";
 import { serialiseOutputReference, hexToBytes } from "@/lib/pit/bucketMath";
 
@@ -472,7 +473,10 @@ async function buildMarketBuyTx(
     txBuilder = txBuilder.setValidity({ from: validFromMs, to: validToMs });
   }
 
-  return txBuilder.build();
+  // Token-aware coin selection: HOSKY-priced listings otherwise drag in
+  // every ADA-heavy UTxO before the SDK's largest-first selector reaches the
+  // token (see coinSelection.ts). This keeps the input set minimal.
+  return txBuilder.build({ coinSelection: tokenAwareLargestFirst });
 }
 
 function canonicalRefSort(refs: UTxO[]): UTxO[] {
