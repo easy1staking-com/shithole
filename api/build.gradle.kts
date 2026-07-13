@@ -131,6 +131,14 @@ tasks.register<JavaExec>("preprodMintHoskyMimic") {
     standardInput = System.`in`
 }
 
+tasks.register<JavaExec>("preprodMintFromFixture") {
+    group = "preprod tools"
+    description = "Mint a realistic preprod collection from a mainnet fixture (.local/<slug>-mainnet.json, built by scripts/mint/build-mainnet-fixture.py). Embeds raw CIP-25 verbatim, batches under the tx-size limit. Set FIXTURE=<path> (and optional BATCH_SIZE)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.easy1staking.shithole.tools.preprod.MintFromFixtureTool")
+    standardInput = System.`in`
+}
+
 tasks.register<JavaExec>("preprodMintFungible") {
     group = "preprod tools"
     description = "Mint a preprod fungible token under a one-shot native policy. Args: <asset_name_ascii> <supply_smallest_unit> <decimals> [ticker]."

@@ -11,7 +11,10 @@ import {
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { describeError } from "@/lib/errors";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
-import { supportedCollections } from "@/lib/market/supportedCollections";
+import {
+  supportedCollections,
+  type SupportedCollection,
+} from "@/lib/market/supportedCollections";
 import {
   splitUnit,
   supportedPriceTokens,
@@ -45,9 +48,30 @@ export function ListDrawer() {
   const walletAddress = useWalletStore((s) => s.addressBech32);
 
   const collections = useMemo(() => supportedCollections(), []);
-  const collection = collections[0] ?? null;
-
   const priceTokens = useMemo(() => supportedPriceTokens(), []);
+
+  // Resolve a collection's default pricing token (by label) to a unit,
+  // falling back to the first token (ADA).
+  const defaultTokenUnitFor = useCallback(
+    (c: SupportedCollection | null): string => {
+      const t = c?.defaultPriceTokenLabel
+        ? priceTokens.find((pt) => pt.label === c.defaultPriceTokenLabel)
+        : undefined;
+      return t?.unit ?? priceTokens[0]?.unit ?? "";
+    },
+    [priceTokens],
+  );
+
+  const [collectionPolicy, setCollectionPolicy] = useState<string>(
+    collections[0]?.policyId ?? "",
+  );
+  const collection = useMemo(
+    () =>
+      collections.find((c) => c.policyId === collectionPolicy) ??
+      collections[0] ??
+      null,
+    [collections, collectionPolicy],
+  );
 
   const { data: walletNfts, isLoading: nftsLoading, error: nftsError } =
     useWalletCollectionNfts(walletAddress, collection?.policyId ?? null);
@@ -62,7 +86,20 @@ export function ListDrawer() {
   const [sameForAll, setSameForAll] = useState(true);
   const [sharedPrice, setSharedPrice] = useState("10");
   const [sharedTokenUnit, setSharedTokenUnit] = useState<string>(
-    priceTokens[0]?.unit ?? "",
+    defaultTokenUnitFor(collections[0] ?? null),
+  );
+
+  // Switching collection resets the selection (different assets) and
+  // pre-selects that collection's default pricing token.
+  const onCollectionChange = useCallback(
+    (policy: string) => {
+      setCollectionPolicy(policy);
+      const c = collections.find((x) => x.policyId === policy) ?? null;
+      setSharedTokenUnit(defaultTokenUnitFor(c));
+      setSelected(new Set());
+      setOverrides({});
+    },
+    [collections, defaultTokenUnitFor],
   );
 
   const [busy, setBusy] = useState(false);
@@ -283,6 +320,21 @@ export function ListDrawer() {
         <>
           {/* ---- Shared / same-for-all bar ---- */}
           <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+            {collections.length > 1 ? (
+              <Field label="collection">
+                <select
+                  value={collectionPolicy}
+                  onChange={(e) => onCollectionChange(e.target.value)}
+                  className="rounded border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 focus:border-sky-700 focus:outline-none"
+                >
+                  {collections.map((c) => (
+                    <option key={c.policyId} value={c.policyId}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
             <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-zinc-400">
               <input
                 type="checkbox"

@@ -63,6 +63,14 @@ const PREPROD_PRICE_TOKENS: SupportedPriceToken[] = [
     unit: "1ccce842d51112e37ca436f9cedf726507d159a0b0970b6d416634065553444d",
     decimals: 6,
   },
+  {
+    label: "SNEK",
+    ticker: "SNEK",
+    // Minted by preprodMintFungible (tx 65657d1f…dee82cfee, 2026-07-13).
+    // Snekkies' default pricing token. decimals 0 (matches mainnet SNEK).
+    unit: "51c13093b6572b7e4e7ed3e0f6451a82b9d3a5d8dea8b831a0a55424534e454b",
+    decimals: 0,
+  },
 ];
 
 const MAINNET_PRICE_TOKENS: SupportedPriceToken[] = [
@@ -86,6 +94,14 @@ const MAINNET_PRICE_TOKENS: SupportedPriceToken[] = [
     // 0014df10 + 5553444d ("USDM"). decimals 6.
     unit: "c48cbb3d5e57ed56e276bc45f99ab39abe94e6cd7ac39fb402da47ad0014df105553444d",
     decimals: 6,
+  },
+  {
+    label: "SNEK",
+    ticker: "SNEK",
+    // Cardano Foundation registry mapping. policy 279c909f… + 534e454b
+    // ("SNEK"), decimals 0.
+    unit: "279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f534e454b",
+    decimals: 0,
   },
 ];
 
