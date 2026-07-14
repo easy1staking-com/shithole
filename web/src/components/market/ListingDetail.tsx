@@ -19,7 +19,7 @@ import {
   probeBabelAvailability,
   type BabelAvailability,
 } from "@/lib/fluidtokens/babelDiscovery";
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
 import { describeError } from "@/lib/errors";
 import { isBabelFeeEnabled } from "@/lib/fluidtokens/feature";
 import { requiredTokenPayment } from "@/lib/fluidtokens/math";
@@ -69,7 +69,7 @@ export function ListingDetail({ unit }: { unit: string }) {
   const refreshHistory = useRefreshHistory();
 
   const [listing, setListing] = useState<DecodedListing | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [tx, setTx] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
@@ -99,7 +99,7 @@ export function ListingDetail({ unit }: { unit: string }) {
         );
         if (!cancelled) setListing(match ?? null);
       } catch (e) {
-        if (!cancelled) setErr(describeError(e));
+        if (!cancelled) setErr(e);
       }
     })();
     return () => {
@@ -279,7 +279,7 @@ export function ListingDetail({ unit }: { unit: string }) {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -313,7 +313,7 @@ export function ListingDetail({ unit }: { unit: string }) {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -337,7 +337,7 @@ export function ListingDetail({ unit }: { unit: string }) {
         <p className="text-sm text-amber-300">marketplace not deployed.</p>
       ) : !listing ? (
         err ? (
-          <ErrorNotice message={err} />
+          <ErrorView error={err} context={{ subject: "listing" }} />
         ) : (
           <p className="text-sm text-zinc-500">looking up the listing…</p>
         )
@@ -433,7 +433,15 @@ export function ListingDetail({ unit }: { unit: string }) {
         </div>
       )}
 
-      {err && listing ? <ErrorNotice message={err} /> : null}
+      {err && listing ? (
+        <ErrorView
+          error={err}
+          context={{
+            action: txKind === "cancel" ? "cancelled" : "bought",
+            subject: "listing",
+          }}
+        />
+      ) : null}
       {tx ? (
         <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
           <p className="break-all">↗ {tx}</p>

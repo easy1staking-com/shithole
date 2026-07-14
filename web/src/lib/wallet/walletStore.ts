@@ -10,7 +10,6 @@
 
 import { create } from "zustand";
 
-import { describeError } from "@/lib/errors";
 
 import {
   detectInstalledWallets,
@@ -47,7 +46,8 @@ export type WalletState = {
   /** True while a connect is in flight. */
   connecting: boolean;
   /** Last connect error message, if any. */
-  error: string | null;
+  /** Raw thrown value (or a preset string) — classified at the render site. */
+  error: unknown;
 };
 
 export type WalletActions = {
@@ -143,10 +143,9 @@ export const useWalletStore = create<WalletState & WalletActions>(
           /* localStorage unavailable — non-fatal */
         }
       } catch (err) {
-        const message = describeError(err);
         set({
           connecting: false,
-          error: message,
+          error: err,
           name: null,
           api: null,
           addressHex: null,

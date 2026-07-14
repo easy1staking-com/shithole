@@ -7,6 +7,7 @@ import {
   useWalletStore,
 } from "./walletStore";
 import { detectInstalledWallets, type Cip30WalletEntry } from "./cip30";
+import { ErrorView } from "@/components/ErrorView";
 
 /**
  * SSR-safe wallet detection via useSyncExternalStore.
@@ -224,10 +225,10 @@ export function WalletConnectButton({ className }: { className?: string }) {
           ))}
         </div>
       )}
-      {error && (
-        <p className="absolute right-0 top-full mt-1 text-xs text-red-400">
-          {error}
-        </p>
+      {error != null && (
+        <div className="absolute right-0 top-full z-20 mt-1 w-72">
+          <ErrorView error={error} />
+        </div>
       )}
     </div>
   );

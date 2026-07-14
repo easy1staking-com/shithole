@@ -296,6 +296,15 @@ export function classifyError(
     return known("warning", "No wallet found", "Install Eternl, Vespr, or Lace, then refresh.");
   }
 
+  // 3b. Wallet exposes no usable addresses.
+  if (/no addresses|has no address|wallet has no/.test(t)) {
+    return known(
+      "warning",
+      "Empty wallet",
+      "This account has no addresses yet — pick a funded account and reconnect.",
+    );
+  }
+
   // 4. Wrong network (wallet vs app).
   if (/wrong network|network.?mismatch|networkid|does not match app network/.test(t)) {
     const lead =
