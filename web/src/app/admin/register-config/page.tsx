@@ -5,7 +5,6 @@ import { useCallback, useMemo, useState } from "react";
 import {
   registerConfig,
   type ConfigRegistrationRequest,
-  ApiError,
   type ConfigRegistrationResponse,
 } from "@/lib/api/client";
 import {
@@ -19,8 +18,8 @@ import {
   toEvolutionNetwork,
 } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
-import { ErrorNotice } from "@/components/ErrorNotice";
-import { describeError } from "@/lib/errors";
+import { ErrorView } from "@/components/ErrorView";
+import { Notice } from "@/components/Notice";
 
 // Heavy lucid-dependent helpers are loaded lazily inside `onSubmit` —
 // keeps the WASM-backed CML out of the SSR bundle. See
@@ -45,7 +44,11 @@ type Step =
       kind: "success";
       response: ConfigRegistrationResponse;
     }
-  | { kind: "error"; message: string; at: string };
+  // Caught failure at a named stage — rendered via ErrorView (friendly
+  // Notice for known/operational, debug box for genuinely-unknown).
+  | { kind: "error"; error: unknown; at: string }
+  // Local pre-flight validation — rendered as a warning Notice.
+  | { kind: "invalid"; message: string };
 
 const DEFAULT_VALUES: Partial<RegisterConfigFormValues> = {
   m: 10,
@@ -167,25 +170,19 @@ export default function RegisterConfigPage() {
     const parsed = validate();
     if (!parsed) return;
     if (!api) {
-      setStep({
-        kind: "error",
-        at: "wallet",
-        message: "connect a wallet first",
-      });
+      setStep({ kind: "invalid", message: "connect a wallet first" });
       return;
     }
     if (!addressBech32) {
       setStep({
-        kind: "error",
-        at: "wallet",
+        kind: "invalid",
         message: "wallet address not resolved yet — try reconnecting",
       });
       return;
     }
     if (networkMismatch) {
       setStep({
-        kind: "error",
-        at: "wallet",
+        kind: "invalid",
         message:
           "wallet network does not match app network — switch the wallet network and try again",
       });
@@ -193,8 +190,7 @@ export default function RegisterConfigPage() {
     }
     if (!projectId) {
       setStep({
-        kind: "error",
-        at: "config",
+        kind: "invalid",
         message:
           "NEXT_PUBLIC_BLOCKFROST_PROJECT_ID is not configured — see web/.env.example",
       });
@@ -214,11 +210,7 @@ export default function RegisterConfigPage() {
       deployConfig = deployMod.deployConfig;
       awaitTxConfirmation = awaitMod.awaitTxConfirmation;
     } catch (err) {
-      setStep({
-        kind: "error",
-        at: "loading SDK",
-        message: describeError(err),
-      });
+      setStep({ kind: "error", at: "loading SDK", error: err });
       return;
     }
 
@@ -226,11 +218,7 @@ export default function RegisterConfigPage() {
     try {
       client = await makeClient(api);
     } catch (err) {
-      setStep({
-        kind: "error",
-        at: "wallet",
-        message: describeError(err),
-      });
+      setStep({ kind: "error", at: "wallet", error: err });
       return;
     }
 
@@ -247,11 +235,7 @@ export default function RegisterConfigPage() {
         );
       }
     } catch (err) {
-      setStep({
-        kind: "error",
-        at: "wallet",
-        message: describeError(err),
-      });
+      setStep({ kind: "error", at: "wallet", error: err });
       return;
     }
 
@@ -271,11 +255,7 @@ export default function RegisterConfigPage() {
         network: networkEv,
       });
     } catch (err) {
-      setStep({
-        kind: "error",
-        at: "deploy",
-        message: describeError(err),
-      });
+      setStep({ kind: "error", at: "deploy", error: err });
       return;
     }
 
@@ -284,11 +264,7 @@ export default function RegisterConfigPage() {
     try {
       await awaitTxConfirmation(client, deployResult.txHash);
     } catch (err) {
-      setStep({
-        kind: "error",
-        at: "confirmation",
-        message: describeError(err),
-      });
+      setStep({ kind: "error", at: "confirmation", error: err });
       return;
     }
 
@@ -326,11 +302,7 @@ export default function RegisterConfigPage() {
       }
       addressHex = storedHex;
     } catch (err) {
-      setStep({
-        kind: "error",
-        at: "signing",
-        message: describeError(err),
-      });
+      setStep({ kind: "error", at: "signing", error: err });
       return;
     }
 
@@ -338,17 +310,7 @@ export default function RegisterConfigPage() {
     try {
       signature = await api.signData(addressHex, canonicalHex);
     } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : typeof err === "object" && err !== null && "info" in err
-            ? String((err as { info?: unknown }).info)
-            : String(err);
-      setStep({
-        kind: "error",
-        at: "signing",
-        message: `wallet rejected the signature: ${message}`,
-      });
+      setStep({ kind: "error", at: "signing", error: err });
       return;
     }
 
@@ -381,13 +343,7 @@ export default function RegisterConfigPage() {
       const response = await registerConfig(body);
       setStep({ kind: "success", response });
     } catch (err) {
-      const message =
-        err instanceof ApiError
-          ? `${err.status} ${err.body?.reason ?? ""}: ${err.body?.message ?? err.message}`
-          : err instanceof Error
-            ? err.message
-            : String(err);
-      setStep({ kind: "error", at: "registration", message });
+      setStep({ kind: "error", at: "registration", error: err });
     }
   };
 
@@ -708,14 +664,19 @@ function StepStatus({ step }: { step: Step }) {
       </div>
     );
   }
+  if (step.kind === "invalid") {
+    return <Notice severity="warning">{step.message}</Notice>;
+  }
   if (step.kind === "error") {
     return (
-      <div
-        className="rounded-md border border-red-700 bg-red-950 p-4 text-sm"
-        role="alert"
-      >
-        <p className="font-semibold text-red-200">failed during {step.at}.</p>
-        <ErrorNotice message={step.message} className="mt-2" />
+      <div className="space-y-2" role="alert">
+        <p className="text-xs uppercase tracking-widest text-zinc-500">
+          failed during {step.at}
+        </p>
+        <ErrorView
+          error={step.error}
+          context={{ action: "registered", subject: "config" }}
+        />
       </div>
     );
   }

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   HistoryEmptyState,
+  HistoryLoadError,
   HistoryRow,
   HistoryTabStrip,
   parseHistoryFilter,
@@ -59,11 +60,7 @@ export function HistoryBoard() {
     <div className="space-y-6">
       <HistoryTabStrip filter={filter} setFilter={setFilter} />
 
-      {errored && (
-        <div className="rounded-md border border-red-800/60 bg-red-950/30 p-4 text-sm text-red-300">
-          couldn&apos;t load some history rows. try again later.
-        </div>
-      )}
+      {errored && <HistoryLoadError />}
 
       {loading ? (
         <p className="text-sm text-zinc-500">scraping the chain…</p>

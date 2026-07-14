@@ -94,6 +94,13 @@ describe("classifyError — known operational errors", () => {
     expect(c.severity).toBe("warning");
   });
 
+  it("no suitable seed UTxO (register-config)", () => {
+    const c = classifyError(
+      new Error("no UTxO with >= 5 ADA available to seed the one-shot mint"),
+    );
+    expect(c.title).toBe("Not enough funds");
+  });
+
   it("contended UTxO (BadInputsUTxO) with subject", () => {
     const c = classifyError(fiberFailure("[BadInputsUTxO ...]"), { subject: "listing" });
     expect(c.title).toBe("Someone got there first");

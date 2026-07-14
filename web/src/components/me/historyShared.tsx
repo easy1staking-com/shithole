@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 
+import { Notice } from "@/components/Notice";
 import {
   useListingsByPkh,
   useMarketListingsByPkh,
@@ -108,6 +109,20 @@ export function HistoryTabStrip({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Partial-load warning. {@code useHistoryFeed} merges three independent
+ * queries (pit / p2p / market); if any one errors we still show the rows
+ * that loaded and flag the gap here. Known/operational — a warning
+ * Notice, not the red debug box.
+ */
+export function HistoryLoadError({ className }: { className?: string }) {
+  return (
+    <Notice severity="warning" className={className}>
+      couldn&apos;t load some history rows. try again later.
+    </Notice>
   );
 }
 

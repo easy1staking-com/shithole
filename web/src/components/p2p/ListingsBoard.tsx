@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { ErrorView } from "@/components/ErrorView";
 import { MultiSelectPopover } from "@/components/p2p/MultiSelectPopover";
 import {
   useAssetPoolMembership,
@@ -273,11 +274,7 @@ export function ListingsBoard() {
       )}
 
       {isPending && <p className="text-sm text-zinc-500">looking for listings…</p>}
-      {isError && (
-        <p className="text-sm text-red-400" role="alert">
-          couldn&apos;t load listings: {error.message}
-        </p>
-      )}
+      {isError && <ErrorView error={error} context={{ subject: "listings" }} />}
       {filteredListings && filteredListings.length === 0 && (
         <EmptyState
           filterTicker={filterTicker}

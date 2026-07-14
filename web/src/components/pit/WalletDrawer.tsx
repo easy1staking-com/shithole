@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { useNftMetadata } from "@/lib/api/hooks";
+import { ErrorView } from "@/components/ErrorView";
 import { PoolChips } from "@/components/PoolChips";
 import type { Listing } from "@/types/api";
 import {
@@ -346,8 +347,8 @@ export function WalletDrawer({
       )}
 
       {nfts.error && (
-        <div className="border-t border-zinc-800/60 bg-zinc-950 px-6 py-3 text-xs text-red-400">
-          couldn&apos;t enumerate your stash: {nfts.error.message}
+        <div className="border-t border-zinc-800/60 bg-zinc-950 px-6 py-3">
+          <ErrorView error={nfts.error} context={{ subject: "stash" }} />
         </div>
       )}
     </section>

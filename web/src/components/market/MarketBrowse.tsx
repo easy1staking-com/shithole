@@ -10,9 +10,8 @@ import {
   type FilterState,
 } from "@/components/market/FilterBar";
 import { ListingCard } from "@/components/market/ListingCard";
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
 import { fetchNftMetadata } from "@/lib/api/client";
-import { describeError } from "@/lib/errors";
 import { queryKeys } from "@/lib/api/hooks";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import {
@@ -42,7 +41,7 @@ export function MarketBrowse() {
   const walletApi = useWalletStore((s) => s.api);
 
   const [listings, setListings] = useState<DecodedListing[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   // Default the browse view to all currencies, cheapest first. The sort
   // works across currencies by comparing human-readable amounts (see the
@@ -64,7 +63,7 @@ export function MarketBrowse() {
       const found = await fetchMarketListings(client, marketplaceAddress);
       setListings(found);
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setLoading(false);
     }
@@ -188,7 +187,9 @@ export function MarketBrowse() {
         <>
           <FilterBar filters={filters} onChange={setFilters} />
 
-          {err ? <ErrorNotice message={err} /> : null}
+          {err ? (
+            <ErrorView error={err} context={{ subject: "listings" }} />
+          ) : null}
 
           {!walletApi ? (
             <p className="text-sm text-zinc-500">connect a wallet to browse.</p>

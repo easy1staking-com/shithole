@@ -324,7 +324,7 @@ export function classifyError(
   }
 
   // 6. Insufficient funds.
-  if (/insufficient|not enough|inputsexhausted|balance insufficient|no available inputs|coin selection failed/.test(t)) {
+  if (/insufficient|not enough|inputsexhausted|balance insufficient|no available inputs|no utxo with|coin selection failed/.test(t)) {
     return known("warning", "Not enough funds", "Your wallet can't cover the amount plus fees. Top up and retry.");
   }
 

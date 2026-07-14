@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
+import { Notice } from "@/components/Notice";
 import { fetchCollection, fetchCurated } from "@/lib/api/client";
-import { describeError } from "@/lib/errors";
 import { awaitTxConfirmation } from "@/lib/tx/awaitConfirmation";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { submitConfigUpdate } from "@/lib/tx/updateConfig";
@@ -32,7 +32,10 @@ type Step =
   | { kind: "building" }
   | { kind: "awaiting"; txHash: string }
   | { kind: "success"; txHash: string }
-  | { kind: "error"; message: string };
+  // Caught failure → ErrorView (friendly Notice for known, debug box otherwise).
+  | { kind: "error"; error: unknown }
+  // Local pre-flight validation → warning Notice.
+  | { kind: "invalid"; message: string };
 
 type FormValues = {
   m: number;
@@ -89,16 +92,16 @@ export default function UpdateConfigPage() {
 
   const handleSubmit = useCallback(async () => {
     if (!api) {
-      setStep({ kind: "error", message: "connect a wallet first" });
+      setStep({ kind: "invalid", message: "connect a wallet first" });
       return;
     }
     if (!collection.data || !values) {
-      setStep({ kind: "error", message: "no collection selected" });
+      setStep({ kind: "invalid", message: "no collection selected" });
       return;
     }
     if (isAdmin === false) {
       setStep({
-        kind: "error",
+        kind: "invalid",
         message:
           "connected wallet is not the admin for this collection — the tx would fail on-chain",
       });
@@ -128,7 +131,7 @@ export default function UpdateConfigPage() {
       await awaitTxConfirmation(client, result.txHash);
       setStep({ kind: "success", txHash: result.txHash });
     } catch (err) {
-      setStep({ kind: "error", message: describeError(err) });
+      setStep({ kind: "error", error: err });
     }
   }, [api, collection.data, values, networkName, isAdmin]);
 
@@ -167,9 +170,7 @@ export default function UpdateConfigPage() {
           ))}
         </select>
         {curated.error && (
-          <p className="text-xs text-red-400">
-            failed to load curated list: {curated.error.message}
-          </p>
+          <ErrorView error={curated.error} context={{ subject: "collections" }} />
         )}
       </section>
 
@@ -177,9 +178,7 @@ export default function UpdateConfigPage() {
         <p className="text-sm text-zinc-500">loading current config…</p>
       )}
       {collection.error && (
-        <p className="text-sm text-red-400">
-          failed to load collection: {collection.error.message}
-        </p>
+        <ErrorView error={collection.error} context={{ subject: "collection" }} />
       )}
 
       {collection.data && values && (
@@ -305,7 +304,15 @@ export default function UpdateConfigPage() {
               <span className="font-mono">{step.txHash}</span>
             </p>
           )}
-          {step.kind === "error" && <ErrorNotice message={step.message} />}
+          {step.kind === "invalid" && (
+            <Notice severity="warning">{step.message}</Notice>
+          )}
+          {step.kind === "error" && (
+            <ErrorView
+              error={step.error}
+              context={{ action: "updated", subject: "config" }}
+            />
+          )}
         </>
       )}
     </main>

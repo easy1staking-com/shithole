@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ErrorNotice } from "@/components/ErrorNotice";
-import { describeError } from "@/lib/errors";
+import { ErrorView } from "@/components/ErrorView";
+import { Notice } from "@/components/Notice";
 import { fetchJars, type Jar } from "@/lib/jar/queryJars";
 import { makeClient } from "@/lib/tx/evolutionClient";
 import { applyJarScript } from "@/lib/tx/marketScripts";
@@ -44,7 +44,11 @@ export function JarManager() {
   const [createCount, setCreateCount] = useState("3");
   const [loading, setLoading] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  // Raw caught error (rendered via ErrorView) vs. local validation
+  // warning (rendered as a warning Notice) — kept separate so a friendly
+  // validation string never lands in the unknown-error debug box.
+  const [err, setErr] = useState<unknown>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [lastTx, setLastTx] = useState<string | null>(null);
 
   // Resolve jar address from the connected pkh.
@@ -59,7 +63,7 @@ export function JarManager() {
         const jar = await applyJarScript(network, walletPkh);
         setJarAddress(jar.address);
       } catch (e) {
-        setErr(describeError(e));
+        setErr(e);
       }
     })();
   }, [walletPkh]);
@@ -68,6 +72,7 @@ export function JarManager() {
     if (!walletApi || !jarAddress) return;
     setLoading(true);
     setErr(null);
+    setWarning(null);
     try {
       const client = await makeClient(walletApi);
       const { jars: js, junk: jk } = await fetchJars(client, jarAddress);
@@ -75,7 +80,7 @@ export function JarManager() {
       setJunk(jk);
       setSelected(new Set());
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setLoading(false);
     }
@@ -89,11 +94,12 @@ export function JarManager() {
     if (!walletApi || !walletPkh) return;
     const n = parseInt(createCount, 10);
     if (!Number.isInteger(n) || n <= 0) {
-      setErr("count must be a positive integer");
+      setWarning("count must be a positive integer");
       return;
     }
     setBusyAction("create");
     setErr(null);
+    setWarning(null);
     setLastTx(null);
     try {
       const client = await makeClient(walletApi);
@@ -105,7 +111,7 @@ export function JarManager() {
       setLastTx(res.txHash);
       await refresh();
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBusyAction(null);
     }
@@ -115,11 +121,12 @@ export function JarManager() {
     if (!walletApi || !walletPkh || !walletAddress) return;
     const consumed = jars.filter((j) => selected.has(jarKey(j))).map((j) => j.utxo);
     if (consumed.length < 2) {
-      setErr("select at least two jars to merge");
+      setWarning("select at least two jars to merge");
       return;
     }
     setBusyAction("merge");
     setErr(null);
+    setWarning(null);
     setLastTx(null);
     try {
       const client = await makeClient(walletApi);
@@ -132,7 +139,7 @@ export function JarManager() {
       setLastTx(res.txHash);
       await refresh();
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBusyAction(null);
     }
@@ -144,11 +151,12 @@ export function JarManager() {
       .filter((j) => selected.has(jarKey(j)))
       .map((j) => j.utxo);
     if (consumed.length < 2) {
-      setErr("select at least two jars to bulk-collect");
+      setWarning("select at least two jars to bulk-collect");
       return;
     }
     setBusyAction("bulk-collect");
     setErr(null);
+    setWarning(null);
     setLastTx(null);
     try {
       const client = await makeClient(walletApi);
@@ -161,7 +169,7 @@ export function JarManager() {
       setLastTx(res.txHash);
       await refresh();
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBusyAction(null);
     }
@@ -171,6 +179,7 @@ export function JarManager() {
     if (!walletApi || !walletPkh || !walletAddress) return;
     setBusyAction(`collect:${jarKey(jar)}`);
     setErr(null);
+    setWarning(null);
     setLastTx(null);
     try {
       const client = await makeClient(walletApi);
@@ -183,7 +192,7 @@ export function JarManager() {
       setLastTx(res.txHash);
       await refresh();
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBusyAction(null);
     }
@@ -217,7 +226,8 @@ export function JarManager() {
         )}
       </header>
 
-      {err ? <ErrorNotice message={err} /> : null}
+      {warning ? <Notice severity="warning">{warning}</Notice> : null}
+      {err ? <ErrorView error={err} context={{ subject: "jar" }} /> : null}
       {lastTx ? (
         <p className="rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
           ↗ {lastTx}

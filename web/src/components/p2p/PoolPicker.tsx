@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 
+import { ErrorView } from "@/components/ErrorView";
 import { usePools } from "@/lib/api/hooks";
 import type { Pool } from "@/types/api";
 
@@ -40,13 +41,12 @@ export function PoolPicker({
 
   if (isError) {
     return (
-      <div className="rounded-lg border border-red-900 bg-red-950/40 p-4 text-sm">
-        <p className="font-medium text-red-200">couldn&apos;t load pools</p>
-        <p className="mt-1 text-red-300/70">{error.message}</p>
+      <div className="space-y-2">
+        <ErrorView error={error} context={{ subject: "pools" }} />
         <button
           type="button"
           onClick={() => void refetch()}
-          className="mt-2 text-red-200 underline underline-offset-2 hover:text-red-100"
+          className="text-sm text-zinc-400 underline underline-offset-2 hover:text-zinc-200"
         >
           retry
         </button>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   HistoryEmptyState,
+  HistoryLoadError,
   HistoryRow,
   HistoryTabStrip,
   useHistoryFeed,
@@ -236,11 +237,7 @@ function DrawerContents({
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {errored && (
-          <div className="mb-4 rounded-md border border-red-800/60 bg-red-950/30 p-3 text-sm text-red-300">
-            couldn&apos;t load some history rows. try again later.
-          </div>
-        )}
+        {errored && <HistoryLoadError className="mb-4" />}
         {loading ? (
           <p className="text-sm text-zinc-500">scraping the chain…</p>
         ) : filtered.length === 0 ? (
