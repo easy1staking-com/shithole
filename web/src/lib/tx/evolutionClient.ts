@@ -66,3 +66,21 @@ export async function makeClient(walletApi: Cip30Api): Promise<EvolutionClient> 
   const baseUrl = getBlockfrostUrl(networkName);
   return attachWallet(networkOf(networkName), baseUrl, projectId, walletApi);
 }
+
+/**
+ * Read-only client — Blockfrost provider, NO wallet. For public,
+ * connect-free chain reads (e.g. the landing's marketplace strips), where
+ * we only need provider methods like {@code getUtxos}. Cheaper and works
+ * before any wallet is connected.
+ */
+export function makeReadClient() {
+  const networkName = getNetworkName();
+  const projectId = getBlockfrostProjectId();
+  if (!projectId) {
+    throw new Error(
+      "NEXT_PUBLIC_BLOCKFROST_PROJECT_ID is not set — cannot build a read client",
+    );
+  }
+  const baseUrl = getBlockfrostUrl(networkName);
+  return Client.make(networkOf(networkName)).withBlockfrost({ baseUrl, projectId });
+}

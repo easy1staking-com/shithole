@@ -202,7 +202,7 @@ export function JarManager() {
   const aggregateBalance = useMemo(() => sumAssets(jars.map((j) => j.utxo.assets)), [jars]);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-12">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
       <nav className="flex items-center justify-between text-xs uppercase tracking-widest text-zinc-500">
         <Link href="/" className="hover:text-zinc-300">
           ← home

@@ -63,8 +63,10 @@ export function NavMenu({
         aria-haspopup="true"
         aria-controls={open ? menuId : undefined}
         className={
-          "rounded-md px-2 py-1 font-mono text-sm lowercase transition-colors " +
-          (isActive ? "text-zinc-100" : "text-zinc-400 hover:text-zinc-200")
+          "rounded-md px-3 py-1.5 font-mono text-[15px] uppercase tracking-[0.08em] transition-colors " +
+          (isActive
+            ? "bg-zinc-900 text-zinc-100"
+            : "text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200")
         }
       >
         {label}

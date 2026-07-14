@@ -17,7 +17,7 @@ function shortHash(h: string): string {
 export function Footer() {
   return (
     <footer className="mt-16 border-t border-zinc-800/80 bg-zinc-950 text-zinc-400">
-      <div className="mx-auto w-full max-w-4xl px-6 py-10">
+      <div className="mx-auto w-full max-w-6xl px-6 py-10">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
           {/* Brand */}
           <div className="space-y-2">
