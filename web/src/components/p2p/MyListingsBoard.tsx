@@ -286,7 +286,7 @@ export function MyListingsBoard() {
        *  closure even after we clear the selection. */}
       {(selectedCount > 0 || bulkState.kind === "confirmed") && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-800 bg-zinc-950/95 backdrop-blur">
-          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-6 py-3">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-3">
             <div className="flex items-center gap-2 text-xs text-zinc-300">
               {bulkState.kind === "confirmed" ? (
                 <ConfirmationChip status="confirmed" />
@@ -327,7 +327,7 @@ export function MyListingsBoard() {
             )}
           </div>
           {bulkState.kind === "error" && (
-            <div className="mx-auto max-w-4xl px-6 pb-3">
+            <div className="mx-auto max-w-6xl px-6 pb-3">
               {typeof bulkState.error === "string" ? (
                 <Notice severity="info">{bulkState.error}</Notice>
               ) : (

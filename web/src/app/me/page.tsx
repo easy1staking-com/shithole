@@ -185,7 +185,7 @@ export default function MePage() {
   const isBulkRunning = bulkState.kind === "running";
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-6 pt-8 pb-24">
+    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-6 pt-8 pb-24">
       <header>
         <div className="flex items-start justify-between gap-3">
           <Link

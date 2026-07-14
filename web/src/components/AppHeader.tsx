@@ -45,7 +45,7 @@ export function AppHeader() {
       // mode — pads the bar's top edge down by the system safe area.
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6">
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/"
@@ -62,9 +62,11 @@ export function AppHeader() {
             {/* Hide the wordmark on small phones — the nav menus +
                 wallet pill compete for horizontal real estate. The
                 logo glyph alone is recognisable enough as a home link. */}
-            <span className="hidden sm:inline">s#!thole</span>
+            <span className="hidden font-bold uppercase tracking-[0.08em] sm:inline">
+              s#!thole
+            </span>
           </Link>
-          <nav className="flex items-center gap-0">
+          <nav className="flex items-center gap-1">
             <NavMenu
               label="pit"
               items={[
