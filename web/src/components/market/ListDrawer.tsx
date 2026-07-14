@@ -8,8 +8,8 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
-import { ErrorNotice } from "@/components/ErrorNotice";
-import { describeError } from "@/lib/errors";
+import { ErrorView } from "@/components/ErrorView";
+import { Notice } from "@/components/Notice";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { supportedCollections } from "@/lib/market/supportedCollections";
 import {
@@ -68,7 +68,13 @@ export function ListDrawer() {
   const [busy, setBusy] = useState(false);
   const [tx, setTx] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
+  // Local validation feedback (empty selection, bad price, no wallet) —
+  // not thrown errors, so surfaced via Notice rather than ErrorView.
+  const [notice, setNotice] = useState<{
+    severity: "warning" | "info";
+    message: string;
+  } | null>(null);
 
   const queryClient = useQueryClient();
   const refreshHistory = useRefreshHistory();
@@ -159,7 +165,7 @@ export function ListDrawer() {
 
   const buildSubmission = (): SubmissionEntry[] | null => {
     if (selected.size === 0) {
-      setErr("select at least one NFT");
+      setNotice({ severity: "warning", message: "select at least one NFT" });
       return null;
     }
     const out: SubmissionEntry[] = [];
@@ -172,12 +178,18 @@ export function ListDrawer() {
         : overrides[unit]?.tokenUnit ?? sharedTokenUnit;
       const token = priceTokens.find((t) => t.unit === rowUnit);
       if (!token) {
-        setErr(`unknown price token for ${unit}`);
+        setNotice({
+          severity: "warning",
+          message: `unknown price token for ${unit}`,
+        });
         return null;
       }
       const priceQty = parseDecimal(rowDisplay, token.decimals);
       if (priceQty === null || priceQty <= 0n) {
-        setErr(`invalid price for ${humanUnit(unit)}: ${rowDisplay}`);
+        setNotice({
+          severity: "warning",
+          message: `invalid price for ${humanUnit(unit)}: ${rowDisplay}`,
+        });
         return null;
       }
       out.push({ unit, qty: 1n, token, priceQty });
@@ -187,13 +199,14 @@ export function ListDrawer() {
 
   const onSubmit = async () => {
     if (!manifest || !walletApi || !walletAddress || !walletPkh) {
-      setErr("connect a wallet first");
+      setNotice({ severity: "info", message: "connect a wallet first" });
       return;
     }
     const submission = buildSubmission();
     if (!submission) return;
     setBusy(true);
     setErr(null);
+    setNotice(null);
     setTx(null);
     setConfirmation(null);
     try {
@@ -239,7 +252,7 @@ export function ListDrawer() {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBusy(false);
       setConfirming(false);
@@ -249,6 +262,7 @@ export function ListDrawer() {
   // Validate, then move to the confirmation step (no wallet prompt yet).
   const onReview = () => {
     setErr(null);
+    setNotice(null);
     if (buildSubmission()) setConfirming(true);
   };
 
@@ -332,7 +346,7 @@ export function ListDrawer() {
             </header>
 
             {nftsError ? (
-              <ErrorNotice error={nftsError} title="Couldn't load wallet NFTs" />
+              <ErrorView error={nftsError} context={{ subject: "wallet NFTs" }} />
             ) : !walletNfts || walletNfts.length === 0 ? (
               <p className="text-xs text-zinc-500">
                 {nftsLoading
@@ -405,7 +419,15 @@ export function ListDrawer() {
             </div>
           )}
 
-          {err ? <ErrorNotice message={err} /> : null}
+          {notice ? (
+            <Notice severity={notice.severity}>{notice.message}</Notice>
+          ) : null}
+          {err ? (
+            <ErrorView
+              error={err}
+              context={{ action: "listed", subject: "listing" }}
+            />
+          ) : null}
           {tx ? (
             <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-xs text-emerald-200">
               <p className="break-all">↗ {tx}</p>

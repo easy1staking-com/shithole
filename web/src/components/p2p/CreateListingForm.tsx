@@ -9,7 +9,8 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
+import { Notice } from "@/components/Notice";
 import { DepositStep } from "@/components/p2p/DepositStep";
 import { NftPickerStep } from "@/components/p2p/NftPickerStep";
 import { PoolPicker, PoolSummary } from "@/components/p2p/PoolPicker";
@@ -62,11 +63,7 @@ function CollectionPickerStep() {
         the collection — we&apos;ll find someone to take it.
       </p>
       {isPending && <p className="text-sm text-zinc-500">stirring the mud…</p>}
-      {isError && (
-        <p className="text-sm text-red-400" role="alert">
-          could not load pits: {error.message}
-        </p>
-      )}
+      {isError && <ErrorView error={error} context={{ subject: "pits" }} />}
       {curated && curated.length === 0 && (
         <p className="text-sm text-zinc-500">no pits yet. come back when something dies.</p>
       )}
@@ -145,7 +142,7 @@ function FlowForCollection({ slug }: { slug: string }) {
   const addressBech32 = useWalletStore((s) => s.addressBech32);
 
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<unknown>(null);
   const [submitResult, setSubmitResult] = useState<CreateP2pListingResult | null>(
     null,
   );
@@ -204,7 +201,7 @@ function FlowForCollection({ slug }: { slug: string }) {
             setConfirmation("rejected");
           });
       } catch (e) {
-        setSubmitError(describeError(e));
+        setSubmitError(e);
       } finally {
         setSubmitting(false);
       }
@@ -225,9 +222,7 @@ function FlowForCollection({ slug }: { slug: string }) {
   }
   if (collection.isError) {
     return (
-      <p className="text-sm text-red-400" role="alert">
-        could not load &apos;{slug}&apos;: {collection.error.message}
-      </p>
+      <ErrorView error={collection.error} context={{ subject: "collection" }} />
     );
   }
 
@@ -319,7 +314,18 @@ function FlowForCollection({ slug }: { slug: string }) {
               onSubmit={handleSubmitDeposit}
               submitting={submitting}
             />
-            {submitError && <ErrorNotice message={submitError} className="mt-3" />}
+            {submitError != null &&
+              (typeof submitError === "string" ? (
+                <Notice severity="info" className="mt-3">
+                  {submitError}
+                </Notice>
+              ) : (
+                <ErrorView
+                  error={submitError}
+                  context={{ action: "posted", subject: "listing" }}
+                  className="mt-3"
+                />
+              ))}
           </>
         )}
       </Step>

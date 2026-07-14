@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { NavMenu } from "@/components/NavMenu";
+import { NetworkMismatchBanner } from "@/components/NetworkMismatchBanner";
 import { isMarketplaceEnabled } from "@/lib/market/config";
 import { WalletConnectButton } from "@/lib/wallet/WalletConnectButton";
 
@@ -115,6 +116,7 @@ export function AppHeader() {
         </div>
         <WalletConnectButton />
       </div>
+      <NetworkMismatchBanner />
     </header>
   );
 }

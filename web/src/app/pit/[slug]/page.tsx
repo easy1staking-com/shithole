@@ -15,7 +15,7 @@ import {
 } from "@/components/pit/SwapRevealOverlay";
 import { WalletDrawer } from "@/components/pit/WalletDrawer";
 import { useCollection, useListings } from "@/lib/api/hooks";
-import { describeError } from "@/lib/errors";
+import { classifyError, describeError } from "@/lib/errors";
 import { useMatchability } from "@/lib/pit/useMatchability";
 import type { Match } from "@/lib/pit/bucketMath";
 import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
@@ -367,15 +367,23 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           setToast("chain didn't accept the listing — try again");
         }
       } catch (err) {
-        const message = describeError(err);
-        console.error("list failed:", message);
+        console.error("list failed:", describeError(err));
         // Submit-side failure (wallet refused, tx-build threw, etc.) —
         // the optimistic remove didn't fire because we hadn't gotten to
         // the result yet, but invalidate defensively in case it did.
         queryClient.invalidateQueries({
           queryKey: ["walletCollection", addressBech32, collectionPolicyId],
         });
-        setToast(`couldn't list: ${message.slice(0, 100)}`);
+        // Classify rather than truncate a debug dump into the toast:
+        // known/operational failures get their friendly one-liner; a
+        // genuinely-unknown failure gets a short toast + the full dump
+        // in the console (the list flow has no inline error surface).
+        const c = classifyError(err, { action: "listed" });
+        setToast(
+          c.kind === "known"
+            ? `couldn't list: ${c.message}`
+            : "couldn't list — see console for details",
+        );
       } finally {
         setListing(false);
         window.setTimeout(() => setToast(null), 5000);

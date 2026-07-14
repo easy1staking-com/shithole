@@ -29,9 +29,12 @@ export function ConfirmationChip({ status }: { status: ChainConfirmation }) {
     );
   }
   if (status === "rejected") {
+    // A 3-min awaitTxConfirmation timeout is usually slow indexing, not a
+    // failed tx — so amber "still settling", not a red ✗. (Status name kept
+    // for the callers; only the presentation is softened.)
     return (
-      <span className="inline-flex items-center gap-1 rounded-sm bg-red-950/60 px-1.5 py-0.5 font-mono text-[10px] text-red-200">
-        ✗ not seen on chain — check the explorer
+      <span className="inline-flex items-center gap-1 rounded-sm bg-amber-950/60 px-1.5 py-0.5 font-mono text-[10px] text-amber-200">
+        ⋯ not confirmed yet — check the explorer
       </span>
     );
   }

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ConfirmationChip } from "@/components/ConfirmationChip";
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
+import { Notice } from "@/components/Notice";
 import { describeError } from "@/lib/errors";
 import { useP2pListingsByBuyer } from "@/lib/api/hooks";
 import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
@@ -36,7 +37,7 @@ type BulkState =
   | { kind: "submitting"; current: number; total: number; label: string }
   | { kind: "confirming"; current: number; total: number; label: string }
   | { kind: "confirmed"; count: number }
-  | { kind: "error"; message: string };
+  | { kind: "error"; error: unknown };
 
 function listingKey(l: P2pListing): string {
   return `${l.tx_hash}#${l.output_index}`;
@@ -110,7 +111,7 @@ export function MyListingsBoard() {
 
   const handleBulkReclaim = useCallback(async () => {
     if (!api || !paymentKeyHashHex) {
-      setBulkState({ kind: "error", message: "connect a wallet first" });
+      setBulkState({ kind: "error", error: "connect a wallet first" });
       return;
     }
     // Group by config_nft_policy — one tx per collection.
@@ -182,10 +183,9 @@ export function MyListingsBoard() {
         setBulkState((s) => (s.kind === "confirmed" ? { kind: "idle" } : s));
       }, 4000);
     } catch (err) {
-      const message = describeError(err);
-      console.error("bulk reclaim failed:", message);
+      console.error("bulk reclaim failed:", describeError(err));
       if (!mountedRef.current) return;
-      setBulkState({ kind: "error", message });
+      setBulkState({ kind: "error", error: err });
     }
   }, [
     api,
@@ -208,11 +208,7 @@ export function MyListingsBoard() {
     return <p className="text-sm text-zinc-500">looking up your listings…</p>;
   }
   if (isError) {
-    return (
-      <p className="text-sm text-red-400" role="alert">
-        couldn&apos;t load: {error.message}
-      </p>
-    );
+    return <ErrorView error={error} context={{ subject: "listings" }} />;
   }
   if (liveListings.length === 0) {
     return (
@@ -332,7 +328,14 @@ export function MyListingsBoard() {
           </div>
           {bulkState.kind === "error" && (
             <div className="mx-auto max-w-4xl px-6 pb-3">
-              <ErrorNotice message={bulkState.message} title="Bulk reclaim failed" />
+              {typeof bulkState.error === "string" ? (
+                <Notice severity="info">{bulkState.error}</Notice>
+              ) : (
+                <ErrorView
+                  error={bulkState.error}
+                  context={{ action: "reclaimed", subject: "listing" }}
+                />
+              )}
             </div>
           )}
         </div>

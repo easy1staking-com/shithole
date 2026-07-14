@@ -6,9 +6,8 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
 import { useNftMetadata } from "@/lib/api/hooks";
-import { describeError } from "@/lib/errors";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { listPools, matchesPool } from "@/lib/market/poolTraits";
 import {
@@ -58,7 +57,7 @@ export function MyListings() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const [tx, setTx] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ChainConfirmation>(null);
 
@@ -73,7 +72,7 @@ export function MyListings() {
       const list = await fetchMarketListings(client, marketplaceAddress);
       setAll(list);
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setLoading(false);
     }
@@ -156,7 +155,7 @@ export function MyListings() {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBusyKey(null);
     }
@@ -194,7 +193,7 @@ export function MyListings() {
           setConfirmation("rejected");
         });
     } catch (e) {
-      setErr(describeError(e));
+      setErr(e);
     } finally {
       setBulkBusy(false);
     }
@@ -299,7 +298,12 @@ export function MyListings() {
         </>
       )}
 
-      {err ? <ErrorNotice message={err} /> : null}
+      {err ? (
+        <ErrorView
+          error={err}
+          context={{ action: "cancelled", subject: "listing" }}
+        />
+      ) : null}
       {tx ? (
         <div className="space-y-2 rounded border border-emerald-900 bg-emerald-950/40 px-3 py-2 font-mono text-[10px] text-emerald-200">
           <p className="break-all">↗ {tx}</p>

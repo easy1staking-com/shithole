@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
+import { Notice } from "@/components/Notice";
 import { describeError } from "@/lib/errors";
 import { useNftMetadata } from "@/lib/api/hooks";
 import { useMyListings, type MyListingRow } from "@/lib/me/useMyListings";
@@ -42,7 +43,9 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
 type BulkState =
   | { kind: "idle" }
   | { kind: "running"; current: number; total: number; label: string }
-  | { kind: "error"; message: string };
+  // Caught failure → ErrorView; local validation → warning Notice.
+  | { kind: "error"; error: unknown }
+  | { kind: "invalid"; message: string };
 
 export default function MePage() {
   const { addressBech32, paymentKeyHashHex, api } = useWalletStore();
@@ -81,7 +84,7 @@ export default function MePage() {
 
   const handleBulkWithdraw = useCallback(async () => {
     if (!api) {
-      setBulkState({ kind: "error", message: "connect a wallet first" });
+      setBulkState({ kind: "invalid", message: "connect a wallet first" });
       return;
     }
     // Group selected rows by config_nft_policy → one tx per collection.
@@ -174,9 +177,8 @@ export default function MePage() {
       setSelected(new Set());
       setBulkState({ kind: "idle" });
     } catch (err) {
-      const message = describeError(err);
-      console.error("bulk withdraw failed:", message);
-      setBulkState({ kind: "error", message });
+      console.error("bulk withdraw failed:", describeError(err));
+      setBulkState({ kind: "error", error: err });
     }
   }, [api, rows, effectiveSelected, queryClient]);
 
@@ -233,9 +235,7 @@ export default function MePage() {
       )}
 
       {error && (
-        <p className="rounded-lg border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm text-red-300" role="alert">
-          couldn&apos;t fetch your listings: {error.message}
-        </p>
+        <ErrorView error={error} context={{ subject: "listings" }} />
       )}
 
       {addressBech32 && !isLoading && rows.length === 0 && !error && (
@@ -262,8 +262,14 @@ export default function MePage() {
         </p>
       )}
 
+      {bulkState.kind === "invalid" && (
+        <Notice severity="warning">{bulkState.message}</Notice>
+      )}
       {bulkState.kind === "error" && (
-        <ErrorNotice message={bulkState.message} title="Bulk withdraw failed" />
+        <ErrorView
+          error={bulkState.error}
+          context={{ action: "withdrawn", subject: "listing" }}
+        />
       )}
 
       {rows.length > 0 && (
@@ -358,7 +364,9 @@ function listingKey(row: MyListingRow): string {
 type ActionState =
   | { kind: "idle" }
   | { kind: "running"; label: string }
-  | { kind: "error"; message: string };
+  // Caught failure → ErrorView; local validation → warning Notice.
+  | { kind: "error"; error: unknown }
+  | { kind: "invalid"; message: string };
 
 function MyListingCard({
   row,
@@ -404,7 +412,7 @@ function MyListingCard({
   const runWithLucid = useCallback(
     async (label: string, fn: (client: Awaited<ReturnType<typeof makeClient>>) => Promise<void>) => {
       if (!api) {
-        setState({ kind: "error", message: "connect a wallet first" });
+        setState({ kind: "invalid", message: "connect a wallet first" });
         return;
       }
       setState({ kind: "running", label });
@@ -414,9 +422,8 @@ function MyListingCard({
         invalidate();
         setState({ kind: "idle" });
       } catch (err) {
-        const message = describeError(err);
-        console.error(`${label} failed:`, message);
-        setState({ kind: "error", message });
+        console.error(`${label} failed:`, describeError(err));
+        setState({ kind: "error", error: err });
       }
     },
     [api, invalidate],
@@ -546,9 +553,14 @@ function MyListingCard({
           {state.label}…
         </div>
       )}
+      {state.kind === "invalid" && (
+        <div className="border-t border-zinc-800/60 px-4 py-2">
+          <Notice severity="warning">{state.message}</Notice>
+        </div>
+      )}
       {state.kind === "error" && (
         <div className="border-t border-red-900/40 px-4 py-2">
-          <ErrorNotice message={state.message} />
+          <ErrorView error={state.error} context={{ subject: "listing" }} />
         </div>
       )}
     </li>

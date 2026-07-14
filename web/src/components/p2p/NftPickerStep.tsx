@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 
+import { ErrorView } from "@/components/ErrorView";
 import { SelectableWalletCard } from "@/components/pit/SelectableWalletCard";
 import { useAssetPoolMembership } from "@/lib/api/hooks";
 import {
@@ -79,11 +80,7 @@ export function NftPickerStep({
   }
 
   if (nftsError) {
-    return (
-      <p className="text-sm text-red-400" role="alert">
-        could not read wallet contents: {nftsErrorObj.message}
-      </p>
-    );
+    return <ErrorView error={nftsErrorObj} context={{ subject: "wallet" }} />;
   }
 
   if (!nfts || nfts.length === 0) {
