@@ -92,14 +92,21 @@ export async function submitJarCollect(
   // otherwise the excess lovelace flows back as change to the connected
   // wallet (Evolution balancer auto-sizes that against min-UTxO).
   if (hasTokens) {
-    if (extraLovelace < MIN_TOKEN_PAYOUT_LOVELACE) {
-      throw new Error(
-        `not enough excess ADA to sweep tokens: have ${extraLovelace} lovelace above the ${LEAVE_BEHIND_LOVELACE}-lovelace floor, need >= ${MIN_TOKEN_PAYOUT_LOVELACE} to satisfy the token payout's min-UTxO`,
-      );
-    }
+    // Floor the payout's ADA at the token-output min-UTxO. When the jar's
+    // own surplus (extraLovelace) is below that floor — e.g. a jar sitting
+    // at the 5 ADA leave-behind floor, so extraLovelace = 0 — the Evolution
+    // balancer funds the shortfall from the connected wallet's own UTxOs
+    // during build. (Previously we hard-pinned the payout lovelace to
+    // extraLovelace and threw when it was below the floor, which made such
+    // jars impossible to sweep even though the wallet could cover the
+    // min-UTxO — the "not enough excess ADA to sweep tokens" error.)
+    const payoutLovelace =
+      extraLovelace > MIN_TOKEN_PAYOUT_LOVELACE
+        ? extraLovelace
+        : MIN_TOKEN_PAYOUT_LOVELACE;
     builder = builder.payToAddress({
       address: toAddress(input.payoutBech32Address),
-      assets: toAssets({ lovelace: extraLovelace, ...tokens }),
+      assets: toAssets({ lovelace: payoutLovelace, ...tokens }),
     });
   }
 
@@ -202,20 +209,20 @@ export async function submitJarBulkCollect(
     });
   }
 
-  // Token payout: only when there's something non-ADA to ship. ADA-only
-  // surplus flows back via change to the wallet (Evolution balancer
-  // handles min-UTxO for us); avoids the bug where extraLovelace = 0
-  // (e.g., every selected jar at the 5 ADA floor) would have produced an
-  // output of {lovelace: 0n} and failed at build.
+  // Token payout: only when there's something non-ADA to ship. Floor its
+  // ADA at the token-output min-UTxO; when the combined surplus
+  // (extraLovelace) is below that floor — e.g. every selected jar sitting
+  // at the 5 ADA floor, so extraLovelace = 0 — the Evolution balancer funds
+  // the shortfall from the connected wallet during build, instead of the
+  // old hard-throw that made those jars unsweepable.
   if (hasTokens) {
-    if (extraLovelace < MIN_TOKEN_PAYOUT_LOVELACE) {
-      throw new Error(
-        `not enough excess ADA to sweep tokens: have ${extraLovelace} lovelace above ${LEAVE_BEHIND_LOVELACE * n}, need >= ${MIN_TOKEN_PAYOUT_LOVELACE} to satisfy the token payout's min-UTxO`,
-      );
-    }
+    const payoutLovelace =
+      extraLovelace > MIN_TOKEN_PAYOUT_LOVELACE
+        ? extraLovelace
+        : MIN_TOKEN_PAYOUT_LOVELACE;
     builder = builder.payToAddress({
       address: toAddress(input.payoutBech32Address),
-      assets: toAssets({ lovelace: extraLovelace, ...totalNonAda }),
+      assets: toAssets({ lovelace: payoutLovelace, ...totalNonAda }),
     });
   }
 
