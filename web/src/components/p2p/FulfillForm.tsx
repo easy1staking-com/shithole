@@ -9,7 +9,8 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
+import { Notice } from "@/components/Notice";
 import { MultiSelectPopover } from "@/components/p2p/MultiSelectPopover";
 import { SelectableWalletCard } from "@/components/pit/SelectableWalletCard";
 import { describeError } from "@/lib/errors";
@@ -72,9 +73,9 @@ export function FulfillForm({
   if (!listing) {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-red-400" role="alert">
-          listing not found, or already taken.
-        </p>
+        <Notice severity="warning" title="This offer's gone">
+          Someone already filled it, or the seller reclaimed it. Grab another.
+        </Notice>
         <Link href="/p2p" className="text-xs text-zinc-400 hover:text-zinc-200">
           ← back to open listings
         </Link>
@@ -214,7 +215,7 @@ function FulfillBody({
   );
 
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<unknown>(null);
   const [submitResult, setSubmitResult] = useState<{ txHash: string } | null>(
     null,
   );
@@ -320,7 +321,7 @@ function FulfillBody({
           setConfirmation("rejected");
         });
     } catch (e) {
-      setSubmitError(describeError(e));
+      setSubmitError(e);
     } finally {
       setSubmitting(false);
     }
@@ -465,7 +466,12 @@ function FulfillBody({
                 : "fulfill — make the swap"}
         </button>
       )}
-      {submitError && <ErrorNotice message={submitError} />}
+      {submitError ? (
+        <ErrorView
+          error={submitError}
+          context={{ action: "fulfilled", subject: "offer" }}
+        />
+      ) : null}
     </div>
   );
 }

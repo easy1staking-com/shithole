@@ -65,6 +65,12 @@ describe("classifyError — known operational errors", () => {
     expect(c.title).toBe("No wallet found");
   });
 
+  it("wallet has no addresses (preset string)", () => {
+    const c = classifyError("wallet has no addresses");
+    expect(c.kind).toBe("known");
+    expect(c.title).toBe("Empty wallet");
+  });
+
   it("wrong network, with network context", () => {
     const c = classifyError(new Error("wallet network does not match app network"), {
       appNetwork: "preprod",

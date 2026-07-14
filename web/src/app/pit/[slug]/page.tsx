@@ -96,7 +96,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   // outlive the submit (e.g. show "stuck" overlay after the swap state
   // already cleared to idle).
   const [revealStatus, setRevealStatus] = useState<SwapStatus | null>(null);
-  const [revealError, setRevealError] = useState<string | null>(null);
+  const [revealError, setRevealError] = useState<unknown>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationStatus>(null);
   const [reveal, setReveal] = useState<
     { depositUnit: string; outcomeUnit: string; txHash?: string } | null
@@ -251,13 +251,12 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           setConfirmation("rejected");
         });
     } catch (err) {
-      const message = describeError(err);
-      console.error("swap failed:", message);
+      console.error("swap failed:", describeError(err));
       // Submit-side failure → the "stuck in the pipes" overlay. Chain
       // never saw the tx, so wallet/pool state is unchanged — no
       // invalidation needed.
       setRevealStatus("error");
-      setRevealError(message);
+      setRevealError(err);
     }
   }, [
     swap,
@@ -520,7 +519,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           <SwapRevealOverlay
             key="reveal"
             status={revealStatus}
-            errorMessage={revealError}
+            error={revealError}
             depositUnit={reveal.depositUnit}
             outcomeUnit={reveal.outcomeUnit}
             confirmation={confirmation}

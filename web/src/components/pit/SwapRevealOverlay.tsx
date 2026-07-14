@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
-import { ErrorNotice } from "@/components/ErrorNotice";
+import { ErrorView } from "@/components/ErrorView";
 import { useNftMetadata } from "@/lib/api/hooks";
 
 /**
@@ -52,7 +52,7 @@ type Phase = "splash" | "swirl" | "reveal" | "settled" | "stuck";
 
 export function SwapRevealOverlay({
   status,
-  errorMessage,
+  error,
   depositUnit,
   outcomeUnit,
   confirmation,
@@ -62,7 +62,7 @@ export function SwapRevealOverlay({
   onRetry,
 }: {
   status: SwapStatus;
-  errorMessage?: string | null;
+  error?: unknown;
   /** The NB NFT going in (deposit). */
   depositUnit: string;
   /** The NA NFT that will emerge (already known — bucket-matched off-chain). */
@@ -165,7 +165,7 @@ export function SwapRevealOverlay({
             <StuckPhase
               key="stuck"
               accent={accent}
-              message={errorMessage ?? null}
+              error={error ?? null}
               onDismiss={onDismiss}
             />
           )}
@@ -576,11 +576,11 @@ function ConfirmationChip({
 
 function StuckPhase({
   accent,
-  message,
+  error,
   onDismiss,
 }: {
   accent: string;
-  message: string | null;
+  error: unknown;
   onDismiss: () => void;
 }) {
   return (
@@ -604,9 +604,9 @@ function StuckPhase({
         <p className="text-lg font-semibold text-zinc-100">
           your s#!t got stuck in the pipes
         </p>
-        {message && (
+        {error != null && (
           <div className="mx-auto mt-3 w-full max-w-sm text-left">
-            <ErrorNotice message={message} />
+            <ErrorView error={error} context={{ action: "swapped", subject: "swap" }} />
           </div>
         )}
         <p className="mt-3 text-xs text-zinc-500">
