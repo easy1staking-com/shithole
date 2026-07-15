@@ -41,4 +41,23 @@ public class CollectionStateDto {
 
     @JsonProperty("m_staleness")
     private MStalenessDto mStaleness;
+
+    /** Where this collection appears: {@code pit}, {@code marketplace}, or {@code both}. */
+    private String surface;
+
+    /** Default pricing token — hex policy id (null/empty = ADA). */
+    @JsonProperty("default_price_policy")
+    private String defaultPricePolicy;
+
+    /** Default pricing token — hex asset name. */
+    @JsonProperty("default_price_name")
+    private String defaultPriceName;
+
+    /** Default pricing token — smallest-unit exponent. */
+    @JsonProperty("default_price_decimals")
+    private Integer defaultPriceDecimals;
+
+    /** Default pricing token — display label (HOSKY / SNEK / ADA). */
+    @JsonProperty("price_token_label")
+    private String priceTokenLabel;
 }

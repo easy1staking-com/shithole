@@ -57,6 +57,15 @@ public interface MarketplaceEventRepository
             + "order by coalesce(e.spentAtSlot, e.createdAtSlot) desc")
     List<MarketplaceEventEntity> findAllByPkh(@Param("pkh") byte[] pkh, Pageable pageable);
 
+    /** Same as {@link #findAllByPkh} but scoped to a single collection — the
+     * optional {@code ?collection} filter on the per-user history feed. */
+    @Query("select e from MarketplaceEventEntity e "
+            + "where (e.sellerPkh = :pkh or e.buyerPkh = :pkh) "
+            + "and e.collectionPolicyId = :policy "
+            + "order by coalesce(e.spentAtSlot, e.createdAtSlot) desc")
+    List<MarketplaceEventEntity> findAllByPkhAndCollectionPolicyId(
+            @Param("pkh") byte[] pkh, @Param("policy") byte[] policy, Pageable pageable);
+
     /**
      * Public per-collection activity feed — every marketplace event for a
      * collection (listed / sold / cancelled), newest-first by last-touched
@@ -67,4 +76,25 @@ public interface MarketplaceEventRepository
             + "order by coalesce(e.spentAtSlot, e.createdAtSlot) desc")
     List<MarketplaceEventEntity> findByCollectionPolicyId(
             @Param("policy") byte[] policy, Pageable pageable);
+
+    /** Count of currently-active (unspent) marketplace listings for a collection. */
+    long countByCollectionPolicyIdAndSpentActionIsNull(byte[] collectionPolicyId);
+
+    /**
+     * Sold events for a collection since a cutoff — powers the 24h volume /
+     * sale-count / unique-trader stats. Ordered newest-first.
+     */
+    @Query("select e from MarketplaceEventEntity e "
+            + "where e.collectionPolicyId = :policy "
+            + "and e.spentAction = 'sold' "
+            + "and e.spentAt >= :since "
+            + "order by e.spentAt desc")
+    List<MarketplaceEventEntity> findSoldSince(
+            @Param("policy") byte[] policy,
+            @Param("since") java.time.OffsetDateTime since);
+
+    /** Active listings for a collection — used for floor price. */
+    @Query("select e from MarketplaceEventEntity e "
+            + "where e.collectionPolicyId = :policy and e.spentAction is null")
+    List<MarketplaceEventEntity> findActiveByCollectionPolicyId(@Param("policy") byte[] policy);
 }
