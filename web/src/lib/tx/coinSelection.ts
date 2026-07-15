@@ -60,5 +60,19 @@ export function tokenAwareLargestFirst(
     selected.push(u);
     acc = Assets.merge(acc, u.assets);
   }
+
+  // Every available UTxO consumed and the requirement is STILL not covered:
+  // the wallet genuinely can't afford this buy. Evolution's Selection phase
+  // invokes this selector with the remaining shortfall against a FIXED wallet
+  // UTxO set, so once these are exhausted no later reselection pass can
+  // succeed — throwing here is safe (never false-blocks). Previously we
+  // returned the under-covering set silently and the buy died deeper in
+  // balancing with a cryptic error; now the throw becomes the `.cause` of
+  // Evolution's TransactionBuilderError and describeError surfaces this
+  // message to the buyer.
+  if (!Assets.covers(acc, requiredAssets)) {
+    throw new Error("Insufficient balance to complete this purchase.");
+  }
+
   return { selectedUtxos: selected };
 }

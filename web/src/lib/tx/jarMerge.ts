@@ -99,20 +99,20 @@ export async function submitJarMerge(
     datum: inlineDatum(buildJarDatum()),
   });
 
-  // Token payout: only when there's something non-ADA to ship. ADA-only
-  // surplus rides back as change to the wallet (Evolution balancer
-  // auto-sizes against min-UTxO). Avoids the bug where extraLovelace was
-  // below min-UTxO (e.g., merging two 5-ADA jars → 0 lovelace payout)
-  // would have produced an unbuildable output.
+  // Token payout: only when there's something non-ADA to ship. Floor its
+  // ADA at the token-output min-UTxO; when the merged surplus
+  // (extraLovelace) is below that floor — e.g. merging two 5-ADA jars, so
+  // extraLovelace = 0 — the Evolution balancer funds the shortfall from the
+  // connected wallet during build, instead of the old hard-throw that made
+  // those merges impossible.
   if (hasTokens) {
-    if (extraLovelace < MIN_TOKEN_PAYOUT_LOVELACE) {
-      throw new Error(
-        `not enough excess ADA to sweep tokens: have ${extraLovelace} lovelace above the ${LEAVE_BEHIND_LOVELACE}-lovelace floor, need >= ${MIN_TOKEN_PAYOUT_LOVELACE} to satisfy the token payout's min-UTxO`,
-      );
-    }
+    const payoutLovelace =
+      extraLovelace > MIN_TOKEN_PAYOUT_LOVELACE
+        ? extraLovelace
+        : MIN_TOKEN_PAYOUT_LOVELACE;
     builder = builder.payToAddress({
       address: toAddress(input.payoutBech32Address),
-      assets: toAssets({ lovelace: extraLovelace, ...totalNonAda }),
+      assets: toAssets({ lovelace: payoutLovelace, ...totalNonAda }),
     });
   }
 
