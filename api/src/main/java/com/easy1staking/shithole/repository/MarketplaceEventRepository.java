@@ -56,4 +56,15 @@ public interface MarketplaceEventRepository
             + "where e.sellerPkh = :pkh or e.buyerPkh = :pkh "
             + "order by coalesce(e.spentAtSlot, e.createdAtSlot) desc")
     List<MarketplaceEventEntity> findAllByPkh(@Param("pkh") byte[] pkh, Pageable pageable);
+
+    /**
+     * Public per-collection activity feed — every marketplace event for a
+     * collection (listed / sold / cancelled), newest-first by last-touched
+     * slot. Powers {@code GET /api/collections/{slug}/activity}.
+     */
+    @Query("select e from MarketplaceEventEntity e "
+            + "where e.collectionPolicyId = :policy "
+            + "order by coalesce(e.spentAtSlot, e.createdAtSlot) desc")
+    List<MarketplaceEventEntity> findByCollectionPolicyId(
+            @Param("policy") byte[] policy, Pageable pageable);
 }

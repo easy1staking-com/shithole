@@ -76,6 +76,10 @@ public class MarketplaceEventEntity {
     @Column(name = "listed_nft_unit", nullable = false)
     private byte[] listedNftUnit;
 
+    /** Collection dimension = first 28 bytes (policy id) of {@code listedNftUnit}. */
+    @Column(name = "collection_policy_id")
+    private byte[] collectionPolicyId;
+
     @Column(name = "lovelace", nullable = false)
     private Long lovelace;
 

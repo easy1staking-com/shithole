@@ -87,9 +87,7 @@ is a singleton script → **no deploy, no mint.**
   in `ListingDetail`.
 - **Preprod CashGrab whitelist:** the whitelisted preprod CashGrab (`ca53618b…`) is one of several
   mimic mint runs — verify it's the policy you're actively listing under when testing.
-- **AI memory:** the decision-log dir is empty — copy the 40+ memories from the Mac
-  (`-Users-…/memory/` → `-home-…/memory/`, drop the *files* in; folder-name slug differs).
-- **Commit `docs/DEV_SETUP_LINUX.md`** (untracked) and the dev-only `.gitignore` `._*`/`.DS_Store` change.
+- **Commit `docs/DEV_SETUP_LINUX.md`** (untracked) and the dev-only `.gitignore` `._*`/`.DS_Store` change. ✓
 
 ## Test-plan status
 T1 (fixtures) ✓ · T2 (preprod mint) ✓ · T3 (BE bring-up), T4 (E2E), T5 (automated) — per phase above.

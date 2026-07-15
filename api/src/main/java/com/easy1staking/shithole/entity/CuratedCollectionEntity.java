@@ -53,4 +53,24 @@ public class CuratedCollectionEntity {
 
     @Column(name = "listing_script_address")
     private String listingScriptAddress;
+
+    /** Where this collection appears: {@code pit}, {@code marketplace}, or {@code both}. */
+    @Column(name = "surface")
+    private String surface;
+
+    /** Default pricing token for the list form — hex policy id ({@code null}/empty = ADA). */
+    @Column(name = "default_price_policy")
+    private String defaultPricePolicy;
+
+    /** Default pricing token — hex asset name. */
+    @Column(name = "default_price_name")
+    private String defaultPriceName;
+
+    /** Default pricing token — smallest-unit exponent (ADA=6, HOSKY/SNEK=0). */
+    @Column(name = "default_price_decimals")
+    private Integer defaultPriceDecimals;
+
+    /** Default pricing token — display label (e.g. {@code HOSKY}, {@code SNEK}, {@code ADA}). */
+    @Column(name = "price_token_label")
+    private String priceTokenLabel;
 }

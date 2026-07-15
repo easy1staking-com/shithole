@@ -29,4 +29,19 @@ public interface CuratedCollectionRepository extends JpaRepository<CuratedCollec
      * needs the curation metadata).
      */
     Optional<CuratedCollectionEntity> findByConfigNftPolicy(String configNftPolicy);
+
+    /**
+     * Resolve a collection by its NFT policy id — the canonical multi-surface
+     * key. Marketplace events derive it from the sold NFT's policy; used to
+     * turn a {@code collection_policy_id} into a slug (and its curation
+     * metadata) for the activity/stats endpoints.
+     */
+    Optional<CuratedCollectionEntity> findFirstByCollectionPolicyId(String collectionPolicyId);
+
+    /**
+     * Pit-visible curated collections for {@code GET /api/curated} — excludes
+     * marketplace-only rows so the pit/p2p surfaces don't show collections
+     * that have no on-chain config.
+     */
+    List<CuratedCollectionEntity> findBySurfaceNotOrderByDisplayOrderAscSlugAsc(String surface);
 }
