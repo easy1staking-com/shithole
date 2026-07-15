@@ -3,6 +3,100 @@
 > Handoff spec / implementation prompt. Preprod-first. All design decisions below are **locked**
 > (resolved in the requirements dialogue). Scope is the **Marketplace** (jpg.store-style buy/sell
 > listings) — NOT the Pit swap flow.
+>
+> **The original spec (Objective → Out of scope) is preserved below as reference detail.**
+> **The living plan is the STATUS section immediately below — start there.**
+
+---
+
+# STATUS & EXECUTION PLAN — updated 2026-07-15
+
+## ⚠️ Correction: mainnet needs NO minting
+Gnomeskies / Snekkies / Hosky 10k are **real, existing mainnet collections** (we scraped their
+metadata *from* mainnet by policy id). SNEK / HOSKY / USDM are **real mainnet tokens**. The
+**minting was preprod-only** — mimics, because the real assets don't exist on preprod and we
+needed test data there. **Mainnet cutover = a pure data change**: add the real mainnet policy ids
+to `MAINNET_COLLECTIONS` + seed `marketplace_collections.csv` with the real policies. Marketplace
+is a singleton script → **no deploy, no mint.**
+
+## Done
+- **M0 ✓** (`1a89140`, dev) — `.local` fixture scrapes + `MintFromFixtureTool` / `preprodMintFromFixture`;
+  minted Gnomeskies / Snekkies / Hosky 10k (24 each) + SNEK/HOSKY/USDM mimics on preprod. (T1–T2 ✓)
+- **M3 partial ✓ — B1, B2** (`1a89140`, dev) — 3 collections + SNEK in the FE registries;
+  `ListDrawer` collection selector + per-collection default-token pre-fill.
+- **Done *outside* the original plan (shipped to main):**
+  - **Marketplace-first landing** (`25a55a4`) — hero + live per-collection NFT strips
+    (`CollectionStrip`, wallet-free `makeReadClient` + `useMarketListings`) + subordinate Pit/P2P band
+    + `isMarketplaceEnabled()` kill-switch. **This partly supersedes B3** (per-collection strips
+    already exist; what's left of B3 is a tab/filter on `/market` itself).
+  - **Messaging / error system** (`ed27bcd`) — `classifyError` + severity `Notice` + `ErrorView`,
+    React error boundaries, global network-mismatch banner.
+  - **Fixes on main** — jar sweep min-UTxO fix; marketplace pre-buy balance guard (guard itself
+    still parked uncommitted on dev — see Housekeeping).
+
+## Remaining work — ordered phases
+
+### Phase 1 — BE data foundation  (orig. M1 · Workstream A1, A2, A4, A5, A6)
+- **V1_0_11 migration:** `curated_collections.config_nft_policy` → nullable; add
+  `default_price_policy/name/decimals`, `price_token_label`, `surface` (pit|marketplace|both);
+  `marketplace_events` + `collection_policy_id BYTEA` + index `(collection_policy_id, slot DESC)`;
+  **backfill** existing `marketplace_events` from `substring(listed_nft_unit for 28)`.
+- **MarketplaceEventsIndexer:** populate `collection_policy_id` on create/buy/cancel.
+- **`marketplace_collections.csv` seeding** (+ env override) — mirror the `curated_collections` CSV loader.
+- **Repos:** `findByCollectionPolicyId(policy, pageable)`; per-user `findAllByPkhAndConfigNftPolicy(...)`.
+- **Resolution:** `collection_policy_id ↔ slug`; make `/api/collections/{slug}` work for config-less
+  (marketplace-only) rows (it currently 404s when there's no config).
+- BE tests (H2).
+
+### Phase 2 — BE activity + price oracle  (orig. M2 · A3, A7)
+- **PriceOracleService** — Minswap (primary) + GeckoTerminal (fallback) token→ADA, CoinGecko ADA→USD,
+  scheduled ~60s, cached, behind a swappable interface.
+- **`GET /api/collections/{slug}/activity`** — public, marketplace-only, token-aware, paginated,
+  `{event, nft_unit, price, ada_estimate, usd_estimate, wallet, ts}`.
+- **`GET /api/collections/{slug}/stats`** — 24h volume, sale count, floor, unique traders (native + ada + usd).
+- **Per-user `/me` history collection filter** — optional `?collection={slug|policy}`.
+- BE tests (oracle math mocked upstream; activity pagination; stats aggregation).
+
+### Phase 3 — FE per-collection surfaces  (orig. M4 · B3-reconciled, B4, B5, B6)
+- **B3 (reconciled):** landing strips already cover per-collection browse. Remaining: a collection
+  **tab/filter on `/market`** itself (`MarketBrowse` currently mixes all whitelisted collections;
+  it still hardcodes "HOSKY CashGrab only" copy — fix that too), driven by `/api/curated`.
+- **B4:** public per-collection **activity feed + stats strip** (a collection page, e.g. `/market/[collection]`),
+  consuming Phase-2 endpoints; token-aware formatting + "≈ estimated" ADA/USD.
+- **B5:** per-user `/me/history` optional collection filter (tag marketplace rows w/ `collection_policy_id`).
+- **B6:** theme the new collections (accent/background/mascot) from curated metadata — also feeds the
+  landing strips + `CollectionStrip` tint chips + the `PitP2pBand` chips.
+- FE tests (vitest + MSW curated fixtures for the 3 collections).
+
+### Phase 4 — Preprod E2E, then mainnet cutover  (orig. M5 + cutover)
+- **Preprod E2E (T3/T4):** list/buy/cancel per collection; assert activity/stats/history.
+- **Mainnet cutover — DATA ONLY (no mint, no deploy):** add real mainnet policy ids to
+  `MAINNET_COLLECTIONS`; seed `marketplace_collections.csv` with the real mainnet policies; SNEK/HOSKY
+  already in `MAINNET_PRICE_TOKENS`. Flip on → the landing's extra strips + activity light up on prod.
+
+## Housekeeping / cleanup (don't forget)
+- **Land parked → main:** the `coinSelection` pre-buy balance guard (tested on preprod, uncommitted on dev).
+- **Reconcile dev ↔ main:** dev holds the messaging/landing commits locally (now also on main via
+  cherry-pick, *different hashes*) + the dev-only `1a89140` groundwork + preprod `manifest.json`/env
+  working-tree changes. Rebase dev onto `origin/main` (git drops the patch-equivalent dupes, keeps
+  `1a89140`); **stash the preprod working-tree changes first**, and keep the preprod
+  `manifest.json` + `.env*` **dev-only, never on main**.
+- **Messaging polish (deferred from the audit):** jar disabled-button hint ("nothing to sweep" /
+  "below 5 ADA floor"); `update-config` zod validation (mirror `register-config`); remaining a11y
+  `role`/`aria-live` on inline error `<p>`s + loading regions; delete the dead `babelProbeError` state
+  in `ListingDetail`.
+- **Preprod CashGrab whitelist:** the whitelisted preprod CashGrab (`ca53618b…`) is one of several
+  mimic mint runs — verify it's the policy you're actively listing under when testing.
+- **AI memory:** the decision-log dir is empty — copy the 40+ memories from the Mac
+  (`-Users-…/memory/` → `-home-…/memory/`, drop the *files* in; folder-name slug differs).
+- **Commit `docs/DEV_SETUP_LINUX.md`** (untracked) and the dev-only `.gitignore` `._*`/`.DS_Store` change.
+
+## Test-plan status
+T1 (fixtures) ✓ · T2 (preprod mint) ✓ · T3 (BE bring-up), T4 (E2E), T5 (automated) — per phase above.
+
+---
+
+# ORIGINAL SPEC (reference detail)
 
 ## Objective
 Extend the Marketplace to:
@@ -179,16 +273,17 @@ estimates; `/stats` aggregates per token. Assert `/me/history` filters by collec
   test default-token pre-fill, collection filter, activity feed + estimated-price formatting. Update MSW
   handlers/fixtures under `web/src/mocks/fixtures/api/`.
 
-## Milestones
-- **M0** — Fixtures + generalized mint tool (T1) → mint 3 collections + tokens on preprod (T2).
-- **M1** — BE: V1_0_11, indexer `collection_policy_id`, marketplace-CSV seeding, repos, resolution (A1–A2, A4–A6).
-- **M2** — BE: PriceOracleService + activity/stats endpoints + per-user collection filter (A3, A7); unit tests (T5-BE).
-- **M3** — FE: registries + collection selector + default-token pre-fill (B1–B2).
-- **M4** — FE: multi-collection browse + public per-collection activity/stats + per-user collection filter (B3–B6).
-- **M5** — Full preprod E2E (T3–T4), then FE/BE test pass (T5).
+## Milestones  (superseded by the STATUS section at top — kept for the A/B task mapping)
+- **M0 ✓** — Fixtures + generalized mint tool (T1) → mint 3 collections + tokens on preprod (T2).
+- **M1** *(Phase 1)* — BE: V1_0_11, indexer `collection_policy_id`, marketplace-CSV seeding, repos, resolution (A1–A2, A4–A6).
+- **M2** *(Phase 2)* — BE: PriceOracleService + activity/stats endpoints + per-user collection filter (A3, A7); unit tests (T5-BE).
+- **M3 (B1, B2 ✓)** — FE: registries + collection selector + default-token pre-fill. **B3 partly done by the marketplace-first landing.**
+- **M4** *(Phase 3)* — FE: `/market` collection tab/filter + public per-collection activity/stats + per-user collection filter (B3-remainder, B4–B6).
+- **M5** *(Phase 4)* — Full preprod E2E (T3–T4), then FE/BE test pass (T5), then mainnet data cutover.
 
 ## Out of scope
 - Pit expansion / new on-chain configs for the new collections.
 - Any listing-validator changes (datum already multi-token).
-- Mainnet deploy (separate cutover; mirror preprod once green).
+- Mainnet **minting or deploy** — NOT needed. The collections + tokens already exist on mainnet;
+  cutover is a **data-only** whitelist + CSV seed (see STATUS ⚠️ at top). Marketplace is a singleton.
 - Public pit/p2p swap history feed (per-user only for now).
