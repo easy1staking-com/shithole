@@ -36,7 +36,7 @@ is a singleton script → **no deploy, no mint.**
 
 ## Remaining work — ordered phases
 
-### Phase 1 — BE data foundation  (orig. M1 · Workstream A1, A2, A4, A5, A6)
+### Phase 1 — BE data foundation  ✅ DONE (dev) — (orig. M1 · Workstream A1, A2, A4, A5, A6)
 - **V1_0_11 migration:** `curated_collections.config_nft_policy` → nullable; add
   `default_price_policy/name/decimals`, `price_token_label`, `surface` (pit|marketplace|both);
   `marketplace_events` + `collection_policy_id BYTEA` + index `(collection_policy_id, slot DESC)`;
@@ -48,7 +48,7 @@ is a singleton script → **no deploy, no mint.**
   (marketplace-only) rows (it currently 404s when there's no config).
 - BE tests (H2).
 
-### Phase 2 — BE activity + price oracle  (orig. M2 · A3, A7)
+### Phase 2 — BE activity + price oracle  ✅ DONE (dev) — (orig. M2 · A3, A7)
 - **PriceOracleService** — Minswap (primary) + GeckoTerminal (fallback) token→ADA, CoinGecko ADA→USD,
   scheduled ~60s, cached, behind a swappable interface.
 - **`GET /api/collections/{slug}/activity`** — public, marketplace-only, token-aware, paginated,
