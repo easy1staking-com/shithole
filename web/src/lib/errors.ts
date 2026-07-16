@@ -291,6 +291,22 @@ export function classifyError(
     return known("warning", "Account changed", "You switched accounts — reconnect to continue.");
   }
 
+  // 2b. Wallet has no account selected, or hit an internal error (CIP-30 -2).
+  if (/no account (set|selected)/.test(t)) {
+    return known(
+      "warning",
+      "No account selected",
+      "Your wallet has no account selected — pick or create one, then reconnect.",
+    );
+  }
+  if (code === -2) {
+    return known(
+      "warning",
+      "Wallet error",
+      "Your wallet hit an internal error. Retry, or restart the extension.",
+    );
+  }
+
   // 3. No wallet installed / detected.
   if (/no cardano wallet|is not installed|no wallet (found|detected)|window\.cardano/.test(t)) {
     return known("warning", "No wallet found", "Install Eternl, Vespr, or Lace, then refresh.");
