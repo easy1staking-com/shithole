@@ -233,9 +233,21 @@ public class CollectionController {
                 .build());
     }
 
-    /** slug → collection policy bytes; null when the slug is unknown or config-less-but-policy-less. */
-    private byte[] resolveCollectionPolicy(String slug) {
-        return curatedCollectionRepository.findById(slug)
+    /** A 28-byte policy id in lowercase hex — also matches SAFE_SLUG, so check first. */
+    private static final Pattern POLICY_HEX = Pattern.compile("^[0-9a-f]{56}$");
+
+    /**
+     * Resolve the path segment to collection policy bytes. Accepts either a
+     * curated slug OR a raw 56-hex policy id — the FE holds policy ids
+     * authoritatively (its whitelist), so accepting them directly removes any
+     * slug-drift risk between FE registry and BE curation. Activity/stats are
+     * public chain data, so serving an uncurated policy is harmless.
+     */
+    private byte[] resolveCollectionPolicy(String slugOrPolicy) {
+        if (POLICY_HEX.matcher(slugOrPolicy).matches()) {
+            return HexUtil.decodeHexString(slugOrPolicy);
+        }
+        return curatedCollectionRepository.findById(slugOrPolicy)
                 .map(CuratedCollectionEntity::getCollectionPolicyId)
                 .filter(p -> p != null && !p.isBlank())
                 .map(HexUtil::decodeHexString)

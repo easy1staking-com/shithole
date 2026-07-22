@@ -2,47 +2,48 @@
 
 import { useQueries } from "@tanstack/react-query";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   ADA_PRICE_UNIT_SENTINEL,
   FilterBar,
   type FilterState,
 } from "@/components/market/FilterBar";
+import { CollectionActivityFeed } from "@/components/market/CollectionActivityFeed";
+import { CollectionStatsStrip } from "@/components/market/CollectionStatsStrip";
+import { CollectionTabs } from "@/components/market/CollectionTabs";
 import { ListingCard } from "@/components/market/ListingCard";
 import { ErrorView } from "@/components/ErrorView";
 import { fetchNftMetadata } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/hooks";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
-import {
-  fetchMarketListings,
-  type DecodedListing,
-} from "@/lib/market/queryListings";
+import { type DecodedListing } from "@/lib/market/queryListings";
+import { useMarketListings } from "@/lib/market/useMarketListings";
 import { matchesPool, poolByTicker } from "@/lib/market/poolTraits";
-import { isSupportedCollection } from "@/lib/market/supportedCollections";
+import {
+  isSupportedCollection,
+  supportedCollections,
+} from "@/lib/market/supportedCollections";
 import { supportedPriceTokens } from "@/lib/market/supportedPriceTokens";
-import { makeClient } from "@/lib/tx/evolutionClient";
-import { useWalletStore } from "@/lib/wallet/walletStore";
 
 /**
  * Browse view for /market. Steps:
- *   1. Pull every UTxO at the marketplace address (single Blockfrost call).
- *   2. Drop anything outside the {@link isSupportedCollection} whitelist —
- *      HOSKY CashGrab only in v1.
- *   3. Batch-fetch CIP-25 metadata for each remaining listing (uses
- *      React Query under useQueries; deduped against ListingCard's own
- *      useNftMetadata call so each unit is fetched once).
- *   4. Apply the filter bar (currency, pool-traits, sort) to the
- *      decorated list.
- *   5. Render filtered listings.
+ *   1. Pull every UTxO at the marketplace address via the PUBLIC read
+ *      client ({@link useMarketListings}) — browsing needs no wallet.
+ *   2. Drop anything outside the {@link isSupportedCollection} whitelist.
+ *   3. Optional collection tab (?c=policy) narrows to one collection and
+ *      unlocks its stats strip + activity feed.
+ *   4. Batch-fetch CIP-25 metadata; apply the filter bar (currency,
+ *      pool-traits, sort); render.
  */
 export function MarketBrowse() {
   const { data: manifest } = useDerivedMarketplaceManifest();
-  const walletApi = useWalletStore((s) => s.api);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [listings, setListings] = useState<DecodedListing[] | null>(null);
-  const [err, setErr] = useState<unknown>(null);
-  const [loading, setLoading] = useState(false);
+  const { listings, loading, error: err } = useMarketListings();
+
   // Default the browse view to all currencies, cheapest first. The sort
   // works across currencies by comparing human-readable amounts (see the
   // `visible` memo below), so it no longer needs a single currency picked.
@@ -52,36 +53,41 @@ export function MarketBrowse() {
     sort: "asc",
   });
 
-  const marketplaceAddress = manifest?.marketplaceAddress ?? null;
+  // Selected collection tab — URL-synced (?c=policy) so the landing strips
+  // can deep-link into a filtered browse. Validated against the whitelist.
+  const selectedCollection = useMemo(() => {
+    const c = searchParams.get("c")?.toLowerCase() ?? null;
+    if (!c) return null;
+    return supportedCollections().some((x) => x.policyId.toLowerCase() === c)
+      ? c
+      : null;
+  }, [searchParams]);
 
-  const refresh = useCallback(async () => {
-    if (!marketplaceAddress || !walletApi) return;
-    setLoading(true);
-    setErr(null);
-    try {
-      const client = await makeClient(walletApi);
-      const found = await fetchMarketListings(client, marketplaceAddress);
-      setListings(found);
-    } catch (e) {
-      setErr(e);
-    } finally {
-      setLoading(false);
-    }
-  }, [marketplaceAddress, walletApi]);
+  const onSelectCollection = useCallback(
+    (policyId: string | null) => {
+      router.replace(policyId ? `/market?c=${policyId.toLowerCase()}` : "/market", {
+        scroll: false,
+      });
+    },
+    [router],
+  );
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  // listings | activity — activity only meaningful for a single collection.
+  const [view, setView] = useState<"listings" | "activity">("listings");
+  const activeView = selectedCollection ? view : "listings";
 
   // Whitelist filter — keep only listings whose listed asset is in a
-  // supported collection (HOSKY CashGrab today).
+  // supported collection; then narrow to the selected tab if any.
   const onCollection = useMemo<DecodedListing[]>(() => {
     if (!listings) return [];
     return listings.filter((l) => {
       const u = l.listedUnits[0];
-      return Boolean(u) && isSupportedCollection(u);
+      if (!u || !isSupportedCollection(u)) return false;
+      return selectedCollection
+        ? u.slice(0, 56).toLowerCase() === selectedCollection
+        : true;
     });
-  }, [listings]);
+  }, [listings, selectedCollection]);
 
   // Batch-fetch metadata for every visible (whitelisted) listing in
   // parallel. React Query dedupes against ListingCard's own
@@ -160,6 +166,7 @@ export function MarketBrowse() {
   }, [decorated, filters]);
 
   const someMetaLoading = metaQueries.some((q) => q.isLoading);
+  const collectionCount = supportedCollections().length;
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
@@ -175,9 +182,11 @@ export function MarketBrowse() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">marketplace</h1>
         <p className="max-w-2xl text-sm text-zinc-400">
-          HOSKY CashGrab NFTs only (for now). filter by sale currency or
-          by the stake-pool trait set you care about — buyers wanting
-          delegate-able art can find it.
+          {collectionCount > 1
+            ? `${collectionCount} dead collections and counting. pick one for its stats + activity, `
+            : "dead collections only. "}
+          filter by sale currency or by the stake-pool trait set you care
+          about — buyers wanting delegate-able art can find it.
         </p>
       </header>
 
@@ -185,46 +194,98 @@ export function MarketBrowse() {
         <ManifestEmptyState />
       ) : (
         <>
-          <FilterBar filters={filters} onChange={setFilters} />
+          <CollectionTabs
+            selected={selectedCollection}
+            onSelect={onSelectCollection}
+          />
 
-          {err ? (
-            <ErrorView error={err} context={{ subject: "listings" }} />
+          {selectedCollection ? (
+            <>
+              <CollectionStatsStrip policyId={selectedCollection} />
+              <div className="flex gap-1 border-b border-zinc-900">
+                <ViewTab
+                  label="listings"
+                  active={activeView === "listings"}
+                  onClick={() => setView("listings")}
+                />
+                <ViewTab
+                  label="activity"
+                  active={activeView === "activity"}
+                  onClick={() => setView("activity")}
+                />
+              </div>
+            </>
           ) : null}
 
-          {!walletApi ? (
-            <p className="text-sm text-zinc-500">connect a wallet to browse.</p>
-          ) : loading ? (
-            <p className="text-sm text-zinc-500">scanning the marketplace…</p>
-          ) : visible.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              {onCollection.length === 0
-                ? "no HOSKY CashGrab listings yet — be the first."
-                : someMetaLoading
-                ? "applying filters…"
-                : "no listings match the current filters."}
-            </p>
+          {activeView === "activity" && selectedCollection ? (
+            <CollectionActivityFeed policyId={selectedCollection} />
           ) : (
             <>
-              <p className="text-xs text-zinc-500">
-                {visible.length} listing{visible.length === 1 ? "" : "s"}
-                {onCollection.length !== visible.length
-                  ? ` of ${onCollection.length}`
-                  : ""}
-              </p>
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {visible.map((e) => (
-                  <li
-                    key={`${e.listing.utxo.txHash}:${e.listing.utxo.outputIndex}`}
-                  >
-                    <ListingCard listing={e.listing} />
-                  </li>
-                ))}
-              </ul>
+              <FilterBar filters={filters} onChange={setFilters} />
+
+              {err ? (
+                <ErrorView error={err} context={{ subject: "listings" }} />
+              ) : null}
+
+              {loading || listings === null ? (
+                <p className="text-sm text-zinc-500">scanning the marketplace…</p>
+              ) : visible.length === 0 ? (
+                <p className="text-sm text-zinc-500">
+                  {onCollection.length === 0
+                    ? "no live listings here yet — be the first."
+                    : someMetaLoading
+                    ? "applying filters…"
+                    : "no listings match the current filters."}
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-zinc-500">
+                    {visible.length} listing{visible.length === 1 ? "" : "s"}
+                    {onCollection.length !== visible.length
+                      ? ` of ${onCollection.length}`
+                      : ""}
+                  </p>
+                  <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {visible.map((e) => (
+                      <li
+                        key={`${e.listing.utxo.txHash}:${e.listing.utxo.outputIndex}`}
+                      >
+                        <ListingCard listing={e.listing} />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </>
           )}
         </>
       )}
     </main>
+  );
+}
+
+function ViewTab({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`-mb-px border-b-2 px-3 py-2 font-mono text-xs uppercase tracking-widest transition-colors ${
+        active
+          ? "border-sky-500 text-zinc-100"
+          : "border-transparent text-zinc-500 hover:text-zinc-300"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
