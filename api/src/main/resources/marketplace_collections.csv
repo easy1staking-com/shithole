@@ -1,0 +1,17 @@
+# Marketplace-only curated collections (no on-chain config) — seeded into
+# curated_collections at boot by MarketplaceCollectionSeeder for the row(s)
+# matching app.network. These are real existing collections (preprod = minted
+# mimics; mainnet = the actual collections), so NO minting is involved — this
+# is pure metadata so the BE can resolve collection_policy_id -> slug + theme
+# + default pricing token for the activity/stats endpoints.
+#
+# columns: network,slug,collection_policy_id,display_name,accent_color,default_price_policy,default_price_name,default_price_decimals,price_token_label
+network,slug,collection_policy_id,display_name,accent_color,default_price_policy,default_price_name,default_price_decimals,price_token_label
+preprod,cashgrab,ca53618b78dc2e22303a53d5601e044818422816fba8be3797257004,HOSKY CashGrab,#eab308,4956a8205aeed1337e45b51679f7cdca1ea44d02c0e78d800acf2f1e,484f534b59,0,HOSKY
+mainnet,cashgrab,a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559,HOSKY CashGrab,#eab308,a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235,484f534b59,0,HOSKY
+preprod,gnomeskies,a4ad9795d5a07ca9df5ccdb99b011fab5a0f4563ede432c5f9c6347d,Gnomeskies,#a78bfa,4956a8205aeed1337e45b51679f7cdca1ea44d02c0e78d800acf2f1e,484f534b59,0,HOSKY
+preprod,snekkies,9b7d392af9c2e262b837a5c8cb9e9b89100a4e1dc3ae872d65e798ad,Snekkies,#34d399,51c13093b6572b7e4e7ed3e0f6451a82b9d3a5d8dea8b831a0a55424,534e454b,0,SNEK
+preprod,tenk,55cd61386250a4a3bf73e8c39408006085614b5a211153fbc080f7ad,Hosky 10k,#fb923c,4956a8205aeed1337e45b51679f7cdca1ea44d02c0e78d800acf2f1e,484f534b59,0,HOSKY
+mainnet,gnomeskies,ec77283fe87b1ccd7e5e8eb963de4c90abc8488e1e090b16b7f70a50,Gnomeskies,#a78bfa,a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235,484f534b59,0,HOSKY
+mainnet,snekkies,b558ea5ecfa2a6e9701dab150248e94104402f789c090426eb60eb60,Snekkies,#34d399,279c909f348e533da5808898f87f9a14bb2c3dfbbacccd631d927a3f,534e454b,0,SNEK
+mainnet,tenk,3bc4864351b565dd028218255f55239c7c6b6f2bb238f113872fb8fa,Hosky 10k,#fb923c,a0028f350aaabe0545fdcb56b039bfb08e4bb4d8c4d7c3c7d481c235,484f534b59,0,HOSKY

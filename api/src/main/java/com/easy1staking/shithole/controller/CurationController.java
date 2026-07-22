@@ -31,8 +31,10 @@ public class CurationController {
 
     @GetMapping(value = "/curated", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<List<CuratedCollectionDto>> curated() {
+        // Pit-visible collections only — marketplace-only rows have no config
+        // and would show up as non-functional "pits".
         List<CuratedCollectionDto> entries = curatedCollectionRepository
-                .findAllByOrderByDisplayOrderAscSlugAsc()
+                .findBySurfaceNotOrderByDisplayOrderAscSlugAsc("marketplace")
                 .stream()
                 .map(CurationController::toDto)
                 .toList();

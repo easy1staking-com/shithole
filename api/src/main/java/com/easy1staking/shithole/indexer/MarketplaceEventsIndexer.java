@@ -30,6 +30,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -174,6 +175,9 @@ public class MarketplaceEventsIndexer {
             }
 
             long lovelace = adaLovelace(out.getAmounts());
+            byte[] listedUnit = unitOpt.get();
+            // Collection dimension = the listed NFT's policy id (first 28 bytes).
+            byte[] collectionPolicyId = Arrays.copyOf(listedUnit, 28);
             MarketplaceEventEntity row = MarketplaceEventEntity.builder()
                     .txHash(txHashBytes)
                     .outputIndex(out.getOutputIndex())
@@ -183,7 +187,8 @@ public class MarketplaceEventsIndexer {
                     .priceName(datum.priceName())
                     .priceQty(datum.priceQty())
                     .accompanyingLovelace(datum.accompanyingLovelace())
-                    .listedNftUnit(unitOpt.get())
+                    .listedNftUnit(listedUnit)
+                    .collectionPolicyId(collectionPolicyId)
                     .lovelace(lovelace)
                     .createdAtSlot(slot)
                     .createdAt(at)

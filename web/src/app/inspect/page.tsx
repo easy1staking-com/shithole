@@ -14,6 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { NftImage } from "@/components/NftImage";
 import { useNftMetadata } from "@/lib/api/hooks";
 import { listPools, matchesPool, type Pool } from "@/lib/market/poolTraits";
 import { supportedCollections } from "@/lib/market/supportedCollections";
@@ -100,19 +101,19 @@ export default function InspectPage() {
       <section className="grid gap-4 sm:grid-cols-[1fr_2fr]">
         {/* NFT card — empty until a lookup resolves. */}
         <div className="aspect-square overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
-          {meta.data?.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={meta.data.image_url}
-              alt={meta.data.name ?? ""}
-              className="h-full w-full object-cover"
-              draggable={false}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center px-3 text-center text-xs uppercase tracking-widest text-zinc-600">
-              {notFound ? "not found" : "enter a serial #"}
-            </div>
-          )}
+          <NftImage
+            ipfsUri={meta.data?.image_ipfs_uri ?? null}
+            url={meta.data?.image_url ?? null}
+            alt={meta.data?.name ?? ""}
+            className="h-full w-full object-cover"
+            loading="eager"
+            draggable={false}
+            fallback={
+              <div className="flex h-full items-center justify-center px-3 text-center text-xs uppercase tracking-widest text-zinc-600">
+                {notFound ? "not found" : "enter a serial #"}
+              </div>
+            }
+          />
         </div>
 
         <div className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">

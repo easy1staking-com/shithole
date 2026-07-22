@@ -9,6 +9,8 @@ import { useQuery, type UseQueryOptions, type UseQueryResult } from "@tanstack/r
 import {
   fetchAssetPoolMembership,
   fetchCollection,
+  fetchCollectionActivity,
+  fetchCollectionStats,
   fetchCurated,
   fetchListings,
   fetchListingsByPkh,
@@ -32,6 +34,8 @@ import type {
   CuratedCollection,
   ListingEvent,
   ListingsResponse,
+  MarketActivityEvent,
+  MarketCollectionStats,
   MarketplaceListing,
   NftMetadata,
   P2pListing,
@@ -95,7 +99,12 @@ export const queryKeys = {
       pkhHex.toLowerCase(),
       query.page ?? 0,
       query.size ?? 100,
+      query.collection?.toLowerCase() ?? null,
     ] as const,
+  collectionActivity: (slugOrPolicy: string, page: number, size: number) =>
+    ["collectionActivity", slugOrPolicy.toLowerCase(), page, size] as const,
+  collectionStats: (slugOrPolicy: string) =>
+    ["collectionStats", slugOrPolicy.toLowerCase()] as const,
 };
 
 type QueryOptions<TData> = Omit<UseQueryOptions<TData, Error, TData>, "queryKey" | "queryFn">;
@@ -131,6 +140,40 @@ export function useListings(
     queryKey: queryKeys.listings(slug, query),
     queryFn: () => fetchListings(slug, query),
     enabled: Boolean(slug),
+    ...options,
+  });
+}
+
+/**
+ * Public marketplace activity feed for a collection. `slugOrPolicy` is a
+ * curated slug or a raw policy id (the FE passes whitelist policy ids).
+ */
+export function useCollectionActivity(
+  slugOrPolicy: string | null,
+  query: { page?: number; size?: number } = {},
+  options?: QueryOptions<MarketActivityEvent[]>,
+): UseQueryResult<MarketActivityEvent[], Error> {
+  const page = query.page ?? 0;
+  const size = query.size ?? 50;
+  return useQuery({
+    queryKey: queryKeys.collectionActivity(slugOrPolicy ?? "", page, size),
+    queryFn: () => fetchCollectionActivity(slugOrPolicy ?? "", { page, size }),
+    enabled: Boolean(slugOrPolicy),
+    staleTime: 30_000,
+    ...options,
+  });
+}
+
+/** Public per-collection marketplace stats. */
+export function useCollectionStats(
+  slugOrPolicy: string | null,
+  options?: QueryOptions<MarketCollectionStats>,
+): UseQueryResult<MarketCollectionStats, Error> {
+  return useQuery({
+    queryKey: queryKeys.collectionStats(slugOrPolicy ?? ""),
+    queryFn: () => fetchCollectionStats(slugOrPolicy ?? ""),
+    enabled: Boolean(slugOrPolicy),
+    staleTime: 30_000,
     ...options,
   });
 }

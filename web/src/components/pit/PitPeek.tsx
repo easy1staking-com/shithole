@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { NftImage } from "@/components/NftImage";
 import { PoolChips } from "@/components/PoolChips";
 import { useAssetPoolMembership, useNftMetadata } from "@/lib/api/hooks";
 import type { Listing } from "@/types/api";
@@ -293,29 +294,26 @@ function PeekCard({
 }) {
   const meta = useNftMetadata(listing.current_nft_unit);
   const name = meta.data?.name ?? prettyAssetName(listing.current_nft_unit);
-  const imageUrl = meta.data?.image_url ?? null;
   return (
     <div
       className="overflow-hidden rounded-md border border-zinc-800 bg-zinc-900"
       title={name}
     >
       <div className="aspect-square bg-zinc-950">
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={name}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div
-            className="grid h-full w-full place-items-center text-[0.6rem]"
-            style={{ color: accent }}
-          >
-            …
-          </div>
-        )}
+        <NftImage
+          ipfsUri={meta.data?.image_ipfs_uri ?? null}
+          url={meta.data?.image_url ?? null}
+          alt={name}
+          className="h-full w-full object-cover"
+          fallback={
+            <div
+              className="grid h-full w-full place-items-center text-[0.6rem]"
+              style={{ color: accent }}
+            >
+              …
+            </div>
+          }
+        />
       </div>
       <div className="space-y-1 px-2 py-1.5">
         <p className="truncate text-[0.7rem] text-zinc-300">{name}</p>

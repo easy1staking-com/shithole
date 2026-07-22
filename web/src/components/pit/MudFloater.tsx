@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 
+import { NftImage } from "@/components/NftImage";
 import { useNftMetadata } from "@/lib/api/hooks";
 import type { Listing } from "@/types/api";
 
@@ -47,7 +48,6 @@ export function MudFloater({
   driftDelaySec: number;
 }) {
   const meta = useNftMetadata(listing.current_nft_unit);
-  const imageUrl = meta.data?.image_url ?? null;
   const name = meta.data?.name ?? listing.current_nft_unit.slice(0, 16) + "…";
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -84,19 +84,17 @@ export function MudFloater({
         className="relative aspect-square overflow-hidden rounded-full shadow-[0_8px_18px_rgba(0,0,0,0.55)] ring-2 ring-black/40"
         style={{ transform: `rotate(${sinkDeg}deg)` }}
       >
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={name}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <div className="grid h-full w-full place-items-center bg-zinc-900 text-[0.6rem] text-zinc-500">
-            loading
-          </div>
-        )}
+        <NftImage
+          ipfsUri={meta.data?.image_ipfs_uri ?? null}
+          url={meta.data?.image_url ?? null}
+          alt={name}
+          className="h-full w-full object-cover"
+          fallback={
+            <div className="grid h-full w-full place-items-center bg-zinc-900 text-[0.6rem] text-zinc-500">
+              loading
+            </div>
+          }
+        />
         {/* A brown sheen over the bottom third — suggests the NFT is
          *  partially submerged. The rotation on the outer container plus
          *  this gradient makes the same image read differently for each

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 import { ErrorView } from "@/components/ErrorView";
+import { NftImage } from "@/components/NftImage";
 import { useNftMetadata } from "@/lib/api/hooks";
 
 /**
@@ -196,13 +197,19 @@ function SplashPhase({ unit, accent }: { unit: string; accent: string }) {
       className="flex flex-col items-center gap-3"
     >
       {image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={image}
-          alt={name}
-          className="h-40 w-40 rounded-xl object-cover shadow-2xl"
+        <div
+          className="rounded-xl"
           style={{ boxShadow: `0 12px 60px ${accent}cc` }}
-        />
+        >
+          <NftImage
+            ipfsUri={meta.data?.image_ipfs_uri ?? null}
+            url={image}
+            alt={name}
+            loading="eager"
+            className="h-40 w-40 rounded-xl object-cover"
+            fallback={<div className="h-40 w-40 rounded-xl bg-zinc-800" />}
+          />
+        </div>
       ) : (
         <div className="h-40 w-40 rounded-xl bg-zinc-800" />
       )}
@@ -355,13 +362,19 @@ function RevealPhase({ unit, accent }: { unit: string; accent: string }) {
       className="flex flex-col items-center gap-3"
     >
       {image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={image}
-          alt={name}
-          className="h-48 w-48 rounded-xl object-cover shadow-2xl"
+        <div
+          className="rounded-xl"
           style={{ boxShadow: `0 20px 80px ${accent}aa` }}
-        />
+        >
+          <NftImage
+            ipfsUri={meta.data?.image_ipfs_uri ?? null}
+            url={image}
+            alt={name}
+            loading="eager"
+            className="h-48 w-48 rounded-xl object-cover"
+            fallback={<div className="h-48 w-48 rounded-xl bg-zinc-800" />}
+          />
+        </div>
       ) : (
         <div className="h-48 w-48 rounded-xl bg-zinc-800" />
       )}
@@ -424,13 +437,19 @@ function SettledPhase({
       className="flex flex-col items-center gap-5"
     >
       {image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={image}
-          alt={name}
-          className="h-48 w-48 rounded-xl object-cover"
+        <div
+          className="rounded-xl"
           style={{ boxShadow: `0 16px 60px ${accent}99` }}
-        />
+        >
+          <NftImage
+            ipfsUri={meta.data?.image_ipfs_uri ?? null}
+            url={image}
+            alt={name}
+            loading="eager"
+            className="h-48 w-48 rounded-xl object-cover"
+            fallback={<div className="h-48 w-48 rounded-xl bg-zinc-800" />}
+          />
+        </div>
       ) : (
         <div className="h-48 w-48 rounded-xl bg-zinc-800" />
       )}

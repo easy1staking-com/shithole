@@ -36,6 +36,52 @@ export const handlers = [
     return HttpResponse.json(collection);
   }),
 
+  // Public per-collection marketplace activity + stats (Phase 2 endpoints).
+  // Static placeholder rows so the /market collection tabs are exercisable
+  // in mock mode; slugOrPolicy accepted like the live BE.
+  http.get("/api/collections/:slugOrPolicy/activity", () => {
+    const now = Date.now();
+    return HttpResponse.json([
+      {
+        event: "listed",
+        nft_unit:
+          "ca53618b78dc2e22303a53d5601e044818422816fba8be3797257004484f534b594361736847726162303030303030303031",
+        price: { native_qty: "500000000", token_label: "HOSKY", decimals: 0 },
+        ada_estimate: 21.15,
+        usd_estimate: 3.5,
+        wallet: "dfc194b57dcb52cbdc6774f2050d471fa237ed43f24232aabf11f9ea",
+        ts: new Date(now - 3600_000).toISOString(),
+      },
+      {
+        event: "sold",
+        nft_unit:
+          "ca53618b78dc2e22303a53d5601e044818422816fba8be3797257004484f534b594361736847726162303030303030303032",
+        price: { native_qty: "10000000", token_label: "ADA", decimals: 6 },
+        ada_estimate: 10,
+        usd_estimate: 1.65,
+        wallet: "893ca99d98d2431a492a20023ef6d6db9c68e9ecbe53e0d5159d1ca3",
+        ts: new Date(now - 7200_000).toISOString(),
+      },
+    ]);
+  }),
+
+  http.get("/api/collections/:slugOrPolicy/stats", () => {
+    return HttpResponse.json({
+      active_listings: 4,
+      sales_24h: 1,
+      unique_traders_24h: 2,
+      volume_24h_ada: 10,
+      volume_24h_usd: 1.65,
+      floor: {
+        native_qty: "500000000",
+        token_label: "HOSKY",
+        decimals: 0,
+        ada_estimate: 21.15,
+        usd_estimate: 3.5,
+      },
+    });
+  }),
+
   http.get("/api/collections/:slug/listings", ({ params, request }) => {
     const slug = params.slug as string;
     const all = listingsBySlug[slug];

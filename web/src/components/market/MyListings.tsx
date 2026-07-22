@@ -7,6 +7,7 @@ import {
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
 import { ErrorView } from "@/components/ErrorView";
+import { NftImage } from "@/components/NftImage";
 import { useNftMetadata } from "@/lib/api/hooks";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { listPools, matchesPool } from "@/lib/market/poolTraits";
@@ -364,7 +365,12 @@ function ListingRow({
         className="h-4 w-4 shrink-0 accent-sky-500"
         aria-label={`select ${name}`}
       />
-      <Thumbnail url={imageUrl} alt={name} seed={unit} />
+      <Thumbnail
+        ipfsUri={meta.data?.image_ipfs_uri ?? null}
+        url={imageUrl}
+        alt={name}
+        seed={unit}
+      />
       <div className="min-w-0 flex-1 space-y-1">
         <h3 className="truncate text-sm font-semibold text-zinc-100">{name}</h3>
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -394,36 +400,33 @@ function ListingRow({
 }
 
 function Thumbnail({
+  ipfsUri,
   url,
   alt,
   seed,
 }: {
+  ipfsUri: string | null;
   url: string | null;
   alt: string;
   seed: string;
 }) {
-  const [errored, setErrored] = useState(false);
-  if (!url || errored) {
-    const [h1, h2] = seedToHues(seed);
-    return (
-      <div
-        className="h-16 w-16 shrink-0 rounded bg-zinc-900"
-        style={{
-          backgroundImage: `linear-gradient(135deg, hsl(${h1} 55% 16%) 0%, hsl(${h2} 55% 28%) 100%)`,
-        }}
-        aria-hidden
-      />
-    );
-  }
+  const [h1, h2] = seedToHues(seed);
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={url}
+    <NftImage
+      ipfsUri={ipfsUri}
+      url={url}
       alt={alt}
-      loading="lazy"
       draggable={false}
-      onError={() => setErrored(true)}
       className="h-16 w-16 shrink-0 rounded object-cover"
+      fallback={
+        <div
+          className="h-16 w-16 shrink-0 rounded bg-zinc-900"
+          style={{
+            backgroundImage: `linear-gradient(135deg, hsl(${h1} 55% 16%) 0%, hsl(${h2} 55% 28%) 100%)`,
+          }}
+          aria-hidden
+        />
+      }
     />
   );
 }

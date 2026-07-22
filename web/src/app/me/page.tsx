@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
 import { ErrorView } from "@/components/ErrorView";
+import { NftImage } from "@/components/NftImage";
 import { Notice } from "@/components/Notice";
 import { describeError } from "@/lib/errors";
 import { useNftMetadata } from "@/lib/api/hooks";
@@ -387,7 +388,6 @@ function MyListingCard({
 
   const accent = collection.theme?.accent_color ?? "#b87333";
   const name = meta.data?.name ?? listing.current_nft_unit.slice(56);
-  const image = meta.data?.image_url ?? null;
   // BE hardcodes accrued_lovelace=0 (CollectionController:152-154 — no
   // per-row min_utxo tracking yet). Derive client-side from the listing's
   // total lovelace minus our FE-enforced floor. Holds as long as every
@@ -481,16 +481,15 @@ function MyListingCard({
             className="h-4 w-4 flex-none cursor-pointer rounded border-zinc-700 bg-zinc-900 accent-zinc-100 disabled:cursor-not-allowed"
             aria-label={selected ? "deselect listing" : "select listing"}
           />
-          {image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={image}
-              alt={name}
-              className="h-20 w-20 flex-none rounded-md object-cover"
-            />
-          ) : (
-            <div className="h-20 w-20 flex-none rounded-md bg-zinc-900" aria-hidden />
-          )}
+          <NftImage
+            ipfsUri={meta.data?.image_ipfs_uri ?? null}
+            url={meta.data?.image_url ?? null}
+            alt={name}
+            className="h-20 w-20 flex-none rounded-md object-cover"
+            fallback={
+              <div className="h-20 w-20 flex-none rounded-md bg-zinc-900" aria-hidden />
+            }
+          />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <Link

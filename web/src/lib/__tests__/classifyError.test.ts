@@ -60,6 +60,17 @@ describe("classifyError — known operational errors", () => {
     expect(c.title).toBe("Account changed");
   });
 
+  it("no account set (CIP-30 -2 info)", () => {
+    const c = classifyError({ code: -2, info: "no account set" });
+    expect(c.kind).toBe("known");
+    expect(c.title).toBe("No account selected");
+  });
+
+  it("wallet internal error (code -2, other)", () => {
+    const c = classifyError({ code: -2, info: "internal error" });
+    expect(c.title).toBe("Wallet error");
+  });
+
   it("no wallet installed", () => {
     const c = classifyError(new Error('wallet "eternl" is not installed'));
     expect(c.title).toBe("No wallet found");

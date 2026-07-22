@@ -323,3 +323,42 @@ export type MarketplaceListing = {
   /** Payment-key hash of the buyer on a sold row; null otherwise. */
   buyer_pkh?: string | null;
 };
+
+/* -------------------------------------------------------------------- */
+/* GET /api/collections/:slugOrPolicy/activity + /stats                 */
+/* -------------------------------------------------------------------- */
+
+/** One row of the public per-collection marketplace activity feed. */
+export type MarketActivityEvent = {
+  event: "listed" | "sold" | "cancelled" | "spent";
+  /** policy_id + asset_name, hex. */
+  nft_unit: string;
+  price: {
+    /** Smallest-unit amount as a string (precision-safe). */
+    native_qty: string;
+    token_label: string;
+    decimals: number;
+  };
+  /** Best-effort "≈ estimated" figures; absent when unpriceable. */
+  ada_estimate?: number;
+  usd_estimate?: number;
+  /** pkh of the wallet on this event's side — buyer for sold, else seller. */
+  wallet: string;
+  ts: string;
+};
+
+/** Public per-collection marketplace stats. ADA/USD figures are estimates. */
+export type MarketCollectionStats = {
+  active_listings: number;
+  sales_24h: number;
+  unique_traders_24h: number;
+  volume_24h_ada?: number;
+  volume_24h_usd?: number;
+  floor?: {
+    native_qty: string;
+    token_label: string;
+    decimals: number;
+    ada_estimate?: number;
+    usd_estimate?: number;
+  } | null;
+};

@@ -15,6 +15,8 @@ import type {
   CuratedCollection,
   ListingEvent,
   ListingsResponse,
+  MarketActivityEvent,
+  MarketCollectionStats,
   MarketplaceListing,
   NftMetadata,
   P2pListing,
@@ -282,6 +284,9 @@ export function fetchP2pListingsByBuyer(
 export type ByPkhQuery = {
   size?: number;
   page?: number;
+  /** Optional collection scope — a curated slug or 56-hex policy id.
+   *  Only honoured by the marketplace by-pkh endpoint. */
+  collection?: string;
 };
 
 /**
@@ -327,8 +332,40 @@ export function fetchMarketListingsByPkh(
   const qs = new URLSearchParams();
   qs.set("size", String(query.size ?? 100));
   qs.set("page", String(query.page ?? 0));
+  if (query.collection) qs.set("collection", query.collection);
   return getJson<MarketplaceListing[]>(
     `/api/market/listings/by-pkh/${encodeURIComponent(pkhHex)}?${qs.toString()}`,
+  );
+}
+
+/* -------------------------------------------------------------------- */
+/* Public per-collection marketplace activity + stats                   */
+/* -------------------------------------------------------------------- */
+
+/**
+ * Public marketplace activity feed for one collection (listed / sold /
+ * cancelled), newest-first, token-aware with "≈ estimated" ADA/USD.
+ * `slugOrPolicy` accepts a curated slug OR a raw 56-hex policy id — the FE
+ * passes its whitelist policy ids so no slug mapping is needed.
+ */
+export function fetchCollectionActivity(
+  slugOrPolicy: string,
+  query: { page?: number; size?: number } = {},
+): Promise<MarketActivityEvent[]> {
+  const qs = new URLSearchParams();
+  qs.set("page", String(query.page ?? 0));
+  qs.set("size", String(query.size ?? 50));
+  return getJson<MarketActivityEvent[]>(
+    `/api/collections/${encodeURIComponent(slugOrPolicy)}/activity?${qs.toString()}`,
+  );
+}
+
+/** Public per-collection marketplace stats (active/24h volume/floor/traders). */
+export function fetchCollectionStats(
+  slugOrPolicy: string,
+): Promise<MarketCollectionStats> {
+  return getJson<MarketCollectionStats>(
+    `/api/collections/${encodeURIComponent(slugOrPolicy)}/stats`,
   );
 }
 

@@ -295,6 +295,9 @@ public class ConfigRegistrationService {
                 .displayOrder(displayOrder)
                 .promotedAt(now)
                 .listingScriptAddress(listingScriptAddress)
+                // pit-backed (has a config) and potentially marketplace-listed —
+                // 'both' keeps it visible in /api/curated (which hides 'marketplace').
+                .surface("both")
                 .build();
 
         return new RegistrationDecision(configEntity, curatedEntity, theme);

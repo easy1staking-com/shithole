@@ -1,8 +1,10 @@
 package com.easy1staking.shithole.controller;
 
 import com.bloxbean.cardano.client.util.HexUtil;
+import com.easy1staking.shithole.entity.CuratedCollectionEntity;
 import com.easy1staking.shithole.entity.MarketplaceEventEntity;
 import com.easy1staking.shithole.model.MarketplaceListingEventDto;
+import com.easy1staking.shithole.repository.CuratedCollectionRepository;
 import com.easy1staking.shithole.repository.MarketplaceEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,10 +40,14 @@ public class MarketController {
 
     /** 28-byte payment-key hash as lowercase hex. */
     private static final Pattern PKH_HEX_PATTERN = Pattern.compile("^[0-9a-f]{56}$");
+    /** A collection filter value is either a 28-byte policy id (hex) or a slug. */
+    private static final Pattern POLICY_HEX_PATTERN = Pattern.compile("^[0-9a-f]{56}$");
+    private static final Pattern SLUG_PATTERN = Pattern.compile("^[a-z0-9-]+$");
     private static final int MAX_PAGE_SIZE = 200;
     private static final int DEFAULT_PAGE_SIZE = 100;
 
     private final MarketplaceEventRepository marketplaceEventRepository;
+    private final CuratedCollectionRepository curatedCollectionRepository;
 
     /**
      * All marketplace events a wallet participated in — as the seller
@@ -54,17 +60,43 @@ public class MarketController {
     public ResponseEntity<List<MarketplaceListingEventDto>> listingsByPkh(
             @PathVariable("pkhHex") String pkhHex,
             @RequestParam(value = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
-            @RequestParam(value = "page", defaultValue = "0") int page) {
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "collection", required = false) String collection) {
         if (pkhHex == null || !PKH_HEX_PATTERN.matcher(pkhHex.toLowerCase()).matches()) {
             return ResponseEntity.badRequest().build();
         }
         int safeSize = Math.max(1, Math.min(MAX_PAGE_SIZE, size));
         int safePage = Math.max(0, page);
         byte[] pkh = HexUtil.decodeHexString(pkhHex.toLowerCase());
+        PageRequest pageable = PageRequest.of(safePage, safeSize);
 
-        List<MarketplaceEventEntity> rows =
-                marketplaceEventRepository.findAllByPkh(pkh, PageRequest.of(safePage, safeSize));
+        List<MarketplaceEventEntity> rows;
+        if (collection == null || collection.isBlank()) {
+            rows = marketplaceEventRepository.findAllByPkh(pkh, pageable);
+        } else {
+            byte[] policy = resolveCollectionPolicy(collection.trim().toLowerCase());
+            if (policy == null) {
+                // Unknown collection filter → no rows rather than an error.
+                return ResponseEntity.ok(List.of());
+            }
+            rows = marketplaceEventRepository.findAllByPkhAndCollectionPolicyId(pkh, policy, pageable);
+        }
         return ResponseEntity.ok(rows.stream().map(MarketController::toDto).toList());
+    }
+
+    /** Resolve a {@code ?collection} value (28-byte policy hex OR slug) to policy bytes. */
+    private byte[] resolveCollectionPolicy(String collection) {
+        if (POLICY_HEX_PATTERN.matcher(collection).matches()) {
+            return HexUtil.decodeHexString(collection);
+        }
+        if (SLUG_PATTERN.matcher(collection).matches()) {
+            return curatedCollectionRepository.findById(collection)
+                    .map(CuratedCollectionEntity::getCollectionPolicyId)
+                    .filter(p -> p != null && !p.isBlank())
+                    .map(HexUtil::decodeHexString)
+                    .orElse(null);
+        }
+        return null;
     }
 
     static MarketplaceListingEventDto toDto(MarketplaceEventEntity e) {
