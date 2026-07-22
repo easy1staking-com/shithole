@@ -67,10 +67,14 @@ export function FrameBox({
       {/* Artwork. userData.entryKey is what the focus raycast reads. */}
       <mesh position-z={0.05} userData={{ entryKey: entry.key }}>
         <planeGeometry args={[1.4, 1.4]} />
+        {/* Distinct keys force a NEW material when the texture arrives —
+            mutating map on a live material needs a shader recompile that
+            doesn't reliably happen, leaving the frame stuck on the
+            fallback color even after the image loaded. */}
         {texture ? (
-          <meshBasicMaterial map={texture} toneMapped={false} />
+          <meshBasicMaterial key="art" map={texture} toneMapped={false} />
         ) : (
-          <meshBasicMaterial color={fallback} />
+          <meshBasicMaterial key="flat" color={fallback} />
         )}
       </mesh>
       {/* Plaque. */}

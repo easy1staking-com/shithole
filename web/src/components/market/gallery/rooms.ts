@@ -281,7 +281,7 @@ function hubModel(data: GalleryData): RoomModel {
     bounds: { kind: "circle", radius },
     wallHeight: 5.2,
     spawn: { position: [0, EYE, 0], yaw: 0 },
-    doors: circleDoors(radius - 0.05, doorDefs),
+    doors: circleDoors(radius - 0.38, doorDefs),
     frames: [],
     lights: [
       [0, 4.2, 0],
@@ -331,7 +331,7 @@ function poolLobbyModel(data: GalleryData, policy: string): RoomModel {
     bounds: { kind: "circle", radius },
     wallHeight: 4.6,
     spawn: { position: [0, EYE, 0], yaw: 0 },
-    doors: circleDoors(radius - 0.05, doorDefs),
+    doors: circleDoors(radius - 0.38, doorDefs),
     frames: [],
     lights: [
       [0, 4, 0],

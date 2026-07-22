@@ -78,9 +78,11 @@ export function GalleryScene({
 
 /* ------------------------------------------------------------------ */
 
-const FLOOR = "#141416";
-const WALL = "#1d1c20";
-const CEIL = "#0d0d0f";
+// Keep wall/floor clearly apart in value — with the dim flicker lighting
+// they read as one surface if they're within a few % of each other.
+const FLOOR = "#0e0e10";
+const WALL = "#2e2b33";
+const CEIL = "#0b0b0d";
 
 function RoomShell({ model }: { model: RoomModel }) {
   const h = model.wallHeight;
@@ -182,8 +184,11 @@ function HubSign({ model }: { model: RoomModel }) {
   );
   useEffect(() => () => tex.dispose(), [tex]);
   const r = model.bounds.kind === "circle" ? model.bounds.radius : 8;
+  // Inset past the cylinder wall's sag at the sign's half-width (3.2m),
+  // otherwise the curved wall swallows the first/last letters.
+  const inset = (3.2 * 3.2) / (2 * r) + 0.25;
   return (
-    <mesh position={[0, model.wallHeight - 0.9, -(r - 0.2)]}>
+    <mesh position={[0, model.wallHeight - 0.9, -(r - inset)]}>
       <planeGeometry args={[6.4, 1.6]} />
       <meshBasicMaterial map={tex} transparent toneMapped={false} />
     </mesh>

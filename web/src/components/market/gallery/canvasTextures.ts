@@ -107,7 +107,8 @@ export function lintelTexture(opts: {
   ctx.shadowColor = opts.color;
   ctx.shadowBlur = 26;
   ctx.fillStyle = opts.color;
-  fitText(ctx, label, 470, 74, MONO, "700");
+  // Width budget leaves room for the glow bleed at both ends.
+  fitText(ctx, label, 430, 74, MONO, "700");
   ctx.fillText(label, 256, 74);
   // Second pass sharpens the core over the glow.
   ctx.shadowBlur = 8;
@@ -131,7 +132,7 @@ export function signTexture(title: string, tagline: string): THREE.CanvasTexture
   ctx.shadowColor = "#eab308";
   ctx.shadowBlur = 34;
   ctx.fillStyle = "#facc15";
-  fitText(ctx, title.toUpperCase(), 950, 120, MONO, "700");
+  fitText(ctx, title.toUpperCase(), 890, 120, MONO, "700");
   ctx.fillText(title.toUpperCase(), 512, 96);
   ctx.shadowBlur = 12;
   ctx.fillText(title.toUpperCase(), 512, 96);
