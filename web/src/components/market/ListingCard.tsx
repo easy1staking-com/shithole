@@ -12,6 +12,7 @@ import {
 } from "@/lib/market/supportedPriceTokens";
 import type { DecodedListing } from "@/lib/market/queryListings";
 import { useNftMetadata } from "@/lib/api/hooks";
+import { useWalletStore } from "@/lib/wallet/walletStore";
 
 /**
  * Marketplace listing card. Inspired by wayup.io's grid view: square
@@ -44,6 +45,14 @@ export function ListingCard({ listing }: { listing: DecodedListing }) {
   const imageUrl = meta.data?.image_url ?? null;
   const isMulti = listing.listedUnits.length > 1;
 
+  // Mark the connected wallet's own listings so sellers can spot (and go
+  // delist) them straight from any browse surface. Cheap datum compare —
+  // no extra fetch; simply absent when no wallet is connected.
+  const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
+  const isMine =
+    !!walletPkh &&
+    listing.datum.sellerPkhHex.toLowerCase() === walletPkh.toLowerCase();
+
   // Pools this NFT matches — same logic the /market filter uses, run
   // per-card here so the chips appear alongside the name. Computed
   // once per metadata refresh.
@@ -58,7 +67,9 @@ export function ListingCard({ listing }: { listing: DecodedListing }) {
   return (
     <Link
       href={detailHref}
-      className="group block overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 transition hover:border-sky-700"
+      className={`group relative block overflow-hidden rounded-xl border bg-zinc-950 transition hover:border-sky-700 ${
+        isMine ? "border-amber-700/70" : "border-zinc-800"
+      }`}
     >
       <ListingImage
         ipfsUri={meta.data?.image_ipfs_uri ?? null}
@@ -66,6 +77,11 @@ export function ListingCard({ listing }: { listing: DecodedListing }) {
         alt={name}
         fallbackSeed={unit}
       />
+      {isMine ? (
+        <span className="absolute left-2 top-2 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-950 shadow">
+          yours
+        </span>
+      ) : null}
       <div className="space-y-1.5 p-3">
         <h3 className="truncate text-sm font-semibold text-zinc-100">
           {name}

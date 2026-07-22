@@ -26,6 +26,7 @@ import {
   supportedCollections,
 } from "@/lib/market/supportedCollections";
 import { supportedPriceTokens } from "@/lib/market/supportedPriceTokens";
+import { useWalletStore } from "@/lib/wallet/walletStore";
 
 /**
  * Browse view for /market. Steps:
@@ -168,6 +169,19 @@ export function MarketBrowse() {
   const someMetaLoading = metaQueries.some((q) => q.isLoading);
   const collectionCount = supportedCollections().length;
 
+  // How many of the live (whitelisted, any collection) listings belong to
+  // the connected wallet — surfaces a "manage yours" shortcut to /market/me.
+  const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
+  const myCount = useMemo(() => {
+    if (!walletPkh || !listings) return 0;
+    const me = walletPkh.toLowerCase();
+    return listings.filter(
+      (l) =>
+        (l.listedUnits[0] ? isSupportedCollection(l.listedUnits[0]) : false) &&
+        l.datum.sellerPkhHex.toLowerCase() === me,
+    ).length;
+  }, [walletPkh, listings]);
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
       <nav className="flex items-center justify-between text-xs uppercase tracking-widest text-zinc-500">
@@ -194,6 +208,25 @@ export function MarketBrowse() {
         <ManifestEmptyState />
       ) : (
         <>
+          {myCount > 0 ? (
+            <Link
+              href="/market/me"
+              className="flex items-center justify-between rounded-lg border border-amber-900/60 bg-amber-950/20 px-3.5 py-2 text-sm text-amber-200 transition hover:border-amber-700"
+            >
+              <span>
+                you have <b className="font-mono">{myCount}</b> listing
+                {myCount === 1 ? "" : "s"} live here (marked{" "}
+                <span className="rounded bg-amber-500/90 px-1 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-zinc-950">
+                  yours
+                </span>
+                )
+              </span>
+              <span className="font-mono text-xs uppercase tracking-widest">
+                manage / delist →
+              </span>
+            </Link>
+          ) : null}
+
           <CollectionTabs
             selected={selectedCollection}
             onSelect={onSelectCollection}
