@@ -23,7 +23,7 @@ export function DoorMesh({ door }: { door: DoorSpec }) {
       {/* The void you walk into. */}
       <mesh position={[0, 1.35, 0.02]}>
         <planeGeometry args={[1.7, 2.7]} />
-        <meshBasicMaterial color="#020203" />
+        <meshBasicMaterial color="#020203" side={THREE.DoubleSide} />
       </mesh>
       {/* Jambs + header. */}
       <mesh position={[-0.95, 1.35, 0.06]}>
@@ -41,7 +41,7 @@ export function DoorMesh({ door }: { door: DoorSpec }) {
       {/* Neon lintel. */}
       <mesh position={[0, 3.45, 0.05]}>
         <planeGeometry args={[2.6, 0.975]} />
-        <meshBasicMaterial map={lintel} transparent toneMapped={false} />
+        <meshBasicMaterial map={lintel} transparent toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
       {/* Pool emblem on the door void (vendored logos only). */}
       {door.logo ? <DoorLogo path={door.logo} /> : null}
@@ -75,7 +75,7 @@ function DoorLogo({ path }: { path: string }) {
   return (
     <mesh position={[0, 1.85, 0.06]}>
       <planeGeometry args={[0.8, 0.8]} />
-      <meshBasicMaterial map={tex} transparent toneMapped={false} />
+      <meshBasicMaterial map={tex} transparent toneMapped={false} side={THREE.DoubleSide} />
     </mesh>
   );
 }

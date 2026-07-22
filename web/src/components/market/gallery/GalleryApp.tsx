@@ -190,12 +190,17 @@ export function GalleryApp() {
     <Shell>
       <div id="dump-canvas" className="absolute inset-0">
         <Canvas
-          key={model.key}
           dpr={[1, 1.75]}
           camera={{ fov: 72, near: 0.1, far: 80, position: [0, EYE, 0] }}
           gl={{ antialias: true, powerPreference: "high-performance" }}
         >
+          {/* Key the CONTENTS, not the Canvas: a keyed Canvas creates a
+              new WebGL context per room change, and browsers kill the
+              oldest context after a handful — the postprocessing pass
+              then dies with "Cannot read ... 'alpha'" on a null
+              context. One context, remounted scene graph. */}
           <GalleryScene
+            key={model.key}
             model={model}
             focusedKey={focusedKey}
             active={!fading}

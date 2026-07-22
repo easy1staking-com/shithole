@@ -2,6 +2,7 @@
 
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 
 import { plaqueTexture, seedColor } from "./canvasTextures";
 import { useNftTexture } from "./useNftTexture";
@@ -72,15 +73,15 @@ export function FrameBox({
             doesn't reliably happen, leaving the frame stuck on the
             fallback color even after the image loaded. */}
         {texture ? (
-          <meshBasicMaterial key="art" map={texture} toneMapped={false} />
+          <meshBasicMaterial key="art" map={texture} toneMapped={false} side={THREE.DoubleSide} />
         ) : (
-          <meshBasicMaterial key="flat" color={fallback} />
+          <meshBasicMaterial key="flat" color={fallback} side={THREE.DoubleSide} />
         )}
       </mesh>
       {/* Plaque. */}
       <mesh position={[0, -1.22, 0.03]}>
         <planeGeometry args={[1.12, 0.56]} />
-        <meshBasicMaterial map={plaque} toneMapped={false} />
+        <meshBasicMaterial map={plaque} toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );

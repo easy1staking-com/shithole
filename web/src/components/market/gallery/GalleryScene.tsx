@@ -48,7 +48,10 @@ export function GalleryScene({
 
       <RoomShell model={model} />
       <RoomDust model={model} />
-      <Rat bounds={model.bounds} />
+      {/* One resident per dry room; the sewer keeps a family. */}
+      {Array.from({ length: model.theme.wetFloor ? 3 : 1 }, (_, i) => (
+        <Rat key={i} bounds={model.bounds} />
+      ))}
 
       {/* Freestanding partitions (hero panels). */}
       {model.blockers.map((b, i) => (
@@ -207,20 +210,18 @@ function FloorMaterial({ theme }: { theme: RoomTheme }) {
   }
   return (
     <MeshReflectorMaterial
-      color="#0c1410"
-      metalness={0.35}
-      roughness={0.75}
-      mirror={0.45}
+      color="#101a14"
+      metalness={0.6}
+      roughness={0.35}
+      mirror={0.8}
       resolution={512}
-      blur={[280, 90]}
-      mixBlur={1}
-      mixStrength={6}
-      depthScale={0.5}
-      minDepthThreshold={0.4}
-      maxDepthThreshold={1.4}
+      blur={[160, 60]}
+      mixBlur={0.6}
+      mixStrength={14}
     />
   );
 }
+
 
 /**
  * A ceiling light with cheap fluorescent flicker — mostly steady, with
@@ -284,7 +285,7 @@ function HubSign({ model }: { model: RoomModel }) {
   return (
     <mesh position={[0, model.wallHeight - 0.9, -(r - inset)]}>
       <planeGeometry args={[6.4, 1.6]} />
-      <meshBasicMaterial map={tex} transparent toneMapped={false} />
+      <meshBasicMaterial map={tex} transparent toneMapped={false} side={THREE.DoubleSide} />
     </mesh>
   );
 }
