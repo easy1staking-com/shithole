@@ -145,7 +145,8 @@ function ipfsPath(uri: string): string | null {
   return path || null;
 }
 
-function buildCandidates(
+/** Exported for the 3D gallery's texture loader — same rotation order. */
+export function buildCandidates(
   ipfsUri: string | null | undefined,
   url: string | null | undefined,
 ): string[] {

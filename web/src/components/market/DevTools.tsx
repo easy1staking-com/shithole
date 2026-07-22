@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-
+import { MarketNav } from "@/components/market/MarketNav";
 import {
   clearLocalManifest,
   marketplaceManifest,
@@ -52,11 +51,7 @@ export function DevTools() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-12">
-      <nav className="flex items-center justify-between text-xs uppercase tracking-widest text-zinc-500">
-        <Link href="/market" className="hover:text-zinc-300">
-          ← back to market
-        </Link>
-      </nav>
+      <MarketNav back={{ href: "/market", label: "← back to market" }} />
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">dev tools</h1>
         <p className="text-sm text-zinc-400">

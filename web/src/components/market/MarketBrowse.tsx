@@ -14,6 +14,7 @@ import { CollectionActivityFeed } from "@/components/market/CollectionActivityFe
 import { CollectionStatsStrip } from "@/components/market/CollectionStatsStrip";
 import { CollectionTabs } from "@/components/market/CollectionTabs";
 import { ListingCard } from "@/components/market/ListingCard";
+import { MarketNav } from "@/components/market/MarketNav";
 import { ErrorView } from "@/components/ErrorView";
 import { fetchNftMetadata } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/hooks";
@@ -184,14 +185,7 @@ export function MarketBrowse() {
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
-      <nav className="flex items-center justify-between text-xs uppercase tracking-widest text-zinc-500">
-        <Link href="/" className="hover:text-zinc-300">
-          ← home
-        </Link>
-        <Link href="/market/new" className="hover:text-zinc-300">
-          list something →
-        </Link>
-      </nav>
+      <MarketNav back={{ href: "/", label: "← home" }} />
 
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">marketplace</h1>
