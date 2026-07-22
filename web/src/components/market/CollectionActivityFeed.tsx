@@ -1,6 +1,7 @@
 "use client";
 
 import { ErrorView } from "@/components/ErrorView";
+import { NftImage } from "@/components/NftImage";
 import { useCollectionActivity, useNftMetadata } from "@/lib/api/hooks";
 import type { MarketActivityEvent } from "@/types/api";
 
@@ -54,7 +55,6 @@ const EVENT_STYLE: Record<string, { chip: string; label: string }> = {
 function ActivityRow({ event }: { event: MarketActivityEvent }) {
   const meta = useNftMetadata(event.nft_unit);
   const name = meta.data?.name ?? prettyName(event.nft_unit);
-  const image = meta.data?.image_url ?? null;
   const style = EVENT_STYLE[event.event] ?? EVENT_STYLE.spent;
   const amount = Number(event.price.native_qty) / 10 ** event.price.decimals;
 
@@ -67,10 +67,13 @@ function ActivityRow({ event }: { event: MarketActivityEvent }) {
       </span>
 
       <div className="h-9 w-9 flex-none overflow-hidden rounded bg-zinc-900">
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt="" loading="lazy" className="h-full w-full object-cover" />
-        ) : null}
+        <NftImage
+          ipfsUri={meta.data?.image_ipfs_uri ?? null}
+          url={meta.data?.image_url ?? null}
+          alt=""
+          className="h-full w-full object-cover"
+          fallback={null}
+        />
       </div>
 
       <div className="min-w-0 flex-1">
