@@ -29,6 +29,12 @@ export type SupportedCollection = {
   defaultPriceTokenLabel?: string;
   /** Per-collection accent (tabs, strip chips). Matches the BE seed CSV. */
   accentColor?: string;
+  /**
+   * True for collections whose NFTs carry the Hosky rug-pool trait
+   * mapping ({@link poolTraits}). In the 3D gallery these collections
+   * open into a pool-door lobby instead of a single room.
+   */
+  poolDoors?: boolean;
 };
 
 const PREPROD_COLLECTIONS: SupportedCollection[] = [
@@ -39,6 +45,7 @@ const PREPROD_COLLECTIONS: SupportedCollection[] = [
     policyId: "ca53618b78dc2e22303a53d5601e044818422816fba8be3797257004",
     defaultPriceTokenLabel: "HOSKY",
     accentColor: "#eab308",
+    poolDoors: true,
   },
   {
     label: "Gnomeskies",
@@ -66,6 +73,7 @@ const MAINNET_COLLECTIONS: SupportedCollection[] = [
     policyId: "a5bb0e5bb275a573d744a021f9b3bff73595468e002755b447e01559",
     defaultPriceTokenLabel: "HOSKY",
     accentColor: "#eab308",
+    poolDoors: true,
   },
 ];
 

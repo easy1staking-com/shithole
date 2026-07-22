@@ -188,9 +188,14 @@ export function MarketBrowse() {
         <Link href="/" className="hover:text-zinc-300">
           ← home
         </Link>
-        <Link href="/market/new" className="hover:text-zinc-300">
-          list something →
-        </Link>
+        <span className="flex items-center gap-4">
+          <Link href="/market/gallery" className="hover:text-zinc-300">
+            walk the dump ⛝
+          </Link>
+          <Link href="/market/new" className="hover:text-zinc-300">
+            list something →
+          </Link>
+        </span>
       </nav>
 
       <header className="space-y-2">

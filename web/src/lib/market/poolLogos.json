@@ -1,0 +1,76 @@
+{
+  "pools": [
+    {
+      "ticker": "A3C",
+      "poolId": "pool1zkdaju2rjefa52uh6yh6etsxla0x6aqs6p6wm245y5szk7k3msd",
+      "logoUrl": null,
+      "source": "none"
+    },
+    {
+      "ticker": "BAIDU",
+      "poolId": "pool1c86ul4pnqvu7jzag8fjdy6dgrn6pt4ad4vmyq038hyg0wl2kaed",
+      "logoUrl": null,
+      "source": "none"
+    },
+    {
+      "ticker": "BONE",
+      "poolId": "pool1j742gcsul7u8c05rsqmkgpkvj5qadj0pew69nctu6crqy9wjjn4",
+      "logoUrl": null,
+      "source": "none"
+    },
+    {
+      "ticker": "EASY1",
+      "poolId": "pool1yr0cv3dtmhcfgqa6yetvmf769ngk89e6tepecmjrmjl2jzcw2lm",
+      "logoUrl": "https://raw.githubusercontent.com/speedwing/easy1-stakepool/main/img/easy1-64x64.png",
+      "source": "extended-metadata"
+    },
+    {
+      "ticker": "FARM",
+      "poolId": "pool1dpu6kslgxlg3ccrwxldl8e6r7ylnq0yalafmucp0yc7k6qegtt0",
+      "logoUrl": "https://adafarm.io/adafarmsheild64x64.png",
+      "source": "extended-metadata"
+    },
+    {
+      "ticker": "HOSKY",
+      "poolId": "pool1jqssxka8hu94aj6f4w3s8l5m6juqmx0hk3ges48jfac6zngmkh8",
+      "logoUrl": "https://gomapool.com/files/Goma_Stake_Icon.jpg",
+      "source": "extended-metadata"
+    },
+    {
+      "ticker": "MALU",
+      "poolId": "pool1qku2yhky7sv4dfjfv42uyvauhehuqevk25aw952d7ulzqzx3jcu",
+      "logoUrl": "https://www.woodlandpools.net/woodland_pools_thumbnail_logo_64x64.png",
+      "source": "extended-metadata"
+    },
+    {
+      "ticker": "PRIDE",
+      "poolId": "pool1h6q8jj55dn6727yydlypu0rz4sflf2enxhs0thqydmddgu3shl5",
+      "logoUrl": "https://info.hazelpool.com/icon.png",
+      "source": "extended-metadata"
+    },
+    {
+      "ticker": "QCPOL",
+      "poolId": "pool1zytydvyy3qztrs8l2xyggvkfcjctp23m2hc3aj7sudnzgny79cg",
+      "logoUrl": null,
+      "source": "none"
+    },
+    {
+      "ticker": "SALT",
+      "poolId": "pool1a2gt2mvuf5zvtqlvw2xgks2efze3p4r985ft62q64lua7gx7lal",
+      "logoUrl": null,
+      "source": "none"
+    },
+    {
+      "ticker": "VEGAS",
+      "poolId": "pool17xh922cr9skc0fqk7sr8at6xx6eluh5qyv9p7ca2x0mtc3st0mz",
+      "logoUrl": "https://raw.githubusercontent.com/Seaside-Staking/m/main/logo64.png",
+      "source": "extended-metadata"
+    },
+    {
+      "ticker": "WEED",
+      "poolId": "pool1mscll7kd2y9c56kv7thv7kv99wjvrr72uwpmuhphaltjz0pkuqa",
+      "logoUrl": null,
+      "source": "none"
+    }
+  ]
+}
