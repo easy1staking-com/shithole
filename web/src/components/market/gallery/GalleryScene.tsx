@@ -1,6 +1,8 @@
 "use client";
 
+import { MeshReflectorMaterial, Sparkles } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
+import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
@@ -8,10 +10,12 @@ import { signTexture } from "./canvasTextures";
 import { DoorMesh } from "./DoorMesh";
 import { FrameBox } from "./FrameBox";
 import { Player } from "./Player";
+import { Rat } from "./Rat";
 import {
   GALLERY_TAGLINE,
   type DoorSpec,
   type RoomModel,
+  type RoomTheme,
 } from "./rooms";
 
 /**
@@ -38,11 +42,13 @@ export function GalleryScene({
 
   return (
     <>
-      <color attach="background" args={["#08080a"]} />
-      <fogExp2 attach="fog" args={["#08080a", 0.045]} />
+      <color attach="background" args={[model.theme.fog]} />
+      <fogExp2 attach="fog" args={[model.theme.fog, model.theme.fogDensity]} />
       <ambientLight intensity={0.55} />
 
       <RoomShell model={model} />
+      <RoomDust model={model} />
+      <Rat bounds={model.bounds} />
 
       {/* Freestanding partitions (hero panels). */}
       {model.blockers.map((b, i) => (
@@ -62,7 +68,7 @@ export function GalleryScene({
       ))}
 
       {model.lights.map((p, i) => (
-        <FlickerLight key={i} position={p} seed={i * 37.7} />
+        <FlickerLight key={i} position={p} seed={i * 37.7} color={model.theme.light} />
       ))}
 
       {model.sign ? <HubSign model={model} /> : null}
@@ -89,7 +95,42 @@ export function GalleryScene({
         onFocusChange={onFocusChange}
         onLockChange={onLockChange}
       />
+
+      {/* Neon actually glows; HDR pixels (rat eyes) smolder. */}
+      <EffectComposer>
+        <Bloom mipmapBlur luminanceThreshold={0.72} intensity={0.85} />
+      </EffectComposer>
     </>
+  );
+}
+
+/** Dust motes drifting through the light — cheap atmosphere. */
+function RoomDust({ model }: { model: RoomModel }) {
+  if (model.bounds.kind === "circle") {
+    const r = model.bounds.radius;
+    return (
+      <Sparkles
+        count={90}
+        color={model.theme.sparkles}
+        size={2.4}
+        speed={0.22}
+        opacity={0.4}
+        scale={[r * 1.6, model.wallHeight * 0.8, r * 1.6]}
+        position={[0, model.wallHeight * 0.45, 0]}
+      />
+    );
+  }
+  const { minX, maxX, minZ, maxZ } = model.bounds;
+  return (
+    <Sparkles
+      count={Math.min(160, Math.round((maxX - minX) * 6))}
+      color={model.theme.sparkles}
+      size={2.4}
+      speed={0.22}
+      opacity={0.4}
+      scale={[maxX - minX - 1, model.wallHeight * 0.8, maxZ - minZ - 1]}
+      position={[(minX + maxX) / 2, model.wallHeight * 0.45, (minZ + maxZ) / 2]}
+    />
   );
 }
 
@@ -113,7 +154,7 @@ function RoomShell({ model }: { model: RoomModel }) {
         </mesh>
         <mesh rotation-x={-Math.PI / 2}>
           <circleGeometry args={[r, 48]} />
-          <meshStandardMaterial color={FLOOR} roughness={1} />
+          <FloorMaterial theme={model.theme} />
         </mesh>
         <mesh position={[0, h, 0]} rotation-x={Math.PI / 2}>
           <circleGeometry args={[r, 48]} />
@@ -131,7 +172,7 @@ function RoomShell({ model }: { model: RoomModel }) {
     <group>
       <mesh position={[cx, 0, cz]} rotation-x={-Math.PI / 2}>
         <planeGeometry args={[len, wid]} />
-        <meshStandardMaterial color={FLOOR} roughness={1} />
+        <FloorMaterial theme={model.theme} />
       </mesh>
       <mesh position={[cx, h, cz]} rotation-x={Math.PI / 2}>
         <planeGeometry args={[len, wid]} />
@@ -159,6 +200,28 @@ function RoomShell({ model }: { model: RoomModel }) {
   );
 }
 
+/** Dry rooms: matte concrete. The sewer: a mirror-wet slick. */
+function FloorMaterial({ theme }: { theme: RoomTheme }) {
+  if (!theme.wetFloor) {
+    return <meshStandardMaterial color={FLOOR} roughness={1} />;
+  }
+  return (
+    <MeshReflectorMaterial
+      color="#0c1410"
+      metalness={0.35}
+      roughness={0.75}
+      mirror={0.45}
+      resolution={512}
+      blur={[280, 90]}
+      mixBlur={1}
+      mixStrength={6}
+      depthScale={0.5}
+      minDepthThreshold={0.4}
+      maxDepthThreshold={1.4}
+    />
+  );
+}
+
 /**
  * A ceiling light with cheap fluorescent flicker — mostly steady, with
  * pseudo-random dips. Only a handful per room, so per-frame updates are
@@ -167,9 +230,11 @@ function RoomShell({ model }: { model: RoomModel }) {
 function FlickerLight({
   position,
   seed,
+  color,
 }: {
   position: [number, number, number];
   seed: number;
+  color: string;
 }) {
   const ref = useRef<THREE.PointLight>(null);
   // Photosensitivity guard: sudden luminance dropouts are exactly what
@@ -201,7 +266,7 @@ function FlickerLight({
       intensity={22}
       distance={18}
       decay={1.6}
-      color="#e8e3d0"
+      color={color}
     />
   );
 }

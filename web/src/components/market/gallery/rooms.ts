@@ -102,11 +102,40 @@ export type Blocker = {
   maxZ: number;
 };
 
+/** Per-room atmosphere — fog, light tint, floor treatment. */
+export type RoomTheme = {
+  fog: string;
+  fogDensity: number;
+  /** Flicker-light color. */
+  light: string;
+  /** Reflective puddle floor (the sewer). */
+  wetFloor: boolean;
+  /** Dust-mote color. */
+  sparkles: string;
+};
+
+export const DEFAULT_THEME: RoomTheme = {
+  fog: "#08080a",
+  fogDensity: 0.045,
+  light: "#e8e3d0",
+  wetFloor: false,
+  sparkles: "#8a8578",
+};
+
+const SEWER_THEME: RoomTheme = {
+  fog: "#06100a",
+  fogDensity: 0.06,
+  light: "#b7e0c0",
+  wetFloor: true,
+  sparkles: "#5adb8a",
+};
+
 export type RoomModel = {
   key: string;
   ref: RoomRef;
   title: string;
   subtitle: string | null;
+  theme: RoomTheme;
   bounds: RoomBounds;
   wallHeight: number;
   spawn: { position: [number, number, number]; yaw: number };
@@ -176,6 +205,22 @@ export function hueFor(seed: string): number {
     acc = (acc * 31 + seed.charCodeAt(i)) >>> 0;
   }
   return acc % 360;
+}
+
+/** Blend two #rrggbb colors — used to tint room light toward accents. */
+export function mixHex(a: string, b: string, t: number): string {
+  const pa = a.replace("#", "");
+  const pb = b.replace("#", "");
+  if (pa.length !== 6 || pb.length !== 6) return a;
+  let out = "#";
+  for (let i = 0; i < 3; i++) {
+    const ca = parseInt(pa.slice(i * 2, i * 2 + 2), 16);
+    const cb = parseInt(pb.slice(i * 2, i * 2 + 2), 16);
+    out += Math.round(ca + (cb - ca) * t)
+      .toString(16)
+      .padStart(2, "0");
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ */
@@ -321,6 +366,7 @@ function hubModel(data: GalleryData): RoomModel {
     ref: { kind: "hub" },
     title: GALLERY_NAME,
     subtitle: GALLERY_TAGLINE,
+    theme: DEFAULT_THEME,
     bounds: { kind: "circle", radius },
     wallHeight: 5.2,
     spawn: { position: [0, EYE, 0], yaw: 0 },
@@ -372,6 +418,7 @@ function poolLobbyModel(data: GalleryData, policy: string): RoomModel {
     key: roomKey({ kind: "poolLobby", policy }),
     ref: { kind: "poolLobby", policy },
     title: `${col?.label ?? "?"} — rug pools`,
+    theme: DEFAULT_THEME,
     subtitle: "every door is a stake pool. delegate responsibly.",
     bounds: { kind: "circle", radius },
     wallHeight: 4.6,
@@ -399,9 +446,15 @@ function collectionModel(data: GalleryData, policy: string): RoomModel {
     sub: "back to the dump",
     color: EXIT_COLOR,
   });
+  const accent = col?.accentColor ?? "#a1a1aa";
   return {
     key: roomKey({ kind: "collection", policy }),
     ref: { kind: "collection", policy },
+    theme: {
+      ...DEFAULT_THEME,
+      light: mixHex("#e8e3d0", accent, 0.2),
+      sparkles: accent,
+    },
     title: col?.label ?? "unknown collection",
     subtitle: entries.length === 0 ? "nothing listed — a truly dead room" : null,
     accent: col?.accentColor ?? "#a1a1aa",
@@ -419,9 +472,15 @@ function poolModel(data: GalleryData, policy: string, ticker: string): RoomModel
     sub: "back to the pools",
     color: EXIT_COLOR,
   });
+  const hue = hueFor(ticker);
   return {
     key: roomKey({ kind: "pool", policy, ticker }),
     ref: { kind: "pool", policy, ticker },
+    theme: {
+      ...DEFAULT_THEME,
+      light: `hsl(${hue} 22% 84%)`,
+      sparkles: `hsl(${hue} 60% 62%)`,
+    },
     title: `${ticker} den`,
     subtitle:
       entries.length === 0
@@ -445,6 +504,7 @@ function sewerModel(data: GalleryData, policy: string): RoomModel {
   return {
     key: roomKey({ kind: "sewer", policy }),
     ref: { kind: "sewer", policy },
+    theme: SEWER_THEME,
     title: "the sewer",
     subtitle: "matches no rug pool. nobody wants them. perfect.",
     accent: "#4ade80",

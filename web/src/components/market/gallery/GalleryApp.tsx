@@ -24,6 +24,7 @@ import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplac
 import { useMarketListings } from "@/lib/market/useMarketListings";
 
 import { GalleryScene } from "./GalleryScene";
+import { useAmbientAudio } from "./useAmbientAudio";
 import {
   EYE,
   GALLERY_NAME,
@@ -116,6 +117,8 @@ export function GalleryApp() {
 
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
+  // Hum + drips start on first lock (a user gesture), pause on unlock.
+  useAmbientAudio(locked);
 
   const enterDoor = useCallback((door: DoorSpec) => {
     if (fadingRef.current) return;
