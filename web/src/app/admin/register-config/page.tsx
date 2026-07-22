@@ -361,14 +361,14 @@ export default function RegisterConfigPage() {
         <p className="mt-1 text-xs text-zinc-500">
           network: <span className="font-mono">{network}</span>
           {!projectId && (
-            <span className="ml-2 text-amber-400">
+            <span role="status" className="ml-2 text-amber-400">
               (NEXT_PUBLIC_BLOCKFROST_PROJECT_ID not set — wallet
               connect works but tx submission will fail)
             </span>
           )}
         </p>
         {networkMismatch && (
-          <p className="mt-1 text-xs text-red-400">
+          <p role="alert" className="mt-1 text-xs text-red-400">
             wallet is on {networkId === 1 ? "mainnet" : "testnet"} but app is
             configured for {network} — switch the wallet network before
             submitting; the deploy tx will fail otherwise.
