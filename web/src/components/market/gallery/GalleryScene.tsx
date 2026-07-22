@@ -155,9 +155,21 @@ function FlickerLight({
   seed: number;
 }) {
   const ref = useRef<THREE.PointLight>(null);
+  // Photosensitivity guard: sudden luminance dropouts are exactly what
+  // prefers-reduced-motion users opt out of. They keep a steady lamp.
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  );
   useFrame(({ clock }) => {
     const l = ref.current;
     if (!l) return;
+    if (reduceMotion) {
+      l.intensity = 22 * 0.92;
+      return;
+    }
     const t = clock.elapsedTime + seed;
     // Layered sines make an organic buzz; the steep sin-product term
     // produces occasional near-dropouts.
