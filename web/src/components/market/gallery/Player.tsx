@@ -11,7 +11,13 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import { EYE, type DoorSpec, type RoomBounds, type RoomModel } from "./rooms";
+import {
+  EYE,
+  type Blocker,
+  type DoorSpec,
+  type RoomBounds,
+  type RoomModel,
+} from "./rooms";
 
 const WALK_SPEED = 3.8;
 const RUN_SPEED = 6.2;
@@ -104,6 +110,7 @@ export function Player({
     }
     camera.position.y = EYE;
     clampToBounds(camera.position, model.bounds);
+    for (const b of model.blockers) pushOut(camera.position, b);
 
     // --- door triggers ---------------------------------------------
     // Short grace period after spawn so a door near the spawn point
@@ -151,6 +158,28 @@ export function Player({
 }
 
 const CENTER = new THREE.Vector2(0, 0);
+
+/** Eject the player from an interior partition along the cheapest axis. */
+function pushOut(p: THREE.Vector3, b: Blocker) {
+  const m = 0.45;
+  if (
+    p.x <= b.minX - m ||
+    p.x >= b.maxX + m ||
+    p.z <= b.minZ - m ||
+    p.z >= b.maxZ + m
+  ) {
+    return;
+  }
+  const dxl = p.x - (b.minX - m);
+  const dxr = b.maxX + m - p.x;
+  const dzl = p.z - (b.minZ - m);
+  const dzr = b.maxZ + m - p.z;
+  const min = Math.min(dxl, dxr, dzl, dzr);
+  if (min === dxl) p.x = b.minX - m;
+  else if (min === dxr) p.x = b.maxX + m;
+  else if (min === dzl) p.z = b.minZ - m;
+  else p.z = b.maxZ + m;
+}
 
 function clampToBounds(p: THREE.Vector3, bounds: RoomBounds) {
   const margin = 0.55;

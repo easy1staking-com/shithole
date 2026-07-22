@@ -90,6 +90,16 @@ export type FramePlacement = {
   entry: GalleryEntry;
   position: [number, number, number];
   rotationY: number;
+  /** Uniform scale — the entrance hero frame is slightly larger. */
+  scale?: number;
+};
+
+/** Axis-aligned interior obstacle (freestanding partition walls). */
+export type Blocker = {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
 };
 
 export type RoomModel = {
@@ -102,6 +112,8 @@ export type RoomModel = {
   spawn: { position: [number, number, number]; yaw: number };
   doors: DoorSpec[];
   frames: FramePlacement[];
+  /** Interior partitions — rendered as walls, collide like walls. */
+  blockers: Blocker[];
   lights: [number, number, number][];
   accent: string;
   /** Big neon sign text (hub only). */
@@ -203,13 +215,20 @@ function circleDoors(
 function corridor(
   entries: GalleryEntry[],
   backDoor: Pick<DoorSpec, "id" | "target" | "label" | "sub" | "color">,
-): Pick<RoomModel, "bounds" | "spawn" | "doors" | "frames" | "lights" | "wallHeight"> {
-  const perWall = Math.ceil(entries.length / 2);
+): Pick<
+  RoomModel,
+  "bounds" | "spawn" | "doors" | "frames" | "blockers" | "lights" | "wallHeight"
+> {
+  // First entry becomes the HERO: hung on a freestanding partition
+  // facing the entrance, so something stares you down the moment you
+  // walk in (the far end wall would drown in fog in long rooms).
+  const [hero, ...rest] = entries;
+  const perWall = Math.ceil(rest.length / 2);
   const startX = 3.2;
   const length = Math.max(11, startX + perWall * FRAME_STEP + 1.5);
   const half = CORRIDOR_W / 2;
 
-  const frames: FramePlacement[] = entries.map((entry, i) => {
+  const frames: FramePlacement[] = rest.map((entry, i) => {
     const side = i % 2 === 0 ? -1 : 1; // alternate walls
     const slot = Math.floor(i / 2);
     return {
@@ -218,6 +237,18 @@ function corridor(
       rotationY: side === -1 ? 0 : Math.PI,
     };
   });
+
+  const blockers: Blocker[] = [];
+  if (hero) {
+    const px = Math.min(length - 1.8, 8.5); // partition center x
+    blockers.push({ minX: px - 0.12, maxX: px + 0.12, minZ: -1.6, maxZ: 1.6 });
+    frames.push({
+      entry: hero,
+      position: [px - 0.17, 1.95, 0],
+      rotationY: -Math.PI / 2, // face the entrance
+      scale: 1.25,
+    });
+  }
 
   const lights: [number, number, number][] = [];
   for (let x = 2.5; x < length && lights.length < 6; x += 6) {
@@ -236,6 +267,7 @@ function corridor(
       },
     ],
     frames,
+    blockers,
     lights,
   };
 }
@@ -294,6 +326,7 @@ function hubModel(data: GalleryData): RoomModel {
     spawn: { position: [0, EYE, 0], yaw: 0 },
     doors: circleDoors(radius - 0.38, doorDefs),
     frames: [],
+    blockers: [],
     lights: [
       [0, 4.2, 0],
       [radius / 2, 3.6, 0],
@@ -345,6 +378,7 @@ function poolLobbyModel(data: GalleryData, policy: string): RoomModel {
     spawn: { position: [0, EYE, 0], yaw: 0 },
     doors: circleDoors(radius - 0.38, doorDefs),
     frames: [],
+    blockers: [],
     lights: [
       [0, 4, 0],
       [radius / 2, 3.4, radius / 3],

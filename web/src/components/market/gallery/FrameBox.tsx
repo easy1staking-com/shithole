@@ -22,7 +22,7 @@ export function FrameBox({
   placement: FramePlacement;
   focused: boolean;
 }) {
-  const { entry, position, rotationY } = placement;
+  const { entry, position, rotationY, scale = 1 } = placement;
 
   const [active, setActive] = useState(false);
   const tick = useRef(0);
@@ -53,7 +53,7 @@ export function FrameBox({
   const fallback = useMemo(() => seedColor(entry.seed), [entry.seed]);
 
   return (
-    <group position={position} rotation-y={rotationY}>
+    <group position={position} rotation-y={rotationY} scale={scale}>
       {/* Border frame — warms up when focused. */}
       <mesh>
         <boxGeometry args={[1.58, 1.58, 0.08]} />

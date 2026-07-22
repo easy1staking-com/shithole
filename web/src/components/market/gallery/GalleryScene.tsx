@@ -44,6 +44,23 @@ export function GalleryScene({
 
       <RoomShell model={model} />
 
+      {/* Freestanding partitions (hero panels). */}
+      {model.blockers.map((b, i) => (
+        <mesh
+          key={i}
+          position={[
+            (b.minX + b.maxX) / 2,
+            model.wallHeight / 2,
+            (b.minZ + b.maxZ) / 2,
+          ]}
+        >
+          <boxGeometry
+            args={[b.maxX - b.minX, model.wallHeight, b.maxZ - b.minZ]}
+          />
+          <meshStandardMaterial color={WALL} roughness={0.95} />
+        </mesh>
+      ))}
+
       {model.lights.map((p, i) => (
         <FlickerLight key={i} position={p} seed={i * 37.7} />
       ))}
