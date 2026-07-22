@@ -72,8 +72,8 @@ dependencies {
     annotationProcessor("com.bloxbean.cardano:cardano-client-annotation-processor:0.8.0-pre4")
 
     // Yaci Store — auto-indexes UTxOs into our Postgres
-    implementation("com.bloxbean.cardano:yaci-store-spring-boot-starter:2.1.0-pre3")
-    implementation("com.bloxbean.cardano:yaci-store-utxo-spring-boot-starter:2.1.0-pre3")
+    implementation("com.bloxbean.cardano:yaci-store-spring-boot-starter:3.0.0-beta3")
+    implementation("com.bloxbean.cardano:yaci-store-utxo-spring-boot-starter:3.0.0-beta3")
 
     // DB
     implementation("org.postgresql:postgresql:42.7.2")
