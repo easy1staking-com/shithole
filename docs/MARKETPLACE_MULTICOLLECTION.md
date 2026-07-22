@@ -69,10 +69,15 @@ is a singleton script → **no deploy, no mint.**
 - FE tests (vitest + MSW curated fixtures for the 3 collections).
 
 ### Phase 4 — Preprod E2E, then mainnet cutover  (orig. M5 + cutover)
-- **Preprod E2E (T3/T4):** list/buy/cancel per collection; assert activity/stats/history.
-- **Mainnet cutover — DATA ONLY (no mint, no deploy):** add real mainnet policy ids to
-  `MAINNET_COLLECTIONS`; seed `marketplace_collections.csv` with the real mainnet policies; SNEK/HOSKY
-  already in `MAINNET_PRICE_TOKENS`. Flip on → the landing's extra strips + activity light up on prod.
+- Phases 1–3 + IPFS image fix **shipped to main 2026-07-22** (`3c7e689`); prod BE deployed +
+  smoke-verified (oracle live: CashGrab floor priced ≈ ADA/USD; slug on prod is `hosky` —
+  irrelevant, the FE queries by policy id). Preprod E2E waived by Giovanni ("testing in prod FTW").
+- **Mainnet cutover — DATA ONLY (no mint, no deploy):** add the 3 real mainnet policy ids to
+  `MAINNET_COLLECTIONS` (`marketplace_collections.csv` already carries their mainnet rows; SNEK/HOSKY
+  already in `MAINNET_PRICE_TOKENS`). Flip on → strips + tabs + stats/activity light up on prod.
+- **Cutover deliberately HELD (2026-07-22):** Giovanni is buying inventory from the 3 collections
+  first so launch isn't empty shelves. NOTE the flip also gates LISTING (ListDrawer uses the same
+  whitelist) — launch sequence: flip whitelist (FE push) → list the inventory → announce.
 
 ## Housekeeping / cleanup (don't forget)
 - **Land parked → main:** the `coinSelection` pre-buy balance guard (tested on preprod, uncommitted on dev).
