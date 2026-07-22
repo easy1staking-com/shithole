@@ -90,8 +90,13 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   // render) so React's "no refs during render" lint stays happy.
   const [hovering, setHovering] = useState(false);
   const [swap, setSwap] = useState<SwapState>({ kind: "idle" });
-  // Transient toast text — shown for ~3s.
-  const [toast, setToast] = useState<string | null>(null);
+  // Transient toast — shown for ~3s. Severity picks the ARIA channel:
+  // "status" (polite) for progress/success, "alert" (assertive) for
+  // errors. Visual styling is identical either way.
+  const [toast, setToast] = useState<{
+    message: string;
+    severity: "status" | "alert";
+  } | null>(null);
   // Reveal overlay state — independent of `swap` so the animation can
   // outlive the submit (e.g. show "stuck" overlay after the swap state
   // already cleared to idle).
@@ -130,7 +135,10 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
       const match = matches.get(nft.unit);
       if (!match) {
         setSwap({ kind: "idle" });
-        setToast("no s#!t in this pit matches yours. try another.");
+        setToast({
+          message: "no s#!t in this pit matches yours. try another.",
+          severity: "alert",
+        });
         // Auto-dismiss the toast.
         window.setTimeout(() => setToast(null), 3500);
         return;
@@ -148,7 +156,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
     if (swap.kind !== "confirming") return;
     if (!api || !addressBech32 || !collection.data || !collectionPolicyId) {
       setSwap({ kind: "idle" });
-      setToast("connect a wallet first");
+      setToast({ message: "connect a wallet first", severity: "alert" });
       window.setTimeout(() => setToast(null), 3500);
       return;
     }
@@ -165,7 +173,10 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
     );
     if (!consumedListing) {
       setSwap({ kind: "idle" });
-      setToast("the matched listing vanished from the pool — try again");
+      setToast({
+        message: "the matched listing vanished from the pool — try again",
+        severity: "alert",
+      });
       window.setTimeout(() => setToast(null), 3500);
       return;
     }
@@ -279,7 +290,10 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
     setRevealError(null);
     setSwap({ kind: "idle" });
     if (wasSuccess && wasConfirmed && outcomeUnit) {
-      setToast(`fished out ${shortName(outcomeUnit)} — check your stash`);
+      setToast({
+        message: `fished out ${shortName(outcomeUnit)} — check your stash`,
+        severity: "status",
+      });
       window.setTimeout(() => setToast(null), 4500);
     }
   }, [revealStatus, confirmation, reveal]);
@@ -302,22 +316,27 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
   const handleListSubmit = useCallback(
     async (picked: WalletCollectionNft[]) => {
       if (!api || !addressBech32 || !collection.data || !collectionPolicyId) {
-        setToast("connect a wallet first");
+        setToast({ message: "connect a wallet first", severity: "alert" });
         window.setTimeout(() => setToast(null), 3500);
         return;
       }
       if (!paymentKeyHashHex) {
-        setToast("wallet address still decoding — try again in a moment");
+        setToast({
+          message: "wallet address still decoding — try again in a moment",
+          severity: "alert",
+        });
         window.setTimeout(() => setToast(null), 3500);
         return;
       }
       if (picked.length === 0) return;
       setListing(true);
-      setToast(
-        picked.length === 1
-          ? "dumping 1 piece of s#!t into the pit…"
-          : `dumping ${picked.length} pieces of s#!t into the pit…`,
-      );
+      setToast({
+        message:
+          picked.length === 1
+            ? "dumping 1 piece of s#!t into the pit…"
+            : `dumping ${picked.length} pieces of s#!t into the pit…`,
+        severity: "status",
+      });
       try {
         const client = await makeClient(api);
         const result = await submitList(client, {
@@ -337,18 +356,22 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           (prev: WalletCollectionNft[] | undefined) =>
             prev ? prev.filter((n) => !pickedUnits.has(n.unit)) : prev,
         );
-        setToast(
-          picked.length === 1
-            ? "submitted. settling on chain…"
-            : `submitted ${picked.length} listings. settling on chain…`,
-        );
+        setToast({
+          message:
+            picked.length === 1
+              ? "submitted. settling on chain…"
+              : `submitted ${picked.length} listings. settling on chain…`,
+          severity: "status",
+        });
         try {
           await awaitTxConfirmation(client, result.txHash);
-          setToast(
-            picked.length === 1
-              ? "your s#!t is in the pit"
-              : `${picked.length} pieces dumped — they're in the pit`,
-          );
+          setToast({
+            message:
+              picked.length === 1
+                ? "your s#!t is in the pit"
+                : `${picked.length} pieces dumped — they're in the pit`,
+            severity: "status",
+          });
           queryClient.invalidateQueries({
             queryKey: ["walletCollection", addressBech32, collectionPolicyId],
           });
@@ -364,7 +387,10 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
           queryClient.invalidateQueries({
             queryKey: ["walletCollection", addressBech32, collectionPolicyId],
           });
-          setToast("chain didn't accept the listing — try again");
+          setToast({
+            message: "chain didn't accept the listing — try again",
+            severity: "alert",
+          });
         }
       } catch (err) {
         console.error("list failed:", describeError(err));
@@ -379,11 +405,13 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
         // genuinely-unknown failure gets a short toast + the full dump
         // in the console (the list flow has no inline error surface).
         const c = classifyError(err, { action: "listed" });
-        setToast(
-          c.kind === "known"
-            ? `couldn't list: ${c.message}`
-            : "couldn't list — see console for details",
-        );
+        setToast({
+          message:
+            c.kind === "known"
+              ? `couldn't list: ${c.message}`
+              : "couldn't list — see console for details",
+          severity: "alert",
+        });
       } finally {
         setListing(false);
         window.setTimeout(() => setToast(null), 5000);
@@ -501,7 +529,7 @@ export default function PitPage({ params }: { params: Promise<Params> }) {
       {/* Toast — error or stubbed success. */}
       <AnimatePresence>
         {toast && (
-          <Toast key="toast" message={toast} />
+          <Toast key="toast" message={toast.message} severity={toast.severity} />
         )}
       </AnimatePresence>
 
@@ -586,12 +614,18 @@ function usePitHoverTracker(
 /* Toast                                                                      */
 /* -------------------------------------------------------------------------- */
 
-function Toast({ message }: { message: string }) {
+function Toast({
+  message,
+  severity,
+}: {
+  message: string;
+  severity: "status" | "alert";
+}) {
   return (
     <div
       className="pointer-events-none fixed inset-x-0 bottom-24 z-50 mx-auto flex w-full max-w-md justify-center px-6"
-      role="status"
-      aria-live="polite"
+      role={severity}
+      aria-live={severity === "alert" ? "assertive" : "polite"}
     >
       <div className="rounded-full bg-zinc-900/95 px-4 py-2 text-sm text-zinc-200 shadow-lg ring-1 ring-zinc-700 backdrop-blur">
         {message}

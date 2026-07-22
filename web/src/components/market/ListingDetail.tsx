@@ -21,7 +21,6 @@ import {
   type BabelAvailability,
 } from "@/lib/fluidtokens/babelDiscovery";
 import { ErrorView } from "@/components/ErrorView";
-import { describeError } from "@/lib/errors";
 import { isBabelFeeEnabled } from "@/lib/fluidtokens/feature";
 import { requiredTokenPayment } from "@/lib/fluidtokens/math";
 import { useRefreshHistory } from "@/lib/me/useRefreshHistory";
@@ -163,7 +162,6 @@ export function ListingDetail({ unit }: { unit: string }) {
     result: BabelAvailability | null;
   } | null>(null);
   const [babelEnabled, setBabelEnabled] = useState(false);
-  const [babelProbeError, setBabelProbeError] = useState<string | null>(null);
   const babelFeatureOn = isBabelFeeEnabled();
   const priceUnit = listing
     ? (listing.datum.pricePolicyHex + listing.datum.priceNameHex).toLowerCase()
@@ -181,9 +179,8 @@ export function ListingDetail({ unit }: { unit: string }) {
         const client = await makeClient(walletApi!);
         const result = await probeBabelAvailability(client, priceUnit);
         if (!cancelled) setBabelProbe({ forUnit: priceUnit, result });
-      } catch (e) {
+      } catch {
         if (!cancelled) {
-          setBabelProbeError(describeError(e));
           setBabelProbe({ forUnit: priceUnit, result: null });
         }
       }

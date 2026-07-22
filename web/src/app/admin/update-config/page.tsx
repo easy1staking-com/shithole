@@ -13,6 +13,8 @@ import { getNetworkName, toEvolutionNetwork } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 import type { CollectionState, CuratedCollection } from "@/types/api";
 
+import { updateConfigFormSchema } from "./validation";
+
 /**
  * Hidden admin page — mutate an existing on-chain config (SPEC §5.2).
  * Not linked from the public nav; reachable only via the direct URL.
@@ -65,6 +67,11 @@ export default function UpdateConfigPage() {
 
   const [values, setValues] = useState<FormValues | null>(null);
   const [step, setStep] = useState<Step>({ kind: "idle" });
+  // Per-field zod errors — surfaced inline next to each input. Cleared
+  // field-by-field on edit, wholesale on collection switch.
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<"m" | "protocolFeeAda" | "listerFeeAda", string>>
+  >({});
 
   // When the BE returns the current config, pre-fill the form so the
   // admin only needs to edit the fields they care about. setState-in-
@@ -107,6 +114,30 @@ export default function UpdateConfigPage() {
       });
       return;
     }
+    // Zod pre-flight on the numeric fields — before the tx builder ever
+    // sees the values, so a bad bound reads as a field error rather than
+    // a raw throw in the error box.
+    const parsed = updateConfigFormSchema.safeParse({
+      m: values.m,
+      protocolFeeAda: values.protocolFeeAda,
+      listerFeeAda: values.listerFeeAda,
+    });
+    if (!parsed.success) {
+      const fe: Partial<
+        Record<"m" | "protocolFeeAda" | "listerFeeAda", string>
+      > = {};
+      for (const issue of parsed.error.issues) {
+        const path = issue.path.join(".") as
+          | "m"
+          | "protocolFeeAda"
+          | "listerFeeAda";
+        if (!fe[path]) fe[path] = issue.message;
+      }
+      setFieldErrors(fe);
+      setStep({ kind: "invalid", message: "fix the highlighted fields first" });
+      return;
+    }
+    setFieldErrors({});
     setStep({ kind: "building" });
     try {
       const client = await makeClient(api);
@@ -158,6 +189,7 @@ export default function UpdateConfigPage() {
             setSlug(e.target.value);
             setStep({ kind: "idle" });
             setValues(null);
+            setFieldErrors({});
           }}
           disabled={curated.isLoading || running}
           className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
@@ -216,50 +248,73 @@ export default function UpdateConfigPage() {
           </section>
 
           <section className="grid grid-cols-2 gap-4">
-            <Field label="M (buckets)">
+            <Field label="M (buckets)" error={fieldErrors.m} errorId="upd-m-error">
               <input
                 type="number"
                 min={1}
                 value={values.m}
-                onChange={(e) =>
-                  setValues({ ...values, m: Number(e.target.value) })
-                }
+                onChange={(e) => {
+                  setValues({ ...values, m: Number(e.target.value) });
+                  setFieldErrors((fe) => ({ ...fe, m: undefined }));
+                }}
                 disabled={running}
+                aria-invalid={!!fieldErrors.m}
+                aria-describedby={fieldErrors.m ? "upd-m-error" : undefined}
                 className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-sm text-zinc-100"
               />
             </Field>
-            <Field label="protocol fee (ADA)">
+            <Field
+              label="protocol fee (ADA)"
+              error={fieldErrors.protocolFeeAda}
+              errorId="upd-protocol-fee-error"
+            >
               <input
                 type="number"
                 min={0}
                 step={0.1}
                 value={values.protocolFeeAda}
-                onChange={(e) =>
+                onChange={(e) => {
                   setValues({
                     ...values,
                     protocolFeeAda: Number(e.target.value),
-                  })
-                }
+                  });
+                  setFieldErrors((fe) => ({ ...fe, protocolFeeAda: undefined }));
+                }}
                 disabled={running}
+                aria-invalid={!!fieldErrors.protocolFeeAda}
+                aria-describedby={
+                  fieldErrors.protocolFeeAda
+                    ? "upd-protocol-fee-error"
+                    : undefined
+                }
                 className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-sm text-zinc-100"
               />
               <p className="mt-1 text-[0.65rem] text-zinc-500">
                 set to 0 to enable the v2 zero-fee Swap path
               </p>
             </Field>
-            <Field label="lister fee (ADA)">
+            <Field
+              label="lister fee (ADA)"
+              error={fieldErrors.listerFeeAda}
+              errorId="upd-lister-fee-error"
+            >
               <input
                 type="number"
                 min={1}
                 step={0.1}
                 value={values.listerFeeAda}
-                onChange={(e) =>
+                onChange={(e) => {
                   setValues({
                     ...values,
                     listerFeeAda: Number(e.target.value),
-                  })
-                }
+                  });
+                  setFieldErrors((fe) => ({ ...fe, listerFeeAda: undefined }));
+                }}
                 disabled={running}
+                aria-invalid={!!fieldErrors.listerFeeAda}
+                aria-describedby={
+                  fieldErrors.listerFeeAda ? "upd-lister-fee-error" : undefined
+                }
                 className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-sm text-zinc-100"
               />
               <p className="mt-1 text-[0.65rem] text-zinc-500">
@@ -323,10 +378,14 @@ function Field({
   label,
   children,
   wide,
+  error,
+  errorId,
 }: {
   label: string;
   children: React.ReactNode;
   wide?: boolean;
+  error?: string;
+  errorId?: string;
 }) {
   return (
     <div className={wide ? "col-span-2" : "col-span-1"}>
@@ -334,6 +393,11 @@ function Field({
         {label}
       </label>
       <div className="mt-1">{children}</div>
+      {error && (
+        <p id={errorId} className="mt-1 text-xs text-red-400">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

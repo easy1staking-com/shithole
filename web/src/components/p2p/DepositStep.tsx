@@ -113,7 +113,11 @@ export function DepositStep({
             disabled={submitting}
             className="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm focus:border-amber-500 focus:outline-none"
             aria-invalid={!aboveFloor}
-            aria-describedby="deposit-help"
+            aria-describedby={
+              parsed == null || !aboveFloor
+                ? "deposit-help deposit-error"
+                : "deposit-help"
+            }
           />
           <span className="text-xs text-zinc-500">ADA</span>
         </div>
@@ -122,10 +126,12 @@ export function DepositStep({
           no incentive. the floor is the floor.
         </p>
         {parsed == null && (
-          <p className="mt-1 text-xs text-red-400">enter a positive number.</p>
+          <p id="deposit-error" role="alert" className="mt-1 text-xs text-red-400">
+            enter a positive number.
+          </p>
         )}
         {parsed != null && !aboveFloor && (
-          <p className="mt-1 text-xs text-red-400">
+          <p id="deposit-error" role="alert" className="mt-1 text-xs text-red-400">
             below the floor — the contract won&apos;t let anyone swap
             this. raise it to {formatAda(floor)} ADA or more.
           </p>

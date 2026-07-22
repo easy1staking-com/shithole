@@ -298,15 +298,20 @@ export function MyListingsBoard() {
                   selected
                 </>
               )}
-              {(bulkState.kind === "submitting" ||
-                bulkState.kind === "confirming") && (
-                <span className="ml-2 text-zinc-500">
-                  · {bulkState.label}
-                  {bulkState.total > 1
-                    ? ` (collection ${bulkState.current}/${bulkState.total})`
-                    : ""}
-                </span>
-              )}
+              {/* Persistent aria-live container — the progress span inside
+               *  mounts/unmounts, so the live region has to be the stable
+               *  parent for screen readers to announce the updates. */}
+              <span aria-live="polite">
+                {(bulkState.kind === "submitting" ||
+                  bulkState.kind === "confirming") && (
+                  <span className="ml-2 text-zinc-500">
+                    · {bulkState.label}
+                    {bulkState.total > 1
+                      ? ` (collection ${bulkState.current}/${bulkState.total})`
+                      : ""}
+                  </span>
+                )}
+              </span>
               {bulkState.kind === "confirming" && (
                 <ConfirmationChip status="confirming" />
               )}

@@ -522,18 +522,22 @@ function ProofStatus({
     return <p className="text-xs text-zinc-500">checking if this NFT qualifies…</p>;
   }
   if (isError) {
-    return <p className="text-xs text-red-400">couldn&apos;t fetch proof</p>;
+    return (
+      <p role="alert" className="text-xs text-red-400">
+        couldn&apos;t fetch proof
+      </p>
+    );
   }
   if (proofMissing) {
     return (
-      <p className="text-xs text-red-300">
+      <p role="alert" className="text-xs text-red-300">
         this NFT isn&apos;t in {targetPool ?? "the target pool"}&apos;s tree — pick a different one.
       </p>
     );
   }
   if (ready) {
     return (
-      <p className="text-xs text-amber-300">
+      <p aria-live="polite" className="text-xs text-amber-300">
         ✓ qualifies for {targetPool ?? "this pool"}. ready to fulfill.
       </p>
     );

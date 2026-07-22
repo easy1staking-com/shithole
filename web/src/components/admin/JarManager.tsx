@@ -267,6 +267,16 @@ export function JarManager() {
                 const k = jarKey(jar);
                 const isSelected = selected.has(k);
                 const nonAda = nonAdaUnits(jar.utxo.assets);
+                const noTokens = nonAda.length === 0;
+                const belowFloor =
+                  (jar.utxo.assets.lovelace ?? 0n) < LEAVE_BEHIND_LOVELACE;
+                // Explain a dead-looking button: no-tokens copy wins when
+                // both conditions hold. Otherwise keep the enabled tooltip.
+                const collectHint = noTokens
+                  ? "nothing to sweep — no tokens in this jar"
+                  : belowFloor
+                    ? "below the 5 ADA floor — nothing to collect"
+                    : "Sweep all non-ADA + extra ADA to admin wallet; leave 5 ADA in the jar.";
                 return (
                   <li
                     key={k}
@@ -309,13 +319,13 @@ export function JarManager() {
                     <button
                       type="button"
                       onClick={() => onCollect(jar)}
-                      disabled={
-                        busyAction !== null ||
-                        (jar.utxo.assets.lovelace ?? 0n) < LEAVE_BEHIND_LOVELACE ||
-                        nonAda.length === 0
+                      disabled={busyAction !== null || belowFloor || noTokens}
+                      aria-disabled={
+                        busyAction !== null || belowFloor || noTokens
                       }
                       className="shrink-0 rounded bg-amber-700 px-3 py-1 text-[11px] font-semibold text-zinc-100 disabled:bg-zinc-800 disabled:text-zinc-500"
-                      title="Sweep all non-ADA + extra ADA to admin wallet; leave 5 ADA in the jar."
+                      title={collectHint}
+                      aria-label={`collect — ${collectHint}`}
                     >
                       {busyAction === `collect:${k}` ? "signing…" : "collect"}
                     </button>
