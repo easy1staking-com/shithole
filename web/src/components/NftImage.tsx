@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 /**
  * NFT image with IPFS-gateway rotation. The BE rewrites ipfs:// URIs to a
@@ -49,6 +49,39 @@ export function NftImage({
   const candidates = useMemo(() => buildCandidates(ipfsUri, url), [ipfsUri, url]);
   const [attempt, setAttempt] = useState(0);
 
+  // Viewport gating: don't give the <img> a src until the card is actually
+  // near the viewport. Native loading="lazy" is NOT enough — browsers
+  // preload lazy images within a huge margin and a whale wallet mounts
+  // 1000+ cards at once, so the burst 429s every gateway, the rotation
+  // exhausts, and whole grids render the (near-black) fallback. eager
+  // images (above-the-fold heroes) bypass the observer.
+  const holderRef = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(loading === "eager");
+  useEffect(() => {
+    if (inView) return;
+    const el = holderRef.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      // No IO (jsdom / very old browsers) → load immediately. Microtask
+      // keeps the setState out of the effect's sync body.
+      queueMicrotask(() => setInView(true));
+      return;
+    }
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true);
+          obs.disconnect();
+        }
+      },
+      // Start fetching a little ahead of the scroll for smoothness, but
+      // nowhere near the browser's own multi-thousand-px lazy margins.
+      { rootMargin: "300px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [inView]);
+
   // New unit/metadata → new candidate list → restart the rotation. Uses
   // React's render-time "adjust state when props change" pattern (not an
   // effect): setState during render is bailed out immediately, no extra
@@ -63,6 +96,17 @@ export function NftImage({
   const src = candidates[attempt];
   if (!src) {
     return fallback !== undefined ? <>{fallback}</> : <DefaultFallback className={className} />;
+  }
+
+  if (!inView) {
+    // Same layout slot the <img> will occupy; the observer watches this.
+    return (
+      <div
+        ref={holderRef}
+        aria-hidden
+        className={`animate-pulse bg-zinc-900/60 ${className ?? ""}`}
+      />
+    );
   }
 
   return (
