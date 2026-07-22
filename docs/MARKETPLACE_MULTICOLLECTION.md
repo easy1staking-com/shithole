@@ -57,7 +57,7 @@ is a singleton script → **no deploy, no mint.**
 - **Per-user `/me` history collection filter** — optional `?collection={slug|policy}`.
 - BE tests (oracle math mocked upstream; activity pagination; stats aggregation).
 
-### Phase 3 — FE per-collection surfaces  (orig. M4 · B3-reconciled, B4, B5, B6)
+### Phase 3 — FE per-collection surfaces  ✅ DONE (dev) — (orig. M4 · B3-reconciled, B4, B5, B6)
 - **B3 (reconciled):** landing strips already cover per-collection browse. Remaining: a collection
   **tab/filter on `/market`** itself (`MarketBrowse` currently mixes all whitelisted collections;
   it still hardcodes "HOSKY CashGrab only" copy — fix that too), driven by `/api/curated`.
