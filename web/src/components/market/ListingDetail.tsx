@@ -1,13 +1,13 @@
 "use client";
 
 import { Address } from "@evolution-sdk/evolution";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
+import { MarketNav } from "@/components/market/MarketNav";
 import { NftImage } from "@/components/NftImage";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { listPools, matchesPool } from "@/lib/market/poolTraits";
@@ -319,11 +319,7 @@ export function ListingDetail({ unit }: { unit: string }) {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-12">
-      <nav className="flex items-center justify-between text-xs uppercase tracking-widest text-zinc-500">
-        <Link href="/market" className="hover:text-zinc-300">
-          ← back to market
-        </Link>
-      </nav>
+      <MarketNav back={{ href: "/market", label: "← back to market" }} />
 
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">{displayName}</h1>

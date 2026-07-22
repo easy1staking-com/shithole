@@ -9,6 +9,7 @@ import {
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
 import { ErrorView } from "@/components/ErrorView";
+import { MarketNav } from "@/components/market/MarketNav";
 import { NftImage } from "@/components/NftImage";
 import { Notice } from "@/components/Notice";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
@@ -306,11 +307,7 @@ export function ListDrawer() {
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
-      <nav className="flex items-center justify-between text-xs uppercase tracking-widest text-zinc-500">
-        <Link href="/market" className="hover:text-zinc-300">
-          ← back
-        </Link>
-      </nav>
+      <MarketNav back={{ href: "/market", label: "← back" }} />
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">list on marketplace</h1>
         <p className="text-sm text-zinc-400">
