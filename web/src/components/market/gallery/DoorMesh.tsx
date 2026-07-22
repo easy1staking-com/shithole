@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import * as THREE from "three";
 
 import { lintelTexture } from "./canvasTextures";
 import type { DoorSpec } from "./rooms";
@@ -42,6 +43,39 @@ export function DoorMesh({ door }: { door: DoorSpec }) {
         <planeGeometry args={[2.6, 0.975]} />
         <meshBasicMaterial map={lintel} transparent toneMapped={false} />
       </mesh>
+      {/* Pool emblem on the door void (vendored logos only). */}
+      {door.logo ? <DoorLogo path={door.logo} /> : null}
     </group>
+  );
+}
+
+function DoorLogo({ path }: { path: string }) {
+  const [tex, setTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    let loaded: THREE.Texture | null = null;
+    new THREE.TextureLoader().load(path, (t) => {
+      if (cancelled) {
+        t.dispose();
+        return;
+      }
+      t.colorSpace = THREE.SRGBColorSpace;
+      // 64px sources — nearest-ish filtering keeps them crisp instead
+      // of a blurry smear at door scale.
+      t.magFilter = THREE.NearestFilter;
+      loaded = t;
+      setTex(t);
+    });
+    return () => {
+      cancelled = true;
+      loaded?.dispose();
+    };
+  }, [path]);
+  if (!tex) return null;
+  return (
+    <mesh position={[0, 1.85, 0.06]}>
+      <planeGeometry args={[0.8, 0.8]} />
+      <meshBasicMaterial map={tex} transparent toneMapped={false} />
+    </mesh>
   );
 }

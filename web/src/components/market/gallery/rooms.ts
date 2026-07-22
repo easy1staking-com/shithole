@@ -2,6 +2,7 @@ import {
   listPools,
   type Pool,
 } from "@/lib/market/poolTraits";
+import poolLogos from "@/lib/market/poolLogos.json";
 import {
   supportedCollections,
   type SupportedCollection,
@@ -79,6 +80,8 @@ export type DoorSpec = {
   sub: string;
   /** CSS color for the lintel glow. */
   color: string;
+  /** Same-origin logo path (vendored pool logos) — emblem on the door. */
+  logo?: string | null;
   position: [number, number, number];
   rotationY: number;
 };
@@ -144,6 +147,14 @@ function sewerEntries(data: GalleryData, policy: string): GalleryEntry[] {
   return collectionEntries(data, policy).filter(
     (e) => e.metaLoaded && e.poolTickers.length === 0,
   );
+}
+
+/** Vendored (same-origin) pool logo path, or null — see poolLogos.json. */
+function logoFor(ticker: string): string | null {
+  const hit = (
+    poolLogos as { pools: Array<{ ticker: string; localPath: string | null }> }
+  ).pools.find((p) => p.ticker === ticker);
+  return hit?.localPath ?? null;
 }
 
 /** Deterministic hue from a string — pool doors get stable neon colors. */
@@ -312,6 +323,7 @@ function poolLobbyModel(data: GalleryData, policy: string): RoomModel {
         label: p.ticker,
         sub: n === 0 ? "nothing listed" : `${n} listed`,
         color: `hsl(${hueFor(p.ticker)} 85% 62%)`,
+        logo: logoFor(p.ticker),
       };
     }),
     {
