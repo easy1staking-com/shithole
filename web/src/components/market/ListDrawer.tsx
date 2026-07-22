@@ -9,6 +9,7 @@ import {
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
 import { ErrorView } from "@/components/ErrorView";
+import { NftImage } from "@/components/NftImage";
 import { Notice } from "@/components/Notice";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import {
@@ -701,7 +702,6 @@ function NftPickRow({
 }) {
   const meta = useNftMetadata(nft.unit);
   const name = meta.data?.name ?? humanUnit(nft.unit);
-  const image = meta.data?.image_url ?? null;
   const token = priceTokens.find((t) => t.unit === override.tokenUnit);
 
   // Fee preview (parses override.displayPrice with the token's decimals).
@@ -725,19 +725,17 @@ function NftPickRow({
         className="block w-full text-left"
       >
         <div className="relative aspect-square bg-zinc-900">
-          {image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={image}
-              alt={name}
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-[10px] uppercase tracking-widest text-zinc-600">
-              no image
-            </div>
-          )}
+          <NftImage
+            ipfsUri={meta.data?.image_ipfs_uri ?? null}
+            url={meta.data?.image_url ?? null}
+            alt={name}
+            className="h-full w-full object-cover"
+            fallback={
+              <div className="flex h-full items-center justify-center text-[10px] uppercase tracking-widest text-zinc-600">
+                no image
+              </div>
+            }
+          />
           {isSelected ? (
             <div className="absolute right-2 top-2 rounded bg-sky-700 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-100">
               ✓

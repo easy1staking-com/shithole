@@ -1,0 +1,112 @@
+"use client";
+
+import { useMemo, useState, type ReactNode } from "react";
+
+/**
+ * NFT image with IPFS-gateway rotation. The BE rewrites ipfs:// URIs to a
+ * hardcoded public gateway (ipfs.io) in {@code image_url} — but ipfs.io is
+ * on ad-block/privacy filter lists (Brave Shields, uBlock, strict ETP, DNS
+ * blockers) and rate-limits bursts, so on some browsers every card in a
+ * grid 404s/blocks and renders a raw broken image.
+ *
+ * <p>This component builds the URL client-side from the RAW on-chain URI
+ * ({@code image_ipfs_uri}) and rotates through a gateway list on
+ * {@code onError}: w3s.link → dweb.link → ipfs.io. When there is no
+ * ipfs:// URI it falls back to {@code image_url} verbatim (http/ar/data
+ * images). When every candidate fails — or there's no image at all — it
+ * renders {@code fallback} (default: the muted gradient placeholder).
+ *
+ * <p>Drop-in recipe at call sites:
+ * {@code <NftImage ipfsUri={meta.data?.image_ipfs_uri} url={meta.data?.image_url} …/>}
+ * replacing the whole {@code image ? <img/> : <placeholder/>} branch.
+ */
+
+/** Rotation order. cloudflare-ipfs.com is dead — do not add it. */
+const GATEWAYS = ["w3s.link", "dweb.link", "ipfs.io"] as const;
+
+export type NftImageProps = {
+  /** Raw on-chain URI (ipfs://CID[/path]) — preferred source. */
+  ipfsUri?: string | null;
+  /** BE-rewritten URL — used when there's no ipfs:// URI. */
+  url?: string | null;
+  alt: string;
+  className?: string;
+  loading?: "lazy" | "eager";
+  draggable?: boolean;
+  /** Rendered when every candidate fails or no image exists. */
+  fallback?: ReactNode;
+};
+
+export function NftImage({
+  ipfsUri,
+  url,
+  alt,
+  className,
+  loading = "lazy",
+  draggable,
+  fallback,
+}: NftImageProps) {
+  const candidates = useMemo(() => buildCandidates(ipfsUri, url), [ipfsUri, url]);
+  const [attempt, setAttempt] = useState(0);
+
+  // New unit/metadata → new candidate list → restart the rotation. Uses
+  // React's render-time "adjust state when props change" pattern (not an
+  // effect): setState during render is bailed out immediately, no extra
+  // paint of the stale attempt.
+  const candidatesKey = candidates.join("|");
+  const [prevKey, setPrevKey] = useState(candidatesKey);
+  if (prevKey !== candidatesKey) {
+    setPrevKey(candidatesKey);
+    setAttempt(0);
+  }
+
+  const src = candidates[attempt];
+  if (!src) {
+    return fallback !== undefined ? <>{fallback}</> : <DefaultFallback className={className} />;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading={loading}
+      draggable={draggable}
+      onError={() => setAttempt((a) => a + 1)}
+    />
+  );
+}
+
+/** Muted gradient placeholder — mirrors the market ListingCard fallback. */
+function DefaultFallback({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 ${className ?? ""}`}
+    />
+  );
+}
+
+/** ipfs://CID[/path] (tolerating the legacy ipfs://ipfs/CID form) → CID[/path]. */
+function ipfsPath(uri: string): string | null {
+  if (!uri.startsWith("ipfs://")) return null;
+  let path = uri.slice("ipfs://".length);
+  if (path.startsWith("ipfs/")) path = path.slice("ipfs/".length);
+  return path || null;
+}
+
+function buildCandidates(
+  ipfsUri: string | null | undefined,
+  url: string | null | undefined,
+): string[] {
+  const out: string[] = [];
+  const path = ipfsUri ? ipfsPath(ipfsUri) : null;
+  if (path) {
+    for (const g of GATEWAYS) out.push(`https://${g}/ipfs/${path}`);
+  }
+  // BE-rewritten URL as the last resort (deduped — it's usually the
+  // ipfs.io form already in the list). Sole candidate for non-IPFS images.
+  if (url && !out.includes(url)) out.push(url);
+  return out;
+}

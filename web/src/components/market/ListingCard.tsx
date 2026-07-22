@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
+import { NftImage } from "@/components/NftImage";
 import { listPools, matchesPool } from "@/lib/market/poolTraits";
 import {
   splitUnit,
@@ -59,7 +60,12 @@ export function ListingCard({ listing }: { listing: DecodedListing }) {
       href={detailHref}
       className="group block overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 transition hover:border-sky-700"
     >
-      <ListingImage url={imageUrl} alt={name} fallbackSeed={unit} />
+      <ListingImage
+        ipfsUri={meta.data?.image_ipfs_uri ?? null}
+        url={imageUrl}
+        alt={name}
+        fallbackSeed={unit}
+      />
       <div className="space-y-1.5 p-3">
         <h3 className="truncate text-sm font-semibold text-zinc-100">
           {name}
@@ -113,28 +119,25 @@ function PoolChips({ tickers }: { tickers: string[] }) {
 }
 
 function ListingImage({
+  ipfsUri,
   url,
   alt,
   fallbackSeed,
 }: {
+  ipfsUri: string | null;
   url: string | null;
   alt: string;
   fallbackSeed: string;
 }) {
-  const [errored, setErrored] = useState(false);
-  if (!url || errored) {
-    return <ImageFallback seed={fallbackSeed} />;
-  }
   return (
     <div className="relative aspect-square overflow-hidden bg-zinc-900">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={url}
+      <NftImage
+        ipfsUri={ipfsUri}
+        url={url}
         alt={alt}
-        loading="lazy"
         draggable={false}
-        onError={() => setErrored(true)}
         className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+        fallback={<ImageFallback seed={fallbackSeed} />}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { ErrorView } from "@/components/ErrorView";
+import { NftImage } from "@/components/NftImage";
 import { MultiSelectPopover } from "@/components/p2p/MultiSelectPopover";
 import {
   useAssetPoolMembership,
@@ -424,20 +425,18 @@ function ListingCard({
       className="block overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/40 transition hover:border-zinc-600"
     >
       <div className="relative aspect-square bg-zinc-900">
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={name}
-            className="h-full w-full object-cover"
-            loading="lazy"
-            draggable={false}
-          />
-        ) : (
-          <div className="grid h-full w-full place-items-center text-xs text-zinc-600">
-            …
-          </div>
-        )}
+        <NftImage
+          ipfsUri={meta.data?.image_ipfs_uri ?? null}
+          url={imageUrl}
+          alt={name}
+          className="h-full w-full object-cover"
+          draggable={false}
+          fallback={
+            <div className="grid h-full w-full place-items-center text-xs text-zinc-600">
+              …
+            </div>
+          }
+        />
         {/* Chip shows the locked deposit — the listing's only ADA leg.
          *  Tooltip explains it covers chain costs only; the actual
          *  "what you get" is the offered NFT, prominent below. */}

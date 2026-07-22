@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 
+import { NftImage } from "@/components/NftImage";
 import { useNftMetadata } from "@/lib/api/hooks";
 import { useBreakpoint } from "@/lib/util/useMediaQuery";
 import type { WalletCollectionNft } from "@/lib/wallet/useWalletCollectionNfts";
@@ -61,7 +62,6 @@ type InnerProps = {
 function ConfirmBar({ deposit, onCancel, onConfirm, submitting }: InnerProps) {
   const meta = useNftMetadata(deposit.unit);
   const name = meta.data?.name ?? deposit.unit.slice(56);
-  const image = meta.data?.image_url ?? null;
   return (
     <motion.div
       initial={{ y: -80, opacity: 0 }}
@@ -72,14 +72,14 @@ function ConfirmBar({ deposit, onCancel, onConfirm, submitting }: InnerProps) {
       role="dialog"
       aria-label="confirm swap"
     >
-      {image && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={image}
-          alt={name}
-          className="h-12 w-12 flex-none rounded-md object-cover"
-        />
-      )}
+      <NftImage
+        ipfsUri={meta.data?.image_ipfs_uri ?? null}
+        url={meta.data?.image_url ?? null}
+        alt={name}
+        loading="eager"
+        className="h-12 w-12 flex-none rounded-md object-cover"
+        fallback={null}
+      />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-zinc-100">
           Drop <span className="font-semibold">{name}</span> in?
@@ -111,7 +111,6 @@ function ConfirmBar({ deposit, onCancel, onConfirm, submitting }: InnerProps) {
 function ConfirmSheet({ deposit, onCancel, onConfirm, submitting }: InnerProps) {
   const meta = useNftMetadata(deposit.unit);
   const name = meta.data?.name ?? deposit.unit.slice(56);
-  const image = meta.data?.image_url ?? null;
   return (
     <>
       {/* Scrim — taps cancel. */}
@@ -135,14 +134,14 @@ function ConfirmSheet({ deposit, onCancel, onConfirm, submitting }: InnerProps) 
       >
         <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-zinc-700" />
         <div className="flex flex-col items-center gap-4">
-          {image && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={image}
-              alt={name}
-              className="h-28 w-28 rounded-lg object-cover shadow-lg"
-            />
-          )}
+          <NftImage
+            ipfsUri={meta.data?.image_ipfs_uri ?? null}
+            url={meta.data?.image_url ?? null}
+            alt={name}
+            loading="eager"
+            className="h-28 w-28 rounded-lg object-cover shadow-lg"
+            fallback={null}
+          />
           <div className="text-center">
             <p className="text-base font-semibold text-zinc-100">{name}</p>
             <p className="mt-1 text-sm text-zinc-400">drop this one in?</p>

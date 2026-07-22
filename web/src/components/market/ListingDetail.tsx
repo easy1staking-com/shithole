@@ -8,6 +8,7 @@ import {
   ConfirmationChip,
   type ChainConfirmation,
 } from "@/components/ConfirmationChip";
+import { NftImage } from "@/components/NftImage";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { listPools, matchesPool } from "@/lib/market/poolTraits";
 import {
@@ -343,14 +344,14 @@ export function ListingDetail({ unit }: { unit: string }) {
         )
       ) : (
         <div className="grid gap-4 sm:grid-cols-[1fr_2fr]">
-          {imageUrl ? (
+          {meta.data?.image_ipfs_uri || imageUrl ? (
             <div className="aspect-square overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={imageUrl}
+              <NftImage
+                ipfsUri={meta.data?.image_ipfs_uri ?? null}
+                url={imageUrl}
                 alt={displayName}
                 className="h-full w-full object-cover"
-                loading="lazy"
+                loading="eager"
                 draggable={false}
               />
             </div>
