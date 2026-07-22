@@ -57,8 +57,14 @@ export function NftImage({
   // images (above-the-fold heroes) bypass the observer.
   const holderRef = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(loading === "eager");
+  const candidatesKey = candidates.join("|");
   useEffect(() => {
     if (inView) return;
+    // Re-arm whenever the candidate list changes: on a cold load the first
+    // render happens BEFORE metadata arrives (no candidates → fallback →
+    // no holder div), so an observer armed only at mount would watch
+    // nothing and the image would stay a placeholder forever. The
+    // candidatesKey dep re-runs this once the holder actually renders.
     const el = holderRef.current;
     if (!el) return;
     if (typeof IntersectionObserver === "undefined") {
@@ -80,13 +86,12 @@ export function NftImage({
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [inView]);
+  }, [inView, candidatesKey]);
 
   // New unit/metadata → new candidate list → restart the rotation. Uses
   // React's render-time "adjust state when props change" pattern (not an
   // effect): setState during render is bailed out immediately, no extra
   // paint of the stale attempt.
-  const candidatesKey = candidates.join("|");
   const [prevKey, setPrevKey] = useState(candidatesKey);
   if (prevKey !== candidatesKey) {
     setPrevKey(candidatesKey);
