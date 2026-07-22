@@ -1,7 +1,7 @@
 plugins {
     java
-    id("org.springframework.boot") version "3.3.4"
-    id("io.spring.dependency-management") version "1.1.6"
+    id("org.springframework.boot") version "3.3.13"
+    id("io.spring.dependency-management") version "1.1.7"
 }
 
 group = "com.easy1staking.shithole"
@@ -63,7 +63,7 @@ dependencies {
     // params. Drives SyncStatus's "is the indexer near tip?" check (the
     // adamatic/cardano-recurring-payment-offchain repo uses the same
     // dependency at the same major version for the same purpose).
-    implementation("org.cardanofoundation:cf-cardano-conversions-java:1.2.0")
+    implementation("org.cardanofoundation:cf-cardano-conversions-java:1.2.1")
 
     implementation("com.easy1staking:cardano-client-lib-extensions:0.0.4")
 
@@ -76,8 +76,8 @@ dependencies {
     implementation("com.bloxbean.cardano:yaci-store-utxo-spring-boot-starter:3.0.0-beta3")
 
     // DB
-    implementation("org.postgresql:postgresql:42.7.2")
-    testImplementation("com.h2database:h2:2.2.220")
+    implementation("org.postgresql:postgresql:42.7.13")
+    testImplementation("com.h2database:h2:2.2.224")
 
     // Lombok
     compileOnly("org.projectlombok:lombok:1.18.30")
@@ -86,7 +86,7 @@ dependencies {
     testAnnotationProcessor("org.projectlombok:lombok:1.18.30")
 
     // Observability
-    implementation("io.micrometer:micrometer-registry-prometheus:1.13.5")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.13.15")
 }
 
 tasks.named<Test>("test") {
