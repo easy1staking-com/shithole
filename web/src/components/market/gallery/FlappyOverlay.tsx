@@ -24,6 +24,15 @@ const SPAWN_EVERY = 1.45;
 
 type Pipe = { x: number; gapY: number; gapH: number; passed: boolean };
 
+// The official HOSKY Token logo (Cardano token registry, vendored at
+// public/arcade/). Loaded once per module; the hand-drawn doggo below
+// stays as the fallback until it arrives.
+let hoskyLogo: HTMLImageElement | null = null;
+if (typeof window !== "undefined") {
+  hoskyLogo = new Image();
+  hoskyLogo.src = "/arcade/hosky-logo.png";
+}
+
 type FState = {
   y: number;
   vy: number;
@@ -243,42 +252,51 @@ function draw(canvas: HTMLCanvasElement | null, g: FState) {
     ctx.stroke();
   }
 
-  // The doggo.
+  // The doggo — official logo when loaded, hand-drawn fallback.
   ctx.save();
   ctx.translate(BIRD_X, g.y);
   ctx.rotate(Math.max(-0.45, Math.min(1.0, g.vy / 620)));
-  // ears
-  ctx.fillStyle = "#d97706";
-  ctx.beginPath();
-  ctx.moveTo(-10, -10);
-  ctx.lineTo(-16, -24);
-  ctx.lineTo(-2, -14);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(10, -10);
-  ctx.lineTo(16, -24);
-  ctx.lineTo(2, -14);
-  ctx.closePath();
-  ctx.fill();
-  // head
-  ctx.fillStyle = "#fbbf24";
-  ctx.beginPath();
-  ctx.arc(0, 0, BIRD_R, 0, Math.PI * 2);
-  ctx.fill();
-  // snout
-  ctx.fillStyle = "#fde68a";
-  ctx.beginPath();
-  ctx.ellipse(5, 5, 8, 6.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // nose + eye
-  ctx.fillStyle = "#1c1917";
-  ctx.beginPath();
-  ctx.arc(9, 3, 2.6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(1, -5, 2.4, 0, Math.PI * 2);
-  ctx.fill();
+  if (hoskyLogo?.complete && hoskyLogo.naturalWidth > 0) {
+    // Circle-clip: the registry PNG is square with a solid background.
+    const r = BIRD_R + 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(hoskyLogo, -r, -r, r * 2, r * 2);
+  } else {
+    // ears
+    ctx.fillStyle = "#d97706";
+    ctx.beginPath();
+    ctx.moveTo(-10, -10);
+    ctx.lineTo(-16, -24);
+    ctx.lineTo(-2, -14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(10, -10);
+    ctx.lineTo(16, -24);
+    ctx.lineTo(2, -14);
+    ctx.closePath();
+    ctx.fill();
+    // head
+    ctx.fillStyle = "#fbbf24";
+    ctx.beginPath();
+    ctx.arc(0, 0, BIRD_R, 0, Math.PI * 2);
+    ctx.fill();
+    // snout
+    ctx.fillStyle = "#fde68a";
+    ctx.beginPath();
+    ctx.ellipse(5, 5, 8, 6.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // nose + eye
+    ctx.fillStyle = "#1c1917";
+    ctx.beginPath();
+    ctx.arc(9, 3, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(1, -5, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 
   if (!g.started) {
