@@ -82,6 +82,8 @@ export type DoorSpec = {
   color: string;
   /** Same-origin logo path (vendored pool logos) — emblem on the door. */
   logo?: string | null;
+  /** Rug-pool doors carry a delegation lever for this ticker. */
+  lever?: { ticker: string };
   position: [number, number, number];
   rotationY: number;
 };
@@ -147,6 +149,8 @@ export type RoomModel = {
   accent: string;
   /** Big neon sign text (hub only). */
   sign: string | null;
+  /** The rug-pool lobby's undead delegation evangelist. */
+  zombie?: boolean;
 };
 
 /* ------------------------------------------------------------------ */
@@ -403,6 +407,7 @@ function poolLobbyModel(data: GalleryData, policy: string): RoomModel {
         sub: n === 0 ? "nothing listed" : `${n} listed`,
         color: `hsl(${hueFor(p.ticker)} 85% 62%)`,
         logo: logoFor(p.ticker),
+        lever: { ticker: p.ticker },
       };
     }),
     {
@@ -433,6 +438,7 @@ function poolLobbyModel(data: GalleryData, policy: string): RoomModel {
     ],
     accent: col?.accentColor ?? "#eab308",
     sign: null,
+    zombie: true,
   };
 }
 

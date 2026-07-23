@@ -145,6 +145,56 @@ export function signTexture(title: string, tagline: string): THREE.CanvasTexture
   return toTexture(c);
 }
 
+/** Zombie speech bubble — rounded card, up to 4 short lines. */
+export function bubbleTexture(lines: string[]): THREE.CanvasTexture {
+  const [c, ctx] = canvas(512, 300);
+
+  ctx.fillStyle = "#18181c";
+  ctx.strokeStyle = "#52525b";
+  ctx.lineWidth = 4;
+  roundRect(ctx, 8, 8, 496, 240, 26);
+  ctx.fill();
+  ctx.stroke();
+  // Tail.
+  ctx.beginPath();
+  ctx.moveTo(226, 246);
+  ctx.lineTo(256, 294);
+  ctx.lineTo(286, 246);
+  ctx.closePath();
+  ctx.fillStyle = "#18181c";
+  ctx.fill();
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#d4d4d8";
+  const n = Math.max(lines.length, 1);
+  const lineH = Math.min(52, 200 / n);
+  const startY = 128 - ((n - 1) * lineH) / 2;
+  lines.forEach((line, i) => {
+    fitText(ctx, line, 460, 34, MONO, "600");
+    ctx.fillText(line, 256, startY + i * lineH);
+  });
+
+  return toTexture(c);
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
 /** Deterministic dark fill for frames whose image hasn't loaded yet. */
 export function seedColor(seed: string): string {
   let acc = 0;
