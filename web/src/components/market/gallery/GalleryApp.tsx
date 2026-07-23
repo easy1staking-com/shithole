@@ -26,6 +26,7 @@ import { useDelegation } from "@/lib/wallet/useDelegation";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
 import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
+import { SHOOT_RAT_EVENT } from "./Rat";
 import { SnekOverlay } from "./SnekOverlay";
 import { GalleryScene } from "./GalleryScene";
 import { LockControls } from "./Player";
@@ -179,6 +180,7 @@ export function GalleryApp() {
   const focusedCabinet = focusedId?.startsWith("cabinet:")
     ? focusedId.slice("cabinet:".length)
     : null;
+  const focusedRat = focusedId?.startsWith("rat:") ? focusedId : null;
 
   const actionRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -196,9 +198,14 @@ export function GalleryApp() {
       } else if (focusedCabinet === "snek") {
         document.exitPointerLock();
         setGameOpen("snek");
+      } else if (focusedRat) {
+        // Shooting does NOT release the pointer — keep hunting.
+        window.dispatchEvent(
+          new CustomEvent(SHOOT_RAT_EVENT, { detail: focusedRat }),
+        );
       }
     };
-  }, [focusedEntry, focusedLever, focusedZombie, focusedCabinet, walletApi, router]);
+  }, [focusedEntry, focusedLever, focusedZombie, focusedCabinet, focusedRat, walletApi, router]);
 
   useEffect(() => {
     // pointerLockElement is still null during the click that ACQUIRES
@@ -292,9 +299,13 @@ export function GalleryApp() {
         </Link>
       </div>
 
-      {/* crosshair */}
+      {/* crosshair — goes red over vermin */}
       {locked ? (
-        <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-200/80 shadow" />
+        <div
+          className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow transition-all ${
+            focusedRat ? "h-2.5 w-2.5 bg-red-500/90" : "h-1.5 w-1.5 bg-zinc-200/80"
+          }`}
+        />
       ) : null}
 
       {/* listings fetch state */}
@@ -398,8 +409,15 @@ export function GalleryApp() {
         </div>
       ) : null}
 
+      {/* focused rat card */}
+      {locked && focusedRat ? (
+        <p className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 rounded border border-red-900/70 bg-zinc-950/90 px-3 py-1.5 text-center font-mono text-[11px] uppercase tracking-widest text-red-300 shadow-xl">
+          a rat · click or E — exterminate
+        </p>
+      ) : null}
+
       {/* controls hint while walking, nothing focused */}
-      {locked && !focusedEntry && !focusedLever && !focusedZombie && !focusedCabinet ? (
+      {locked && !focusedEntry && !focusedLever && !focusedZombie && !focusedCabinet && !focusedRat ? (
         <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[11px] uppercase tracking-widest text-zinc-600">
           wasd walk · shift run · walk into a door · esc release mouse
         </p>

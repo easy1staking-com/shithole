@@ -14,7 +14,7 @@ import { saveSnekScore, snekHighScore } from "./snekScore";
 const GRID = 22;
 const CANVAS = 528; // 22 × 24px cells
 const CELL = CANVAS / GRID;
-const START_MS = 150;
+const START_MS = 130;
 const MIN_MS = 62;
 
 type Pt = { x: number; y: number };
@@ -23,7 +23,12 @@ type Dir = { x: number; y: number };
 type GameState = {
   snake: Pt[];
   dir: Dir;
-  nextDir: Dir;
+  /**
+   * Buffered turns, applied one per tick. A queue (not a single slot)
+   * is what makes rapid two-turn maneuvers land — with one slot the
+   * second keypress overwrote the first and inputs felt laggy/eaten.
+   */
+  queue: Dir[];
   food: Pt;
   score: number;
   dead: boolean;
@@ -38,7 +43,7 @@ function freshGame(): GameState {
       { x: 4, y: 11 },
     ],
     dir: { x: 1, y: 0 },
-    nextDir: { x: 1, y: 0 },
+    queue: [],
     food: { x: 15, y: 11 },
     score: 0,
     dead: false,
@@ -83,8 +88,12 @@ export function SnekOverlay({ onClose }: { onClose: () => void }) {
       const d = DIRS[e.code];
       if (d) {
         e.preventDefault();
-        // No 180° reversals.
-        if (d.x !== -g.dir.x || d.y !== -g.dir.y) g.nextDir = d;
+        // Validate against the LAST queued turn (or current heading):
+        // no 180° reversals, no duplicate presses clogging the queue.
+        const ref = g.queue[g.queue.length - 1] ?? g.dir;
+        const reversal = d.x === -ref.x && d.y === -ref.y;
+        const duplicate = d.x === ref.x && d.y === ref.y;
+        if (!reversal && !duplicate && g.queue.length < 3) g.queue.push(d);
         return;
       }
       if (e.code === "Space" && g.dead) {
@@ -106,7 +115,8 @@ export function SnekOverlay({ onClose }: { onClose: () => void }) {
       if (cancelled) return;
       const g = game.current;
       if (!g.dead) {
-        g.dir = g.nextDir;
+        const turn = g.queue.shift();
+        if (turn) g.dir = turn;
         const head = {
           x: g.snake[0].x + g.dir.x,
           y: g.snake[0].y + g.dir.y,

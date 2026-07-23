@@ -14,6 +14,49 @@ import { useEffect, useRef } from "react";
  * While the pointer is unlocked the context suspends (menus are quiet);
  * relocking resumes it. Everything closes on unmount.
  */
+/** Shared context for one-shot effects (rat extermination). */
+let fxCtx: AudioContext | null = null;
+
+/** Squeak + wet pop. Called from a click handler, so autoplay is fine. */
+export function playRatSplat() {
+  if (typeof AudioContext === "undefined") return;
+  try {
+    fxCtx ??= new AudioContext();
+  } catch {
+    return;
+  }
+  const ctx = fxCtx;
+  ctx.resume().catch(() => {});
+  const t0 = ctx.currentTime;
+
+  // Death squeak — a fast falling sawtooth.
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(1600, t0);
+  osc.frequency.exponentialRampToValueAtTime(320, t0 + 0.1);
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0.1, t0);
+  og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+  osc.connect(og).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + 0.14);
+
+  // Wet pop — a decaying lowpassed noise burst.
+  const len = Math.floor(ctx.sampleRate * 0.12);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 550;
+  const g = ctx.createGain();
+  g.gain.value = 0.3;
+  src.connect(lp).connect(g).connect(ctx.destination);
+  src.start(t0 + 0.02);
+}
+
 export function useAmbientAudio(active: boolean) {
   const ctxRef = useRef<AudioContext | null>(null);
   const dripTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

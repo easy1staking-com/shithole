@@ -53,10 +53,6 @@ export function GalleryScene({
 
       <RoomShell model={model} />
       <RoomDust model={model} />
-      {/* One resident per dry room; the sewer keeps a family. */}
-      {Array.from({ length: model.theme.wetFloor ? 3 : 1 }, (_, i) => (
-        <Rat key={i} bounds={model.bounds} />
-      ))}
 
       {/* Freestanding partitions (hero panels). */}
       {model.blockers.map((b, i) => (
@@ -107,6 +103,12 @@ export function GalleryScene({
 
         {(model.cabinets ?? []).map((c) => (
           <ArcadeCabinet key={c.game} spec={c} />
+        ))}
+
+        {/* One resident per dry room; the sewer keeps a family. All
+            shootable, hence inside the interact group. */}
+        {Array.from({ length: model.theme.wetFloor ? 3 : 1 }, (_, i) => (
+          <Rat key={i} id={String(i)} bounds={model.bounds} />
         ))}
       </group>
 

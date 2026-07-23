@@ -195,6 +195,42 @@ function roundRect(
   ctx.closePath();
 }
 
+/** Irregular blood splat decal — every rat dies differently. */
+export function bloodSplatTexture(): THREE.CanvasTexture {
+  const [c, ctx] = canvas(128, 128);
+  // Main body: overlapping dark-red blobs around center.
+  for (let i = 0; i < 8; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = Math.random() * 16;
+    const r = 10 + Math.random() * 17;
+    ctx.globalAlpha = 0.55 + Math.random() * 0.35;
+    ctx.fillStyle = i % 3 === 0 ? "#5a1114" : "#480d10";
+    ctx.beginPath();
+    ctx.ellipse(
+      64 + Math.cos(a) * d,
+      64 + Math.sin(a) * d,
+      r,
+      r * (0.6 + Math.random() * 0.4),
+      Math.random() * Math.PI,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+  // Droplet spray.
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = 26 + Math.random() * 34;
+    ctx.globalAlpha = 0.4 + Math.random() * 0.4;
+    ctx.fillStyle = "#4d0f12";
+    ctx.beginPath();
+    ctx.arc(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1.2 + Math.random() * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  return toTexture(c);
+}
+
 /** Deterministic dark fill for frames whose image hasn't loaded yet. */
 export function seedColor(seed: string): string {
   let acc = 0;
