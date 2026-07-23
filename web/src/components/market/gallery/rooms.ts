@@ -159,7 +159,7 @@ export type RoomModel = {
 };
 
 export type CabinetSpec = {
-  game: "snek";
+  game: "snek" | "flappy";
   position: [number, number, number];
   rotationY: number;
 };
@@ -575,8 +575,14 @@ function arcadeModel(): RoomModel {
     frames: [],
     // Cabinet collision — hidden inside the cabinet body so it renders
     // as furniture, not a wall stub.
-    blockers: [{ minX: 8.6, maxX: 9.4, minZ: -4.3, maxZ: -3.7 }],
-    cabinets: [{ game: "snek", position: [9, 0, -3.95], rotationY: 0 }],
+    blockers: [
+      { minX: 8.6, maxX: 9.4, minZ: -4.3, maxZ: -3.7 },
+      { minX: 10.3, maxX: 11.1, minZ: -4.3, maxZ: -3.7 },
+    ],
+    cabinets: [
+      { game: "snek", position: [9, 0, -3.95], rotationY: 0 },
+      { game: "flappy", position: [10.7, 0, -3.95], rotationY: 0 },
+    ],
     lights: [
       [3, 3.6, 0],
       [9, 3.6, 0],

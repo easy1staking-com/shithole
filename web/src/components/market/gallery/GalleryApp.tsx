@@ -25,7 +25,9 @@ import { useMarketListings } from "@/lib/market/useMarketListings";
 import { useDelegation } from "@/lib/wallet/useDelegation";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
+import type { ArcadeGame } from "./arcadeScores";
 import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
+import { FlappyOverlay } from "./FlappyOverlay";
 import { SHOOT_RAT_EVENT } from "./Rat";
 import { RAT_KILLED_EVENT, ratKillCount, recordRatKill } from "./ratKills";
 import { SnekOverlay } from "./SnekOverlay";
@@ -43,6 +45,17 @@ import {
   type GalleryEntry,
   type RoomRef,
 } from "./rooms";
+
+const CABINET_CARDS: Record<ArcadeGame, { title: string; blurb: string }> = {
+  snek: {
+    title: "SNEK",
+    blurb: "the arcade's finest. eat worthless coins. die. repeat.",
+  },
+  flappy: {
+    title: "FLAPPY HOSKY",
+    blurb: "flap the doggo through the red candles. it never ends well.",
+  },
+};
 
 /**
  * "the dump" — first-person 3D browse over the same live marketplace
@@ -185,7 +198,7 @@ export function GalleryApp() {
   // Overlays (pointer released while open).
   const [leverPanel, setLeverPanel] = useState<string | null>(null); // ticker
   const [connectOpen, setConnectOpen] = useState(false);
-  const [gameOpen, setGameOpen] = useState<"snek" | null>(null);
+  const [gameOpen, setGameOpen] = useState<ArcadeGame | null>(null);
   const overlayOpen = leverPanel !== null || connectOpen || gameOpen !== null;
 
   // --- focused interactable → HUD card + click/E action --------------
@@ -216,9 +229,9 @@ export function GalleryApp() {
       } else if (focusedZombie && !walletApi) {
         document.exitPointerLock();
         setConnectOpen(true);
-      } else if (focusedCabinet === "snek") {
+      } else if (focusedCabinet === "snek" || focusedCabinet === "flappy") {
         document.exitPointerLock();
-        setGameOpen("snek");
+        setGameOpen(focusedCabinet);
       } else if (focusedRat) {
         // Shooting does NOT release the pointer — keep hunting.
         window.dispatchEvent(
@@ -416,13 +429,13 @@ export function GalleryApp() {
       ) : null}
 
       {/* focused cabinet card */}
-      {locked && focusedCabinet ? (
+      {locked && (focusedCabinet === "snek" || focusedCabinet === "flappy") ? (
         <div className="pointer-events-none absolute bottom-8 left-1/2 w-full max-w-sm -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-center shadow-xl">
           <p className="font-mono text-sm font-bold uppercase tracking-widest text-emerald-300">
-            SNEK
+            {CABINET_CARDS[focusedCabinet].title}
           </p>
           <p className="mt-1 text-xs text-zinc-400">
-            the arcade&apos;s finest. eat worthless coins. die. repeat.
+            {CABINET_CARDS[focusedCabinet].blurb}
           </p>
           <p className="mt-1.5 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
             click or E — play (prize: nothing)
@@ -490,6 +503,9 @@ export function GalleryApp() {
       {connectOpen ? <ConnectSheet onClose={() => setConnectOpen(false)} /> : null}
       {gameOpen === "snek" ? (
         <SnekOverlay onClose={() => setGameOpen(null)} />
+      ) : null}
+      {gameOpen === "flappy" ? (
+        <FlappyOverlay onClose={() => setGameOpen(null)} />
       ) : null}
 
       {/* room-change fade */}
