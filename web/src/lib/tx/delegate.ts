@@ -29,11 +29,26 @@ export async function submitDelegation(input: {
   const client = await makeClient(input.walletApi);
 
   const rewards = await input.walletApi.getRewardAddresses();
-  const rewardHex = rewards[0];
+  const rewardHex = rewards[0]?.toLowerCase();
   if (!rewardHex) {
     throw new Error("this wallet exposes no reward (stake) address");
   }
-  // Reward address = 1 header byte + 28-byte stake credential.
+  // Reward address = 1 header byte + 28-byte stake credential. Header
+  // high nibble: 0xe = key-hash credential, 0xf = SCRIPT credential
+  // (multisig/shared wallets) — the latter needs a script witness we
+  // can't provide, so refuse it clearly instead of building a tx that
+  // can never be signed.
+  if (rewardHex.length !== 58) {
+    throw new Error("unexpected reward address shape from the wallet");
+  }
+  if (rewardHex.startsWith("f")) {
+    throw new Error(
+      "this wallet's stake credential is a script (shared/multisig wallet) — lever delegation only supports key-based stake credentials",
+    );
+  }
+  if (!rewardHex.startsWith("e")) {
+    throw new Error("unexpected reward address header from the wallet");
+  }
   const stakeCredential = Credential.makeKeyHash(hexToBytes(rewardHex.slice(2)));
   const poolKeyHash = PoolKeyHash.fromBech32(input.poolIdBech32);
 

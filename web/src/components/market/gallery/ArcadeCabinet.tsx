@@ -17,6 +17,7 @@ const GAME_META: Record<
 > = {
   snek: { title: "SNEK", accent: "#34d399", stripe: "#123324" },
   flappy: { title: "FLAPPY HOSKY", accent: "#fbbf24", stripe: "#3a2a08" },
+  breakout: { title: "BREAKOUT", accent: "#38bdf8", stripe: "#0c2436" },
 };
 
 /**

@@ -159,7 +159,7 @@ export type RoomModel = {
 };
 
 export type CabinetSpec = {
-  game: "snek" | "flappy";
+  game: "snek" | "flappy" | "breakout";
   position: [number, number, number];
   rotationY: number;
 };
@@ -550,7 +550,7 @@ const ARCADE_THEME: RoomTheme = {
 };
 
 function arcadeModel(): RoomModel {
-  const length = 13;
+  const length = 15;
   const half = CORRIDOR_W / 2;
   return {
     key: roomKey({ kind: "arcade" }),
@@ -578,14 +578,17 @@ function arcadeModel(): RoomModel {
     blockers: [
       { minX: 8.6, maxX: 9.4, minZ: -4.3, maxZ: -3.7 },
       { minX: 10.3, maxX: 11.1, minZ: -4.3, maxZ: -3.7 },
+      { minX: 12.0, maxX: 12.8, minZ: -4.3, maxZ: -3.7 },
     ],
     cabinets: [
       { game: "snek", position: [9, 0, -3.95], rotationY: 0 },
       { game: "flappy", position: [10.7, 0, -3.95], rotationY: 0 },
+      { game: "breakout", position: [12.4, 0, -3.95], rotationY: 0 },
     ],
     lights: [
       [3, 3.6, 0],
       [9, 3.6, 0],
+      [12.5, 3.6, 0],
     ],
     accent: "#c084fc",
     sign: null,

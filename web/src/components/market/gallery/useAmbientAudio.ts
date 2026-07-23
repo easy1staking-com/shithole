@@ -60,14 +60,22 @@ export function playRatSplat() {
 export function useAmbientAudio(active: boolean) {
   const ctxRef = useRef<AudioContext | null>(null);
   const dripTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startDrips = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!active) {
+      // Suspend AND stop scheduling: drips created against a suspended
+      // context pile up and all fire at once on resume.
       ctxRef.current?.suspend().catch(() => {});
+      if (dripTimer.current) {
+        clearTimeout(dripTimer.current);
+        dripTimer.current = null;
+      }
       return;
     }
     if (ctxRef.current) {
       ctxRef.current.resume().catch(() => {});
+      if (!dripTimer.current) startDrips.current?.();
       return;
     }
     if (typeof AudioContext === "undefined") return;
@@ -143,7 +151,10 @@ export function useAmbientAudio(active: boolean) {
       osc.stop(t0 + 0.12);
       dripTimer.current = setTimeout(drip, 2500 + Math.random() * 7000);
     };
-    dripTimer.current = setTimeout(drip, 1500);
+    startDrips.current = () => {
+      dripTimer.current = setTimeout(drip, 1500);
+    };
+    startDrips.current();
   }, [active]);
 
   // Teardown only on unmount.

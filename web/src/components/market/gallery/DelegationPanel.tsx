@@ -12,7 +12,7 @@ import {
   leverTargetPoolId,
   type DelegationInfo,
 } from "@/lib/wallet/useDelegation";
-import { getNetworkName } from "@/lib/wallet/network";
+import { expectedNetworkId, getNetworkName } from "@/lib/wallet/network";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
 /**
@@ -24,14 +24,24 @@ export function DelegationPanel({
   ticker,
   walletApi,
   delegation,
+  delegationReady,
   onClose,
 }: {
   ticker: string;
   walletApi: Cip30Api;
+  /** Settled DelegationInfo — null while loading/errored. */
   delegation: DelegationInfo | null;
+  /** True once the delegation query settled successfully. Pulling the
+   * lever before that would guess needsRegistration and build a tx the
+   * ledger rejects (duplicate RegCert). */
+  delegationReady: boolean;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const walletNetworkId = useWalletStore((s) => s.networkId);
+  const networkMismatch =
+    walletNetworkId !== null &&
+    walletNetworkId !== expectedNetworkId(getNetworkName());
   const [phase, setPhase] = useState<
     | { kind: "confirm" }
     | { kind: "submitting" }
@@ -62,8 +72,14 @@ export function DelegationPanel({
         needsRegistration,
       });
       setPhase({ kind: "done", txHash });
-      // Lever position + zombie mood re-derive once the query refreshes.
+      // Lever position + zombie mood re-derive once the query refreshes
+      // — once now, and again after the tx has had a block to land.
       queryClient.invalidateQueries({ queryKey: [DELEGATION_QUERY_KEY] });
+      window.setTimeout(
+        () =>
+          queryClient.invalidateQueries({ queryKey: [DELEGATION_QUERY_KEY] }),
+        45_000,
+      );
     } catch (error) {
       setPhase({ kind: "error", error });
     }
@@ -88,6 +104,13 @@ export function DelegationPanel({
           <Row k="stake-key deposit" v="2 ₳ (one-time, refundable)" />
         ) : null}
       </dl>
+
+      {networkMismatch ? (
+        <p className="mt-2 rounded border border-red-900/60 bg-red-950/30 p-2 text-[11px] text-red-300">
+          your wallet is on the wrong network for this site (
+          {getNetworkName()}) — switch networks before pulling anything.
+        </p>
+      ) : null}
 
       {offMainnetUnmapped ? (
         <p className="mt-2 rounded border border-amber-900/60 bg-amber-950/30 p-2 text-[11px] text-amber-300">
@@ -129,10 +152,18 @@ export function DelegationPanel({
             <Btn
               onClick={pull}
               primary
-              disabled={phase.kind === "submitting" || !targetPoolId}
+              disabled={
+                phase.kind === "submitting" ||
+                !targetPoolId ||
+                !delegationReady ||
+                networkMismatch ||
+                offMainnetUnmapped
+              }
             >
               {phase.kind === "submitting"
                 ? "check your wallet…"
+                : !delegationReady
+                ? "sniffing your stake…"
                 : "pull the lever"}
             </Btn>
           </>

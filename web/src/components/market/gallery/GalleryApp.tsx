@@ -1,6 +1,7 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
+import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useQueries } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,6 +27,7 @@ import { useDelegation } from "@/lib/wallet/useDelegation";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
 import type { ArcadeGame } from "./arcadeScores";
+import { BreakoutOverlay } from "./BreakoutOverlay";
 import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
 import { FlappyOverlay } from "./FlappyOverlay";
 import { SHOOT_RAT_EVENT } from "./Rat";
@@ -55,7 +57,15 @@ const CABINET_CARDS: Record<ArcadeGame, { title: string; blurb: string }> = {
     title: "FLAPPY HOSKY",
     blurb: "flap the doggo through the red candles. it never ends well.",
   },
+  breakout: {
+    title: "BREAKOUT",
+    blurb: "the bricks are real listings. smash the floor price. literally.",
+  },
 };
+
+function isArcadeGame(s: string): s is ArcadeGame {
+  return s in CABINET_CARDS;
+}
 
 /**
  * "the dump" — first-person 3D browse over the same live marketplace
@@ -79,7 +89,11 @@ export function GalleryApp() {
 
   // Metadata for pool assignment, names and image candidates. Shares
   // queryKeys.nft with the 2D surfaces, so nothing is fetched twice.
-  const metaQueries = useQueries({
+  // `combine` matters: the raw useQueries result is a NEW array every
+  // render, which cascaded into full room-model + plaque-texture
+  // rebuilds on every HUD state change. combine output goes through
+  // structural sharing, so identity only changes when data does.
+  const metas = useQueries({
     queries: whitelisted.map((l) => {
       const unit = l.listedUnits[0] ?? "";
       return {
@@ -89,13 +103,14 @@ export function GalleryApp() {
         staleTime: 60_000,
       };
     }),
+    combine: (results) => results.map((r) => r.data),
   });
 
   const entries = useMemo<GalleryEntry[]>(() => {
     const priceTokens = supportedPriceTokens();
     const pools = listPools();
     return whitelisted.map((l, i) => {
-      const meta = metaQueries[i]?.data;
+      const meta = metas[i];
       const unit = l.listedUnits[0] ?? "";
       const price = resolvePriceLabel(l, priceTokens);
       const traits = meta?.traits ?? [];
@@ -123,10 +138,22 @@ export function GalleryApp() {
         seed: unit,
       };
     });
-  }, [whitelisted, metaQueries]);
+  }, [whitelisted, metas]);
 
   const data = useMemo(
     () => ({ collections: galleryCollections(), byPolicy: groupByPolicy(entries) }),
+    [entries],
+  );
+
+  // Brick faces for BREAKOUT — first gateway candidate of every listing
+  // whose metadata resolved. Joined-string memo keeps identity stable
+  // while metadata streams in.
+  const brickImages = useMemo(
+    () =>
+      entries
+        .filter((e) => e.metaLoaded && e.candidates[0])
+        .map((e) => e.candidates[0])
+        .slice(0, 48),
     [entries],
   );
 
@@ -149,31 +176,44 @@ export function GalleryApp() {
   // Hum + drips start on first lock (a user gesture), pause on unlock.
   useAmbientAudio(locked);
 
+  const doorTimers = useRef<number[]>([]);
+  useEffect(
+    () => () => {
+      for (const t of doorTimers.current) window.clearTimeout(t);
+    },
+    [],
+  );
   const enterDoor = useCallback((door: DoorSpec) => {
     if (fadingRef.current) return;
     fadingRef.current = true;
     setFading(true);
     setFocusedId(null);
-    window.setTimeout(() => {
-      setRoomRef(door.target);
+    doorTimers.current.push(
       window.setTimeout(() => {
-        fadingRef.current = false;
-        setFading(false);
-      }, 120);
-    }, 280);
+        setRoomRef(door.target);
+        doorTimers.current.push(
+          window.setTimeout(() => {
+            fadingRef.current = false;
+            setFading(false);
+          }, 120),
+        );
+      }, 280),
+    );
   }, []);
 
   // --- delegation state (rug-pool levers + zombie) -------------------
   const walletApi = useWalletStore((s) => s.api);
   const delegation = useDelegation();
   const delegatedTicker = delegation.data?.rugPool?.ticker ?? null;
-  const zombieState: ZombieState = !walletApi
-    ? { kind: "connect" }
-    : delegation.isLoading
-    ? { kind: "checking" }
-    : delegation.data?.rugPool
-    ? { kind: "thanks", ticker: delegation.data.rugPool.ticker }
-    : { kind: "pitch" };
+  const delegationLoading = delegation.isLoading;
+  // Stable identity — Zombie's speech-bubble texture memoizes on this.
+  const zombieState: ZombieState = useMemo(() => {
+    if (!walletApi) return { kind: "connect" };
+    if (delegationLoading) return { kind: "checking" };
+    return delegatedTicker
+      ? { kind: "thanks", ticker: delegatedTicker }
+      : { kind: "pitch" };
+  }, [walletApi, delegationLoading, delegatedTicker]);
 
   // --- rat bounty, Stage 0 (docs/RAT_BOUNTY.md) ----------------------
   // Easter egg: the tally chip exists ONLY once you've killed at least
@@ -223,13 +263,15 @@ export function GalleryApp() {
         document.exitPointerLock();
         router.push(focusedEntry.detailHref);
       } else if (focusedLever) {
+        // Already delegated here → the lever is down, nothing to pull.
+        if (walletApi && delegatedTicker === focusedLever) return;
         document.exitPointerLock();
         if (walletApi) setLeverPanel(focusedLever);
         else setConnectOpen(true);
       } else if (focusedZombie && !walletApi) {
         document.exitPointerLock();
         setConnectOpen(true);
-      } else if (focusedCabinet === "snek" || focusedCabinet === "flappy") {
+      } else if (focusedCabinet && isArcadeGame(focusedCabinet)) {
         document.exitPointerLock();
         setGameOpen(focusedCabinet);
       } else if (focusedRat) {
@@ -239,7 +281,7 @@ export function GalleryApp() {
         );
       }
     };
-  }, [focusedEntry, focusedLever, focusedZombie, focusedCabinet, focusedRat, walletApi, router]);
+  }, [focusedEntry, focusedLever, focusedZombie, focusedCabinet, focusedRat, walletApi, delegatedTicker, router]);
 
   useEffect(() => {
     // pointerLockElement is still null during the click that ACQUIRES
@@ -286,7 +328,10 @@ export function GalleryApp() {
         <Canvas
           dpr={[1, 1.75]}
           camera={{ fov: 72, near: 0.1, far: 80, position: [0, EYE, 0] }}
-          gl={{ antialias: true, powerPreference: "high-performance" }}
+          // MSAA on the default framebuffer is wasted under the
+          // EffectComposer (it only receives a fullscreen quad) — AA
+          // happens via the composer's multisampling instead.
+          gl={{ antialias: false, powerPreference: "high-performance" }}
         >
           {/* Key the CONTENTS, not the Canvas: a keyed Canvas creates a
               new WebGL context per room change, and browsers kill the
@@ -308,7 +353,12 @@ export function GalleryApp() {
             onFocusChange={setFocusedId}
           />
           {/* Outside the keyed scene: survives room changes, so the
-              pointer stays captured walking through doors. */}
+              pointer stays captured walking through doors. Ditto the
+              composer — keying it with the room reallocated its render
+              targets on every door, a hitch at the worst moment. */}
+          <EffectComposer multisampling={4}>
+            <Bloom mipmapBlur luminanceThreshold={0.72} intensity={0.85} />
+          </EffectComposer>
           <LockControls />
         </Canvas>
       </div>
@@ -429,7 +479,7 @@ export function GalleryApp() {
       ) : null}
 
       {/* focused cabinet card */}
-      {locked && (focusedCabinet === "snek" || focusedCabinet === "flappy") ? (
+      {locked && focusedCabinet && isArcadeGame(focusedCabinet) ? (
         <div className="pointer-events-none absolute bottom-8 left-1/2 w-full max-w-sm -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-center shadow-xl">
           <p className="font-mono text-sm font-bold uppercase tracking-widest text-emerald-300">
             {CABINET_CARDS[focusedCabinet].title}
@@ -497,6 +547,7 @@ export function GalleryApp() {
           ticker={leverPanel}
           walletApi={walletApi}
           delegation={delegation.data ?? null}
+          delegationReady={delegation.isSuccess}
           onClose={() => setLeverPanel(null)}
         />
       ) : null}
@@ -506,6 +557,9 @@ export function GalleryApp() {
       ) : null}
       {gameOpen === "flappy" ? (
         <FlappyOverlay onClose={() => setGameOpen(null)} />
+      ) : null}
+      {gameOpen === "breakout" ? (
+        <BreakoutOverlay images={brickImages} onClose={() => setGameOpen(null)} />
       ) : null}
 
       {/* room-change fade */}
