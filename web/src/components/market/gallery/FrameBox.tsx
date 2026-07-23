@@ -65,8 +65,8 @@ export function FrameBox({
           roughness={0.8}
         />
       </mesh>
-      {/* Artwork. userData.entryKey is what the focus raycast reads. */}
-      <mesh position-z={0.05} userData={{ entryKey: entry.key }}>
+      {/* Artwork. userData.focusId is what the focus raycast reads. */}
+      <mesh position-z={0.05} userData={{ focusId: `frame:${entry.key}` }}>
         <planeGeometry args={[1.4, 1.4]} />
         {/* Distinct keys force a NEW material when the texture arrives —
             mutating map on a live material needs a shader recompile that

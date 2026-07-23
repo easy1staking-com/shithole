@@ -11,6 +11,7 @@ import { DoorMesh } from "./DoorMesh";
 import { FrameBox } from "./FrameBox";
 import { Player } from "./Player";
 import { Rat } from "./Rat";
+import { Zombie, type ZombieState } from "./Zombie";
 import {
   GALLERY_TAGLINE,
   type DoorSpec,
@@ -27,16 +28,21 @@ export function GalleryScene({
   model,
   focusedKey,
   active,
+  delegatedTicker,
+  zombieState,
   onEnterDoor,
   onFocusChange,
 }: {
   model: RoomModel;
   focusedKey: string | null;
   active: boolean;
+  /** Rug pool the connected wallet delegates to — sets lever positions. */
+  delegatedTicker: string | null;
+  zombieState: ZombieState;
   onEnterDoor: (door: DoorSpec) => void;
-  onFocusChange: (entryKey: string | null) => void;
+  onFocusChange: (focusId: string | null) => void;
 }) {
-  const framesGroup = useRef<THREE.Group | null>(null);
+  const interactGroup = useRef<THREE.Group | null>(null);
 
   return (
     <>
@@ -74,11 +80,18 @@ export function GalleryScene({
 
       {model.sign ? <HubSign model={model} /> : null}
 
-      {model.doors.map((d) => (
-        <DoorMesh key={d.id} door={d} />
-      ))}
+      {/* One group for everything the focus raycast can hit. */}
+      <group ref={interactGroup}>
+        {model.doors.map((d) => (
+          <DoorMesh
+            key={d.id}
+            door={d}
+            leverDown={Boolean(
+              d.lever && delegatedTicker === d.lever.ticker,
+            )}
+          />
+        ))}
 
-      <group ref={framesGroup}>
         {model.frames.map((f) => (
           <FrameBox
             key={f.entry.key}
@@ -86,11 +99,15 @@ export function GalleryScene({
             focused={f.entry.key === focusedKey}
           />
         ))}
+
+        {model.zombie ? (
+          <Zombie position={[3.2, 0, -3.2]} state={zombieState} />
+        ) : null}
       </group>
 
       <Player
         model={model}
-        framesGroup={framesGroup}
+        interactGroup={interactGroup}
         active={active}
         onEnterDoor={onEnterDoor}
         onFocusChange={onFocusChange}

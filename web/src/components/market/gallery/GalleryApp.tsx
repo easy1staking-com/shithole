@@ -22,9 +22,13 @@ import { isSupportedCollection } from "@/lib/market/supportedCollections";
 import { supportedPriceTokens } from "@/lib/market/supportedPriceTokens";
 import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplaceManifest";
 import { useMarketListings } from "@/lib/market/useMarketListings";
+import { useDelegation } from "@/lib/wallet/useDelegation";
+import { useWalletStore } from "@/lib/wallet/walletStore";
 
+import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
 import { GalleryScene } from "./GalleryScene";
 import { LockControls } from "./Player";
+import type { ZombieState } from "./Zombie";
 import { useAmbientAudio } from "./useAmbientAudio";
 import {
   EYE,
@@ -116,7 +120,7 @@ export function GalleryApp() {
   const fadingRef = useRef(false);
   const model = useMemo(() => buildRoomModel(roomRef, data), [roomRef, data]);
 
-  const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   // Lock state from the BROWSER, not controls callbacks: on room change
   // the unlock event can land after the old controls unmounted, leaving
@@ -133,7 +137,7 @@ export function GalleryApp() {
     if (fadingRef.current) return;
     fadingRef.current = true;
     setFading(true);
-    setFocusedKey(null);
+    setFocusedId(null);
     window.setTimeout(() => {
       setRoomRef(door.target);
       window.setTimeout(() => {
@@ -143,30 +147,62 @@ export function GalleryApp() {
     }, 280);
   }, []);
 
-  // --- open the focused listing (click or E while locked) -----------
-  const focusedEntry = useMemo(
-    () => model.frames.find((f) => f.entry.key === focusedKey)?.entry ?? null,
-    [model, focusedKey],
-  );
-  const focusedRef = useRef<GalleryEntry | null>(null);
+  // --- delegation state (rug-pool levers + zombie) -------------------
+  const walletApi = useWalletStore((s) => s.api);
+  const delegation = useDelegation();
+  const delegatedTicker = delegation.data?.rugPool?.ticker ?? null;
+  const zombieState: ZombieState = !walletApi
+    ? { kind: "connect" }
+    : delegation.isLoading
+    ? { kind: "checking" }
+    : delegation.data?.rugPool
+    ? { kind: "thanks", ticker: delegation.data.rugPool.ticker }
+    : { kind: "pitch" };
+
+  // Overlays (pointer released while open).
+  const [leverPanel, setLeverPanel] = useState<string | null>(null); // ticker
+  const [connectOpen, setConnectOpen] = useState(false);
+  const overlayOpen = leverPanel !== null || connectOpen;
+
+  // --- focused interactable → HUD card + click/E action --------------
+  const focusedEntry = useMemo(() => {
+    if (!focusedId?.startsWith("frame:")) return null;
+    const key = focusedId.slice("frame:".length);
+    return model.frames.find((f) => f.entry.key === key)?.entry ?? null;
+  }, [model, focusedId]);
+  const focusedLever = focusedId?.startsWith("lever:")
+    ? focusedId.slice("lever:".length)
+    : null;
+  const focusedZombie = focusedId === "zombie";
+
+  const actionRef = useRef<() => void>(() => {});
   useEffect(() => {
-    focusedRef.current = focusedEntry;
-  }, [focusedEntry]);
+    actionRef.current = () => {
+      if (focusedEntry) {
+        document.exitPointerLock();
+        router.push(focusedEntry.detailHref);
+      } else if (focusedLever) {
+        document.exitPointerLock();
+        if (walletApi) setLeverPanel(focusedLever);
+        else setConnectOpen(true);
+      } else if (focusedZombie && !walletApi) {
+        document.exitPointerLock();
+        setConnectOpen(true);
+      }
+    };
+  }, [focusedEntry, focusedLever, focusedZombie, walletApi, router]);
 
   useEffect(() => {
-    const open = () => {
-      const e = focusedRef.current;
-      if (!e) return;
-      document.exitPointerLock();
-      router.push(e.detailHref);
-    };
     // pointerLockElement is still null during the click that ACQUIRES
-    // the lock (requestPointerLock is async), so entering never buys.
+    // the lock (requestPointerLock is async), so entering never fires
+    // an action.
     const onClick = () => {
-      if (document.pointerLockElement) open();
+      if (document.pointerLockElement) actionRef.current();
     };
     const onKey = (ev: KeyboardEvent) => {
-      if (ev.code === "KeyE" && document.pointerLockElement) open();
+      if (ev.code === "KeyE" && document.pointerLockElement) {
+        actionRef.current();
+      }
     };
     document.addEventListener("click", onClick);
     window.addEventListener("keydown", onKey);
@@ -174,7 +210,7 @@ export function GalleryApp() {
       document.removeEventListener("click", onClick);
       window.removeEventListener("keydown", onKey);
     };
-  }, [router]);
+  }, []);
 
   /* ------------------------------------------------------------------ */
 
@@ -211,10 +247,16 @@ export function GalleryApp() {
           <GalleryScene
             key={model.key}
             model={model}
-            focusedKey={focusedKey}
-            active={!fading}
+            focusedKey={
+              focusedId?.startsWith("frame:")
+                ? focusedId.slice("frame:".length)
+                : null
+            }
+            active={!fading && !overlayOpen}
+            delegatedTicker={delegatedTicker}
+            zombieState={zombieState}
             onEnterDoor={enterDoor}
-            onFocusChange={setFocusedKey}
+            onFocusChange={setFocusedId}
           />
           {/* Outside the keyed scene: survives room changes, so the
               pointer stays captured walking through doors. */}
@@ -284,15 +326,64 @@ export function GalleryApp() {
         </div>
       ) : null}
 
+      {/* focused lever card */}
+      {locked && focusedLever ? (
+        <div className="pointer-events-none absolute bottom-8 left-1/2 w-full max-w-sm -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-center shadow-xl">
+          <p className="font-mono text-sm font-bold uppercase tracking-widest text-zinc-100">
+            {focusedLever} stake lever
+          </p>
+          {delegatedTicker === focusedLever ? (
+            <p className="mt-1 text-xs text-emerald-300">
+              your stake already feeds this pool. respect.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-zinc-400">
+              pulling this re-delegates your stake to {focusedLever} —
+              and farms you worthless $HOSKY.
+            </p>
+          )}
+          <p className="mt-1.5 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+            {delegatedTicker === focusedLever
+              ? "nothing to pull — it's already down"
+              : walletApi
+              ? "click or E — pull the lever"
+              : "click or E — connect a wallet first"}
+          </p>
+        </div>
+      ) : null}
+
+      {/* focused zombie card */}
+      {locked && focusedZombie ? (
+        <div className="pointer-events-none absolute bottom-8 left-1/2 w-full max-w-sm -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-center shadow-xl">
+          <p className="font-mono text-sm font-bold uppercase tracking-widest text-emerald-200">
+            the delegation zombie
+          </p>
+          <p className="mt-1 text-xs text-zinc-400">
+            {zombieState.kind === "connect"
+              ? "it wants to sniff your stake."
+              : zombieState.kind === "thanks"
+              ? `it approves of your ${zombieState.ticker} delegation.`
+              : zombieState.kind === "checking"
+              ? "it is sniffing your stake…"
+              : "it judges your respectable pool. pull a lever to appease it."}
+          </p>
+          {zombieState.kind === "connect" ? (
+            <p className="mt-1.5 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+              click or E — connect wallet
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* controls hint while walking, nothing focused */}
-      {locked && !focusedEntry ? (
+      {locked && !focusedEntry && !focusedLever && !focusedZombie ? (
         <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[11px] uppercase tracking-widest text-zinc-600">
           wasd walk · shift run · walk into a door · esc release mouse
         </p>
       ) : null}
 
       {/* click-to-enter overlay */}
-      {!locked && !fading ? (
+      {!locked && !fading && !overlayOpen ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50">
           <div className="rounded-lg border border-zinc-700 bg-zinc-950/90 px-6 py-5 text-center shadow-xl">
             <p className="font-mono text-lg font-bold uppercase tracking-widest text-amber-300">
@@ -309,6 +400,17 @@ export function GalleryApp() {
           </div>
         </div>
       ) : null}
+
+      {/* delegation + connect overlays */}
+      {leverPanel && walletApi ? (
+        <DelegationPanel
+          ticker={leverPanel}
+          walletApi={walletApi}
+          delegation={delegation.data ?? null}
+          onClose={() => setLeverPanel(null)}
+        />
+      ) : null}
+      {connectOpen ? <ConnectSheet onClose={() => setConnectOpen(false)} /> : null}
 
       {/* room-change fade */}
       <div

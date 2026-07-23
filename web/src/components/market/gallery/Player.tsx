@@ -44,17 +44,19 @@ export function LockControls() {
 
 export function Player({
   model,
-  framesGroup,
+  interactGroup,
   active,
   onEnterDoor,
   onFocusChange,
 }: {
   model: RoomModel;
-  framesGroup: React.RefObject<THREE.Group | null>;
+  /** Everything the center-screen raycast may focus (frames, levers, zombie). */
+  interactGroup: React.RefObject<THREE.Group | null>;
   /** False while the room-change fade runs — freezes input + triggers. */
   active: boolean;
   onEnterDoor: (door: DoorSpec) => void;
-  onFocusChange: (entryKey: string | null) => void;
+  /** Emits the focused object's userData.focusId ("frame:…", "lever:…", "zombie"). */
+  onFocusChange: (focusId: string | null) => void;
 }) {
   const camera = useThree((s) => s.camera);
 
@@ -139,12 +141,12 @@ export function Player({
     // --- focus raycast (throttled) ----------------------------------
     if (tick.current++ % 5 === 0) {
       let key: string | null = null;
-      const group = framesGroup.current;
+      const group = interactGroup.current;
       if (group && group.children.length > 0) {
         raycaster.setFromCamera(CENTER, camera);
         const hits = raycaster.intersectObjects(group.children, true);
         for (const hit of hits) {
-          const k2 = hit.object.userData?.entryKey as string | undefined;
+          const k2 = hit.object.userData?.focusId as string | undefined;
           if (k2) {
             key = k2;
             break;
