@@ -27,7 +27,7 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
 
 import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
 import { SHOOT_RAT_EVENT } from "./Rat";
-import { HOSKY_PER_RAT, RAT_KILLED_EVENT, ratKillCount, recordRatKill } from "./ratKills";
+import { RAT_KILLED_EVENT, ratKillCount, recordRatKill } from "./ratKills";
 import { SnekOverlay } from "./SnekOverlay";
 import { GalleryScene } from "./GalleryScene";
 import { LockControls } from "./Player";
@@ -441,11 +441,6 @@ export function GalleryApp() {
         >
           <p>
             🐀 exterminated: <b className="text-zinc-200">{ratKills}</b>
-          </p>
-          <p className="mt-0.5 text-[10px] normal-case tracking-normal text-zinc-500">
-            {ratFlash
-              ? `+${HOSKY_PER_RAT.toLocaleString()} $HOSKY (iou)`
-              : `${(ratKills * HOSKY_PER_RAT).toLocaleString()} $HOSKY owed · bounties soon™`}
           </p>
         </div>
       ) : null}

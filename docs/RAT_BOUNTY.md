@@ -76,8 +76,10 @@ of mouth → rat season.
 
 ## Stages
 
-- **Stage 0 — FE-only (DONE on dev)**: local kill counter + bounty
-  teaser in the gallery HUD; localStorage; zero payout risk.
+- **Stage 0 — FE-only (DONE on dev)**: local kill COUNTER ONLY — no
+  monetary display anywhere (a visible $HOSKY balance reads as an
+  official payment promise before the program is funded/announced).
+  localStorage; zero payout risk.
 - **Stage 1 — BE accounting**: CIP-8 sessions, rat-tag issuance,
   kill validation + timing checks, accrued balances, leaderboard
   endpoint, holder-gate. Balances visible as "unclaimed worthless
