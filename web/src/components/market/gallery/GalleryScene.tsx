@@ -29,14 +29,12 @@ export function GalleryScene({
   active,
   onEnterDoor,
   onFocusChange,
-  onLockChange,
 }: {
   model: RoomModel;
   focusedKey: string | null;
   active: boolean;
   onEnterDoor: (door: DoorSpec) => void;
   onFocusChange: (entryKey: string | null) => void;
-  onLockChange: (locked: boolean) => void;
 }) {
   const framesGroup = useRef<THREE.Group | null>(null);
 
@@ -96,7 +94,6 @@ export function GalleryScene({
         active={active}
         onEnterDoor={onEnterDoor}
         onFocusChange={onFocusChange}
-        onLockChange={onLockChange}
       />
 
       {/* Neon actually glows; HDR pixels (rat eyes) smolder. */}
