@@ -12,7 +12,7 @@ const GalleryApp = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-dvh items-center justify-center bg-black">
+      <div className="fixed inset-0 z-[35] flex items-center justify-center bg-black">
         <p className="font-mono text-xs uppercase tracking-widest text-zinc-500">
           descending into the dump…
         </p>
