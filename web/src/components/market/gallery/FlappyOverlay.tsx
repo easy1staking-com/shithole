@@ -28,9 +28,11 @@ type Pipe = { x: number; gapY: number; gapH: number; passed: boolean };
 // public/arcade/). Loaded once per module; the hand-drawn doggo below
 // stays as the fallback until it arrives.
 let hoskyLogo: HTMLImageElement | null = null;
-if (typeof window !== "undefined") {
-  hoskyLogo = new Image();
-  hoskyLogo.src = "/arcade/hosky-logo.png";
+function ensureLogo() {
+  if (!hoskyLogo && typeof window !== "undefined") {
+    hoskyLogo = new Image();
+    hoskyLogo.src = "/arcade/hosky-logo.png";
+  }
 }
 
 type FState = {
@@ -58,6 +60,7 @@ function fresh(): FState {
 }
 
 export function FlappyOverlay({ onClose }: { onClose: () => void }) {
+  ensureLogo();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const game = useRef<FState>(fresh());
   const [status, setStatus] = useState({ dead: false, score: 0, newRecord: false });

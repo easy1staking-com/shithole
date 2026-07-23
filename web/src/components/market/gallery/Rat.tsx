@@ -222,16 +222,16 @@ export function Rat({ id, bounds }: { id: string; bounds: RoomBounds }) {
           <meshStandardMaterial color="#2c2628" roughness={1} />
         </mesh>
         {/* eyes — HDR red so the bloom pass makes them smolder */}
-        <mesh position={[-0.025, 0.11, 0.21]}>
+        <mesh position={[-0.025, 0.11, 0.21]} userData={focus}>
           <sphereGeometry args={[0.008, 6, 5]} />
           <meshBasicMaterial color={[3, 0.15, 0.15]} toneMapped={false} />
         </mesh>
-        <mesh position={[0.025, 0.11, 0.21]}>
+        <mesh position={[0.025, 0.11, 0.21]} userData={focus}>
           <sphereGeometry args={[0.008, 6, 5]} />
           <meshBasicMaterial color={[3, 0.15, 0.15]} toneMapped={false} />
         </mesh>
         {/* tail */}
-        <mesh position={[0, 0.07, -0.2]} rotation-x={Math.PI / 2.3}>
+        <mesh position={[0, 0.07, -0.2]} rotation-x={Math.PI / 2.3} userData={focus}>
           <cylinderGeometry args={[0.006, 0.014, 0.24, 5]} />
           <meshStandardMaterial color="#3a3234" roughness={1} />
         </mesh>

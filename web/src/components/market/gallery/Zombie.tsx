@@ -43,6 +43,7 @@ function linesFor(state: ZombieState): string[] {
 
 const SKIN = "#7d936c";
 const RAGS = "#3c4238";
+const FOCUS = { focusId: "zombie" };
 
 /**
  * The rug-pool lobby's undead delegation evangelist. Procedural (same
@@ -83,21 +84,19 @@ export function Zombie({
     g.position.y = position[1] + 0.05 + Math.sin(t * 1.3) * 0.02;
   });
 
-  const focus = { focusId: "zombie" };
-
   return (
     <group ref={group} position={position}>
       {/* legs */}
-      <mesh position={[-0.12, 0.45, 0]} userData={focus}>
+      <mesh position={[-0.12, 0.45, 0]} userData={FOCUS}>
         <boxGeometry args={[0.16, 0.9, 0.18]} />
         <meshStandardMaterial color={RAGS} roughness={1} />
       </mesh>
-      <mesh position={[0.13, 0.42, 0.04]} rotation-x={0.08} userData={focus}>
+      <mesh position={[0.13, 0.42, 0.04]} rotation-x={0.08} userData={FOCUS}>
         <boxGeometry args={[0.16, 0.84, 0.18]} />
         <meshStandardMaterial color={RAGS} roughness={1} />
       </mesh>
       {/* torso — slouched */}
-      <mesh position={[0, 1.25, 0.03]} rotation-x={0.12} userData={focus}>
+      <mesh position={[0, 1.25, 0.03]} rotation-x={0.12} userData={FOCUS}>
         <boxGeometry args={[0.52, 0.75, 0.3]} />
         <meshStandardMaterial color={RAGS} roughness={1} />
       </mesh>
@@ -105,7 +104,7 @@ export function Zombie({
       <mesh
         position={[-0.24, 1.42, 0.38]}
         rotation-x={-Math.PI / 2.15}
-        userData={focus}
+        userData={FOCUS}
       >
         <boxGeometry args={[0.12, 0.62, 0.12]} />
         <meshStandardMaterial color={SKIN} roughness={1} />
@@ -113,13 +112,13 @@ export function Zombie({
       <mesh
         position={[0.24, 1.38, 0.36]}
         rotation-x={-Math.PI / 2.4}
-        userData={focus}
+        userData={FOCUS}
       >
         <boxGeometry args={[0.12, 0.6, 0.12]} />
         <meshStandardMaterial color={SKIN} roughness={1} />
       </mesh>
       {/* head — tilted */}
-      <mesh position={[0.03, 1.82, 0.05]} rotation-z={-0.14} userData={focus}>
+      <mesh position={[0.03, 1.82, 0.05]} rotation-z={-0.14} userData={FOCUS}>
         <sphereGeometry args={[0.19, 12, 10]} />
         <meshStandardMaterial color={SKIN} roughness={1} />
       </mesh>

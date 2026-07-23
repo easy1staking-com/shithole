@@ -52,6 +52,9 @@ function freshGame(): GameState {
 }
 
 function placeFood(snake: Pt[]): Pt {
+  // Board full → snake wins snake (score 480+). Any cell is fine; the
+  // next move ends the game anyway. Guards the unbounded loop below.
+  if (snake.length >= GRID * GRID - 1) return { x: 0, y: 0 };
   while (true) {
     const p = {
       x: Math.floor(Math.random() * GRID),
@@ -142,7 +145,8 @@ export function SnekOverlay({ onClose }: { onClose: () => void }) {
         }
       }
       draw(canvasRef.current, g);
-      timer = setTimeout(tick, g.tickMs);
+      // Corpse screen doesn't need game-speed redraws.
+      timer = setTimeout(tick, g.dead ? 250 : g.tickMs);
     };
     timer = setTimeout(tick, START_MS);
     return () => {

@@ -53,7 +53,9 @@ export function devPoolAlias(): { poolId: string; ticker: string } | null {
 export function rugPoolFor(poolId: string | null): Pool | null {
   if (!poolId) return null;
   const id = poolId.toLowerCase();
-  const alias = devPoolAlias();
+  // The alias is a preprod testing tool ONLY — on mainnet an
+  // accidentally-set env var must not make the zombie thank strangers.
+  const alias = getNetworkName() === "mainnet" ? null : devPoolAlias();
   const aliasTicker = alias && alias.poolId === id ? alias.ticker : null;
   return (
     listPools().find(
@@ -118,9 +120,12 @@ export const DELEGATION_QUERY_KEY = "wallet-delegation";
 
 export function useDelegation() {
   const api = useWalletStore((s) => s.api);
+  const addressHex = useWalletStore((s) => s.addressHex);
 
   return useQuery({
-    queryKey: [DELEGATION_QUERY_KEY, Boolean(api)],
+    // Keyed on the wallet's address: switching wallets/accounts must not
+    // serve the previous wallet's delegation from cache.
+    queryKey: [DELEGATION_QUERY_KEY, addressHex ?? "none"],
     enabled: Boolean(api),
     staleTime: 30_000,
     queryFn: async (): Promise<DelegationInfo | null> => {

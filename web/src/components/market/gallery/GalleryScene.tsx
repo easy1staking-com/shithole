@@ -2,7 +2,6 @@
 
 import { MeshReflectorMaterial, Sparkles } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { Bloom, EffectComposer } from "@react-three/postprocessing";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
@@ -54,31 +53,32 @@ export function GalleryScene({
       <RoomShell model={model} />
       <RoomDust model={model} />
 
-      {/* Freestanding partitions (hero panels). */}
-      {model.blockers.map((b, i) => (
-        <mesh
-          key={i}
-          position={[
-            (b.minX + b.maxX) / 2,
-            model.wallHeight / 2,
-            (b.minZ + b.maxZ) / 2,
-          ]}
-        >
-          <boxGeometry
-            args={[b.maxX - b.minX, model.wallHeight, b.maxZ - b.minZ]}
-          />
-          <meshStandardMaterial color={WALL} roughness={0.95} />
-        </mesh>
-      ))}
-
       {model.lights.map((p, i) => (
         <FlickerLight key={i} position={p} seed={i * 37.7} color={model.theme.light} />
       ))}
 
       {model.sign ? <HubSign model={model} /> : null}
 
-      {/* One group for everything the focus raycast can hit. */}
+      {/* One group for everything the focus raycast can hit — including
+          partitions/cabinet blockers WITHOUT focusIds, so they OCCLUDE
+          (no focusing listings through the hero panel). */}
       <group ref={interactGroup}>
+        {model.blockers.map((b, i) => (
+          <mesh
+            key={`blocker-${i}`}
+            position={[
+              (b.minX + b.maxX) / 2,
+              model.wallHeight / 2,
+              (b.minZ + b.maxZ) / 2,
+            ]}
+          >
+            <boxGeometry
+              args={[b.maxX - b.minX, model.wallHeight, b.maxZ - b.minZ]}
+            />
+            <meshStandardMaterial color={WALL} roughness={0.95} />
+          </mesh>
+        ))}
+
         {model.doors.map((d) => (
           <DoorMesh
             key={d.id}
@@ -120,10 +120,6 @@ export function GalleryScene({
         onFocusChange={onFocusChange}
       />
 
-      {/* Neon actually glows; HDR pixels (rat eyes) smolder. */}
-      <EffectComposer>
-        <Bloom mipmapBlur luminanceThreshold={0.72} intensity={0.85} />
-      </EffectComposer>
     </>
   );
 }
@@ -230,14 +226,15 @@ function FloorMaterial({ theme }: { theme: RoomTheme }) {
     return <meshStandardMaterial color={FLOOR} roughness={1} />;
   }
   return (
+    // resolution 256 + no blur pass: the reflector re-renders the whole
+    // scene every frame, and the sewer is the room most likely to hold
+    // the bulk of listings.
     <MeshReflectorMaterial
       color="#101a14"
       metalness={0.6}
       roughness={0.35}
       mirror={0.8}
-      resolution={512}
-      blur={[160, 60]}
-      mixBlur={0.6}
+      resolution={256}
       mixStrength={14}
     />
   );

@@ -146,11 +146,13 @@ export function Player({
         raycaster.setFromCamera(CENTER, camera);
         const hits = raycaster.intersectObjects(group.children, true);
         for (const hit of hits) {
+          // Below-floor hits are hidden rats parked at y=-1 — ignore.
+          if (hit.point.y < -0.2) continue;
           const k2 = hit.object.userData?.focusId as string | undefined;
-          if (k2) {
-            key = k2;
-            break;
-          }
+          // FIRST meaningful hit decides: a mesh without a focusId is an
+          // occluder (partition, cabinet body) — no focusing through it.
+          key = k2 ?? null;
+          break;
         }
       }
       if (key !== lastFocus.current) {
