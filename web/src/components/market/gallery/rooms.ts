@@ -52,7 +52,8 @@ export type RoomRef =
   | { kind: "collection"; policy: string }
   | { kind: "poolLobby"; policy: string }
   | { kind: "pool"; policy: string; ticker: string }
-  | { kind: "sewer"; policy: string };
+  | { kind: "sewer"; policy: string }
+  | { kind: "arcade" };
 
 export function roomKey(r: RoomRef): string {
   switch (r.kind) {
@@ -66,6 +67,8 @@ export function roomKey(r: RoomRef): string {
       return `pool:${r.policy}:${r.ticker}`;
     case "sewer":
       return `sewer:${r.policy}`;
+    case "arcade":
+      return "arcade";
   }
 }
 
@@ -151,6 +154,14 @@ export type RoomModel = {
   sign: string | null;
   /** The rug-pool lobby's undead delegation evangelist. */
   zombie?: boolean;
+  /** Arcade cabinets (the game room). */
+  cabinets?: CabinetSpec[];
+};
+
+export type CabinetSpec = {
+  game: "snek";
+  position: [number, number, number];
+  rotationY: number;
 };
 
 /* ------------------------------------------------------------------ */
@@ -339,6 +350,8 @@ export function buildRoomModel(ref: RoomRef, data: GalleryData): RoomModel {
       return poolModel(data, ref.policy, ref.ticker);
     case "sewer":
       return sewerModel(data, ref.policy);
+    case "arcade":
+      return arcadeModel();
   }
 }
 
@@ -351,7 +364,9 @@ function collectionOf(data: GalleryData, policy: string): SupportedCollection | 
 }
 
 function hubModel(data: GalleryData): RoomModel {
-  const doorDefs = data.collections.map((c) => {
+  const doorDefs: Array<
+    Pick<DoorSpec, "id" | "target" | "label" | "sub" | "color">
+  > = data.collections.map((c) => {
     const n = collectionEntries(data, c.policyId).length;
     const target: RoomRef = c.poolDoors
       ? { kind: "poolLobby", policy: c.policyId }
@@ -363,6 +378,13 @@ function hubModel(data: GalleryData): RoomModel {
       sub: n === 0 ? "nothing listed" : `${n} listed`,
       color: c.accentColor ?? `hsl(${hueFor(c.policyId)} 80% 60%)`,
     };
+  });
+  doorDefs.push({
+    id: "arcade",
+    target: { kind: "arcade" } as RoomRef,
+    label: "the arcade",
+    sub: "insert nothing",
+    color: "#c084fc",
   });
   const { radius } = circleRoom(Math.max(doorDefs.length, 5));
   return {
@@ -516,6 +538,51 @@ function sewerModel(data: GalleryData, policy: string): RoomModel {
     accent: "#4ade80",
     sign: null,
     ...base,
+  };
+}
+
+const ARCADE_THEME: RoomTheme = {
+  fog: "#0a070f",
+  fogDensity: 0.05,
+  light: "#d9c6f5",
+  wetFloor: false,
+  sparkles: "#c084fc",
+};
+
+function arcadeModel(): RoomModel {
+  const length = 13;
+  const half = CORRIDOR_W / 2;
+  return {
+    key: roomKey({ kind: "arcade" }),
+    ref: { kind: "arcade" },
+    title: "the arcade",
+    subtitle: "high score pays out nothing.",
+    theme: ARCADE_THEME,
+    bounds: { kind: "rect", minX: 0, maxX: length, minZ: -half, maxZ: half },
+    wallHeight: 4,
+    spawn: { position: [2.1, EYE, 0], yaw: -Math.PI / 2 },
+    doors: [
+      {
+        id: "exit",
+        target: { kind: "hub" },
+        label: "exit",
+        sub: "back to the dump",
+        color: EXIT_COLOR,
+        position: [0.05, 0, 0],
+        rotationY: Math.PI / 2,
+      },
+    ],
+    frames: [],
+    // Cabinet collision — hidden inside the cabinet body so it renders
+    // as furniture, not a wall stub.
+    blockers: [{ minX: 8.6, maxX: 9.4, minZ: -4.3, maxZ: -3.7 }],
+    cabinets: [{ game: "snek", position: [9, 0, -3.95], rotationY: 0 }],
+    lights: [
+      [3, 3.6, 0],
+      [9, 3.6, 0],
+    ],
+    accent: "#c084fc",
+    sign: null,
   };
 }
 

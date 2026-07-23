@@ -26,6 +26,9 @@ import { useDelegation } from "@/lib/wallet/useDelegation";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
 import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
+import { SHOOT_RAT_EVENT } from "./Rat";
+import { RAT_KILLED_EVENT, ratKillCount, recordRatKill } from "./ratKills";
+import { SnekOverlay } from "./SnekOverlay";
 import { GalleryScene } from "./GalleryScene";
 import { LockControls } from "./Player";
 import type { ZombieState } from "./Zombie";
@@ -159,10 +162,31 @@ export function GalleryApp() {
     ? { kind: "thanks", ticker: delegation.data.rugPool.ticker }
     : { kind: "pitch" };
 
+  // --- rat bounty, Stage 0 (docs/RAT_BOUNTY.md) ----------------------
+  // Easter egg: the tally chip exists ONLY once you've killed at least
+  // one rat. Before that, nothing in the UI admits rats are shootable.
+  const [ratKills, setRatKills] = useState(() => ratKillCount());
+  const [ratFlash, setRatFlash] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onKill = () => {
+      setRatKills(recordRatKill());
+      setRatFlash(true);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setRatFlash(false), 1800);
+    };
+    window.addEventListener(RAT_KILLED_EVENT, onKill);
+    return () => {
+      window.removeEventListener(RAT_KILLED_EVENT, onKill);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
+
   // Overlays (pointer released while open).
   const [leverPanel, setLeverPanel] = useState<string | null>(null); // ticker
   const [connectOpen, setConnectOpen] = useState(false);
-  const overlayOpen = leverPanel !== null || connectOpen;
+  const [gameOpen, setGameOpen] = useState<"snek" | null>(null);
+  const overlayOpen = leverPanel !== null || connectOpen || gameOpen !== null;
 
   // --- focused interactable → HUD card + click/E action --------------
   const focusedEntry = useMemo(() => {
@@ -174,6 +198,10 @@ export function GalleryApp() {
     ? focusedId.slice("lever:".length)
     : null;
   const focusedZombie = focusedId === "zombie";
+  const focusedCabinet = focusedId?.startsWith("cabinet:")
+    ? focusedId.slice("cabinet:".length)
+    : null;
+  const focusedRat = focusedId?.startsWith("rat:") ? focusedId : null;
 
   const actionRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -188,9 +216,17 @@ export function GalleryApp() {
       } else if (focusedZombie && !walletApi) {
         document.exitPointerLock();
         setConnectOpen(true);
+      } else if (focusedCabinet === "snek") {
+        document.exitPointerLock();
+        setGameOpen("snek");
+      } else if (focusedRat) {
+        // Shooting does NOT release the pointer — keep hunting.
+        window.dispatchEvent(
+          new CustomEvent(SHOOT_RAT_EVENT, { detail: focusedRat }),
+        );
       }
     };
-  }, [focusedEntry, focusedLever, focusedZombie, walletApi, router]);
+  }, [focusedEntry, focusedLever, focusedZombie, focusedCabinet, focusedRat, walletApi, router]);
 
   useEffect(() => {
     // pointerLockElement is still null during the click that ACQUIRES
@@ -284,9 +320,13 @@ export function GalleryApp() {
         </Link>
       </div>
 
-      {/* crosshair */}
+      {/* crosshair — goes red over vermin */}
       {locked ? (
-        <div className="pointer-events-none absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-200/80 shadow" />
+        <div
+          className={`pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow transition-all ${
+            focusedRat ? "h-2.5 w-2.5 bg-red-500/90" : "h-1.5 w-1.5 bg-zinc-200/80"
+          }`}
+        />
       ) : null}
 
       {/* listings fetch state */}
@@ -375,8 +415,45 @@ export function GalleryApp() {
         </div>
       ) : null}
 
+      {/* focused cabinet card */}
+      {locked && focusedCabinet ? (
+        <div className="pointer-events-none absolute bottom-8 left-1/2 w-full max-w-sm -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-center shadow-xl">
+          <p className="font-mono text-sm font-bold uppercase tracking-widest text-emerald-300">
+            SNEK
+          </p>
+          <p className="mt-1 text-xs text-zinc-400">
+            the arcade&apos;s finest. eat worthless coins. die. repeat.
+          </p>
+          <p className="mt-1.5 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+            click or E — play (prize: nothing)
+          </p>
+        </div>
+      ) : null}
+
+      {/* rat tally — appears only after the first kill (easter egg) */}
+      {ratKills > 0 ? (
+        <div
+          className={`pointer-events-none absolute bottom-4 right-4 rounded border px-3 py-1.5 text-right font-mono text-[11px] uppercase tracking-widest shadow-xl transition-colors duration-500 ${
+            ratFlash
+              ? "border-red-700 bg-red-950/80 text-red-200"
+              : "border-zinc-800 bg-zinc-950/80 text-zinc-400"
+          }`}
+        >
+          <p>
+            🐀 exterminated: <b className="text-zinc-200">{ratKills}</b>
+          </p>
+        </div>
+      ) : null}
+
+      {/* focused rat card */}
+      {locked && focusedRat ? (
+        <p className="pointer-events-none absolute bottom-8 left-1/2 -translate-x-1/2 rounded border border-red-900/70 bg-zinc-950/90 px-3 py-1.5 text-center font-mono text-[11px] uppercase tracking-widest text-red-300 shadow-xl">
+          a rat · click or E — exterminate
+        </p>
+      ) : null}
+
       {/* controls hint while walking, nothing focused */}
-      {locked && !focusedEntry && !focusedLever && !focusedZombie ? (
+      {locked && !focusedEntry && !focusedLever && !focusedZombie && !focusedCabinet && !focusedRat ? (
         <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[11px] uppercase tracking-widest text-zinc-600">
           wasd walk · shift run · walk into a door · esc release mouse
         </p>
@@ -411,6 +488,9 @@ export function GalleryApp() {
         />
       ) : null}
       {connectOpen ? <ConnectSheet onClose={() => setConnectOpen(false)} /> : null}
+      {gameOpen === "snek" ? (
+        <SnekOverlay onClose={() => setGameOpen(null)} />
+      ) : null}
 
       {/* room-change fade */}
       <div

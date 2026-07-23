@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { signTexture } from "./canvasTextures";
+import { ArcadeCabinet } from "./ArcadeCabinet";
 import { DoorMesh } from "./DoorMesh";
 import { FrameBox } from "./FrameBox";
 import { Player } from "./Player";
@@ -52,10 +53,6 @@ export function GalleryScene({
 
       <RoomShell model={model} />
       <RoomDust model={model} />
-      {/* One resident per dry room; the sewer keeps a family. */}
-      {Array.from({ length: model.theme.wetFloor ? 3 : 1 }, (_, i) => (
-        <Rat key={i} bounds={model.bounds} />
-      ))}
 
       {/* Freestanding partitions (hero panels). */}
       {model.blockers.map((b, i) => (
@@ -103,6 +100,16 @@ export function GalleryScene({
         {model.zombie ? (
           <Zombie position={[3.2, 0, -3.2]} state={zombieState} />
         ) : null}
+
+        {(model.cabinets ?? []).map((c) => (
+          <ArcadeCabinet key={c.game} spec={c} />
+        ))}
+
+        {/* One resident per dry room; the sewer keeps a family. All
+            shootable, hence inside the interact group. */}
+        {Array.from({ length: model.theme.wetFloor ? 3 : 1 }, (_, i) => (
+          <Rat key={i} id={String(i)} bounds={model.bounds} />
+        ))}
       </group>
 
       <Player
