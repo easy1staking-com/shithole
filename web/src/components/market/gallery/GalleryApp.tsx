@@ -26,6 +26,7 @@ import { useDelegation } from "@/lib/wallet/useDelegation";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
 import type { ArcadeGame } from "./arcadeScores";
+import { BreakoutOverlay } from "./BreakoutOverlay";
 import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
 import { FlappyOverlay } from "./FlappyOverlay";
 import { SHOOT_RAT_EVENT } from "./Rat";
@@ -55,7 +56,15 @@ const CABINET_CARDS: Record<ArcadeGame, { title: string; blurb: string }> = {
     title: "FLAPPY HOSKY",
     blurb: "flap the doggo through the red candles. it never ends well.",
   },
+  breakout: {
+    title: "BREAKOUT",
+    blurb: "the bricks are real listings. smash the floor price. literally.",
+  },
 };
+
+function isArcadeGame(s: string): s is ArcadeGame {
+  return s in CABINET_CARDS;
+}
 
 /**
  * "the dump" — first-person 3D browse over the same live marketplace
@@ -127,6 +136,18 @@ export function GalleryApp() {
 
   const data = useMemo(
     () => ({ collections: galleryCollections(), byPolicy: groupByPolicy(entries) }),
+    [entries],
+  );
+
+  // Brick faces for BREAKOUT — first gateway candidate of every listing
+  // whose metadata resolved. Joined-string memo keeps identity stable
+  // while metadata streams in.
+  const brickImages = useMemo(
+    () =>
+      entries
+        .filter((e) => e.metaLoaded && e.candidates[0])
+        .map((e) => e.candidates[0])
+        .slice(0, 48),
     [entries],
   );
 
@@ -229,7 +250,7 @@ export function GalleryApp() {
       } else if (focusedZombie && !walletApi) {
         document.exitPointerLock();
         setConnectOpen(true);
-      } else if (focusedCabinet === "snek" || focusedCabinet === "flappy") {
+      } else if (focusedCabinet && isArcadeGame(focusedCabinet)) {
         document.exitPointerLock();
         setGameOpen(focusedCabinet);
       } else if (focusedRat) {
@@ -429,7 +450,7 @@ export function GalleryApp() {
       ) : null}
 
       {/* focused cabinet card */}
-      {locked && (focusedCabinet === "snek" || focusedCabinet === "flappy") ? (
+      {locked && focusedCabinet && isArcadeGame(focusedCabinet) ? (
         <div className="pointer-events-none absolute bottom-8 left-1/2 w-full max-w-sm -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-center shadow-xl">
           <p className="font-mono text-sm font-bold uppercase tracking-widest text-emerald-300">
             {CABINET_CARDS[focusedCabinet].title}
@@ -506,6 +527,9 @@ export function GalleryApp() {
       ) : null}
       {gameOpen === "flappy" ? (
         <FlappyOverlay onClose={() => setGameOpen(null)} />
+      ) : null}
+      {gameOpen === "breakout" ? (
+        <BreakoutOverlay images={brickImages} onClose={() => setGameOpen(null)} />
       ) : null}
 
       {/* room-change fade */}

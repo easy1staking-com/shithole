@@ -4,7 +4,7 @@
  * so SNEK scores from the single-game era survive.)
  */
 
-export type ArcadeGame = "snek" | "flappy";
+export type ArcadeGame = "snek" | "flappy" | "breakout";
 
 export const ARCADE_HI_EVENT = "shithole:arcade-hi";
 
