@@ -75,10 +75,12 @@ export function Zombie({
       Math.PI * 2,
     ) - Math.PI;
     g.rotation.y += diff * 0.03;
-    // Idle sway + slow breathing bob.
+    // Idle sway + slow breathing bob. The bob band sits fully ABOVE the
+    // floor (base +0.05, ±0.02) — centered at 0 it dipped the feet into
+    // the concrete and the floor plane clipped the legs.
     const t = clock.elapsedTime;
     g.rotation.z = Math.sin(t * 0.7) * 0.03;
-    g.position.y = position[1] + Math.sin(t * 1.3) * 0.02;
+    g.position.y = position[1] + 0.05 + Math.sin(t * 1.3) * 0.02;
   });
 
   const focus = { focusId: "zombie" };
