@@ -425,7 +425,12 @@ export function GalleryApp() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative flex h-dvh w-full overflow-hidden bg-black">
+    // Fullscreen OVERLAY, not an in-flow block: the root layout adds a
+    // fixed 56px AppHeader + pt-14 spacer + Footer around every page,
+    // so an in-flow h-dvh element overflows the viewport by exactly
+    // that chrome — the bottom HUD cards ended up below the fold.
+    // z-[35]: above the header (z-30), below drawers/terms (z-40/50).
+    <div className="fixed inset-0 z-[35] flex overflow-hidden bg-black">
       {children}
     </div>
   );
