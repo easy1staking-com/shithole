@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { signTexture } from "./canvasTextures";
+import { ArcadeCabinet } from "./ArcadeCabinet";
 import { DoorMesh } from "./DoorMesh";
 import { FrameBox } from "./FrameBox";
 import { Player } from "./Player";
@@ -103,6 +104,10 @@ export function GalleryScene({
         {model.zombie ? (
           <Zombie position={[3.2, 0, -3.2]} state={zombieState} />
         ) : null}
+
+        {(model.cabinets ?? []).map((c) => (
+          <ArcadeCabinet key={c.game} spec={c} />
+        ))}
       </group>
 
       <Player

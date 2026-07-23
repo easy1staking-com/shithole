@@ -26,6 +26,7 @@ import { useDelegation } from "@/lib/wallet/useDelegation";
 import { useWalletStore } from "@/lib/wallet/walletStore";
 
 import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
+import { SnekOverlay } from "./SnekOverlay";
 import { GalleryScene } from "./GalleryScene";
 import { LockControls } from "./Player";
 import type { ZombieState } from "./Zombie";
@@ -162,7 +163,8 @@ export function GalleryApp() {
   // Overlays (pointer released while open).
   const [leverPanel, setLeverPanel] = useState<string | null>(null); // ticker
   const [connectOpen, setConnectOpen] = useState(false);
-  const overlayOpen = leverPanel !== null || connectOpen;
+  const [gameOpen, setGameOpen] = useState<"snek" | null>(null);
+  const overlayOpen = leverPanel !== null || connectOpen || gameOpen !== null;
 
   // --- focused interactable → HUD card + click/E action --------------
   const focusedEntry = useMemo(() => {
@@ -174,6 +176,9 @@ export function GalleryApp() {
     ? focusedId.slice("lever:".length)
     : null;
   const focusedZombie = focusedId === "zombie";
+  const focusedCabinet = focusedId?.startsWith("cabinet:")
+    ? focusedId.slice("cabinet:".length)
+    : null;
 
   const actionRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -188,9 +193,12 @@ export function GalleryApp() {
       } else if (focusedZombie && !walletApi) {
         document.exitPointerLock();
         setConnectOpen(true);
+      } else if (focusedCabinet === "snek") {
+        document.exitPointerLock();
+        setGameOpen("snek");
       }
     };
-  }, [focusedEntry, focusedLever, focusedZombie, walletApi, router]);
+  }, [focusedEntry, focusedLever, focusedZombie, focusedCabinet, walletApi, router]);
 
   useEffect(() => {
     // pointerLockElement is still null during the click that ACQUIRES
@@ -375,8 +383,23 @@ export function GalleryApp() {
         </div>
       ) : null}
 
+      {/* focused cabinet card */}
+      {locked && focusedCabinet ? (
+        <div className="pointer-events-none absolute bottom-8 left-1/2 w-full max-w-sm -translate-x-1/2 rounded-lg border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-center shadow-xl">
+          <p className="font-mono text-sm font-bold uppercase tracking-widest text-emerald-300">
+            SNEK
+          </p>
+          <p className="mt-1 text-xs text-zinc-400">
+            the arcade&apos;s finest. eat worthless coins. die. repeat.
+          </p>
+          <p className="mt-1.5 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+            click or E — play (prize: nothing)
+          </p>
+        </div>
+      ) : null}
+
       {/* controls hint while walking, nothing focused */}
-      {locked && !focusedEntry && !focusedLever && !focusedZombie ? (
+      {locked && !focusedEntry && !focusedLever && !focusedZombie && !focusedCabinet ? (
         <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[11px] uppercase tracking-widest text-zinc-600">
           wasd walk · shift run · walk into a door · esc release mouse
         </p>
@@ -411,6 +434,9 @@ export function GalleryApp() {
         />
       ) : null}
       {connectOpen ? <ConnectSheet onClose={() => setConnectOpen(false)} /> : null}
+      {gameOpen === "snek" ? (
+        <SnekOverlay onClose={() => setGameOpen(null)} />
+      ) : null}
 
       {/* room-change fade */}
       <div
