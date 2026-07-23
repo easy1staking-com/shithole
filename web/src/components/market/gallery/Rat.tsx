@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import { bloodSplatTexture } from "./canvasTextures";
+import { RAT_KILLED_EVENT } from "./ratKills";
 import type { RoomBounds } from "./rooms";
 import { playRatSplat } from "./useAmbientAudio";
 
@@ -78,6 +79,8 @@ export function Rat({ id, bounds }: { id: string; bounds: RoomBounds }) {
       }));
       explosion.current = { start: -1 };
       playRatSplat();
+      // Confirmed kill — Stage 0 bounty accounting listens for this.
+      window.dispatchEvent(new Event(RAT_KILLED_EVENT));
       setExploding(true);
       setStains((s) => [
         ...s.slice(-5),

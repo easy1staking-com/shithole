@@ -27,6 +27,7 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
 
 import { ConnectSheet, DelegationPanel } from "./DelegationPanel";
 import { SHOOT_RAT_EVENT } from "./Rat";
+import { HOSKY_PER_RAT, RAT_KILLED_EVENT, ratKillCount, recordRatKill } from "./ratKills";
 import { SnekOverlay } from "./SnekOverlay";
 import { GalleryScene } from "./GalleryScene";
 import { LockControls } from "./Player";
@@ -160,6 +161,26 @@ export function GalleryApp() {
     : delegation.data?.rugPool
     ? { kind: "thanks", ticker: delegation.data.rugPool.ticker }
     : { kind: "pitch" };
+
+  // --- rat bounty, Stage 0 (docs/RAT_BOUNTY.md) ----------------------
+  // Easter egg: the tally chip exists ONLY once you've killed at least
+  // one rat. Before that, nothing in the UI admits rats are shootable.
+  const [ratKills, setRatKills] = useState(() => ratKillCount());
+  const [ratFlash, setRatFlash] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onKill = () => {
+      setRatKills(recordRatKill());
+      setRatFlash(true);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setRatFlash(false), 1800);
+    };
+    window.addEventListener(RAT_KILLED_EVENT, onKill);
+    return () => {
+      window.removeEventListener(RAT_KILLED_EVENT, onKill);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   // Overlays (pointer released while open).
   const [leverPanel, setLeverPanel] = useState<string | null>(null); // ticker
@@ -405,6 +426,26 @@ export function GalleryApp() {
           </p>
           <p className="mt-1.5 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
             click or E — play (prize: nothing)
+          </p>
+        </div>
+      ) : null}
+
+      {/* rat tally — appears only after the first kill (easter egg) */}
+      {ratKills > 0 ? (
+        <div
+          className={`pointer-events-none absolute bottom-4 right-4 rounded border px-3 py-1.5 text-right font-mono text-[11px] uppercase tracking-widest shadow-xl transition-colors duration-500 ${
+            ratFlash
+              ? "border-red-700 bg-red-950/80 text-red-200"
+              : "border-zinc-800 bg-zinc-950/80 text-zinc-400"
+          }`}
+        >
+          <p>
+            🐀 exterminated: <b className="text-zinc-200">{ratKills}</b>
+          </p>
+          <p className="mt-0.5 text-[10px] normal-case tracking-normal text-zinc-500">
+            {ratFlash
+              ? `+${HOSKY_PER_RAT.toLocaleString()} $HOSKY (iou)`
+              : `${(ratKills * HOSKY_PER_RAT).toLocaleString()} $HOSKY owed · bounties soon™`}
           </p>
         </div>
       ) : null}
