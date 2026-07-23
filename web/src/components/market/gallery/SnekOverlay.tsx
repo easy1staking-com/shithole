@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { saveSnekScore, snekHighScore } from "./snekScore";
+import { highScore, saveScore } from "./arcadeScores";
 
 /**
  * SNEK — the arcade's finest. Classic grid snake on a 2D canvas,
@@ -69,7 +69,7 @@ export function SnekOverlay({ onClose }: { onClose: () => void }) {
     score: number;
     newRecord: boolean;
   }>({ dead: false, score: 0, newRecord: false });
-  const [hi, setHi] = useState(() => snekHighScore());
+  const [hi, setHi] = useState(() => highScore("snek"));
 
   // Input.
   useEffect(() => {
@@ -126,9 +126,9 @@ export function SnekOverlay({ onClose }: { onClose: () => void }) {
         const hitSelf = g.snake.some((s) => s.x === head.x && s.y === head.y);
         if (hitWall || hitSelf) {
           g.dead = true;
-          const newRecord = saveSnekScore(g.score);
+          const newRecord = saveScore("snek", g.score);
           setStatus({ dead: true, score: g.score, newRecord });
-          setHi(snekHighScore());
+          setHi(highScore("snek"));
         } else {
           g.snake.unshift(head);
           if (head.x === g.food.x && head.y === g.food.y) {

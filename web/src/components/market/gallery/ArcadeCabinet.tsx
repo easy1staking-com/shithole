@@ -5,7 +5,19 @@ import * as THREE from "three";
 
 import { lintelTexture } from "./canvasTextures";
 import type { CabinetSpec } from "./rooms";
-import { SNEK_HI_EVENT, snekHighScore } from "./snekScore";
+import {
+  ARCADE_HI_EVENT,
+  highScore,
+  type ArcadeGame,
+} from "./arcadeScores";
+
+const GAME_META: Record<
+  ArcadeGame,
+  { title: string; accent: string; stripe: string }
+> = {
+  snek: { title: "SNEK", accent: "#34d399", stripe: "#123324" },
+  flappy: { title: "FLAPPY HOSKY", accent: "#fbbf24", stripe: "#3a2a08" },
+};
 
 /**
  * A CRT arcade cabinet. The attract screen is a canvas texture showing
@@ -14,23 +26,28 @@ import { SNEK_HI_EVENT, snekHighScore } from "./snekScore";
  * don't fire 'storage'). Focus/E handling lives in GalleryApp.
  */
 export function ArcadeCabinet({ spec }: { spec: CabinetSpec }) {
+  const meta = GAME_META[spec.game];
   const focus = useMemo(() => ({ focusId: `cabinet:${spec.game}` }), [spec.game]);
 
   // Lazy initializer reads localStorage once at mount (client-only
   // component — no SSR mismatch); the event keeps it fresh afterwards.
-  const [hi, setHi] = useState(() => snekHighScore());
+  const [hi, setHi] = useState(() => highScore(spec.game));
   useEffect(() => {
-    const onHi = () => setHi(snekHighScore());
-    window.addEventListener(SNEK_HI_EVENT, onHi);
-    return () => window.removeEventListener(SNEK_HI_EVENT, onHi);
-  }, []);
+    const onHi = () => setHi(highScore(spec.game));
+    window.addEventListener(ARCADE_HI_EVENT, onHi);
+    return () => window.removeEventListener(ARCADE_HI_EVENT, onHi);
+  }, [spec.game]);
 
-  const screen = useMemo(() => attractTexture(hi), [hi]);
+  const screen = useMemo(
+    () => attractTexture(meta.title, meta.accent, hi),
+    [meta, hi],
+  );
   useEffect(() => () => screen.dispose(), [screen]);
 
   const marquee = useMemo(
-    () => lintelTexture({ label: "SNEK", sub: "insert nothing", color: "#34d399" }),
-    [],
+    () =>
+      lintelTexture({ label: meta.title, sub: "insert nothing", color: meta.accent }),
+    [meta],
   );
   useEffect(() => () => marquee.dispose(), [marquee]);
 
@@ -42,13 +59,13 @@ export function ArcadeCabinet({ spec }: { spec: CabinetSpec }) {
         <meshStandardMaterial color="#17161b" roughness={0.7} />
       </mesh>
       {/* side accent stripes */}
-      <mesh position={[-0.505, 1.1, 0.1]}>
+      <mesh position={[-0.505, 1.1, 0.1]} rotation-y={-Math.PI / 2}>
         <planeGeometry args={[0.62, 1.7]} />
-        <meshBasicMaterial color="#123324" toneMapped={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={meta.stripe} toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[0.505, 1.1, 0.1]}>
+      <mesh position={[0.505, 1.1, 0.1]} rotation-y={Math.PI / 2}>
         <planeGeometry args={[0.62, 1.7]} />
-        <meshBasicMaterial color="#123324" toneMapped={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={meta.stripe} toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
       {/* screen — slightly tilted back, unlit so it glows in the dark */}
       <mesh position={[0, 1.42, 0.44]} rotation-x={-0.1} userData={focus}>
@@ -74,7 +91,11 @@ export function ArcadeCabinet({ spec }: { spec: CabinetSpec }) {
   );
 }
 
-function attractTexture(hi: number): THREE.CanvasTexture {
+function attractTexture(
+  title: string,
+  accent: string,
+  hi: number,
+): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = 512;
   c.height = 430;
@@ -89,18 +110,23 @@ function attractTexture(hi: number): THREE.CanvasTexture {
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const mono = "700 92px ui-monospace, Menlo, monospace";
+  // Shrink to fit — FLAPPY HOSKY is wider than SNEK.
+  let px = 92;
+  do {
+    ctx.font = `700 ${px}px ui-monospace, Menlo, monospace`;
+    if (ctx.measureText(title).width <= 470) break;
+    px -= 4;
+  } while (px > 24);
 
-  ctx.shadowColor = "#34d399";
+  ctx.shadowColor = accent;
   ctx.shadowBlur = 30;
-  ctx.fillStyle = "#34d399";
-  ctx.font = mono;
-  ctx.fillText("SNEK", 256, 110);
+  ctx.fillStyle = accent;
+  ctx.fillText(title, 256, 110);
   ctx.shadowBlur = 10;
-  ctx.fillText("SNEK", 256, 110);
+  ctx.fillText(title, 256, 110);
 
   ctx.shadowBlur = 0;
-  ctx.fillStyle = "#a7f3d0";
+  ctx.fillStyle = "#e4e4e7";
   ctx.font = "600 34px ui-monospace, Menlo, monospace";
   ctx.fillText(`HI-SCORE ${hi}`, 256, 215);
 
