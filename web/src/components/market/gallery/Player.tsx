@@ -30,13 +30,24 @@ const FOCUS_RANGE = 8;
  * HUD's listing card. Remounted (keyed) on every room change so spawn
  * position/yaw reset cleanly.
  */
+/**
+ * Pointer-lock controls that OUTLIVE room changes. Rendered once per
+ * Canvas (not inside the keyed scene): if the controls remounted with
+ * the room, the browser kept the pointer captured but the fresh
+ * instance didn't know it was locked — mouse-look froze until an extra
+ * click. One persistent instance = walk through doors without ever
+ * re-clicking.
+ */
+export function LockControls() {
+  return <PointerLockControls selector="#dump-canvas" />;
+}
+
 export function Player({
   model,
   framesGroup,
   active,
   onEnterDoor,
   onFocusChange,
-  onLockChange,
 }: {
   model: RoomModel;
   framesGroup: React.RefObject<THREE.Group | null>;
@@ -44,7 +55,6 @@ export function Player({
   active: boolean;
   onEnterDoor: (door: DoorSpec) => void;
   onFocusChange: (entryKey: string | null) => void;
-  onLockChange: (locked: boolean) => void;
 }) {
   const camera = useThree((s) => s.camera);
 
@@ -148,13 +158,7 @@ export function Player({
     }
   });
 
-  return (
-    <PointerLockControls
-      selector="#dump-canvas"
-      onLock={() => onLockChange(true)}
-      onUnlock={() => onLockChange(false)}
-    />
-  );
+  return null;
 }
 
 const CENTER = new THREE.Vector2(0, 0);

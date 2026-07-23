@@ -24,6 +24,7 @@ import { useDerivedMarketplaceManifest } from "@/lib/market/useDerivedMarketplac
 import { useMarketListings } from "@/lib/market/useMarketListings";
 
 import { GalleryScene } from "./GalleryScene";
+import { LockControls } from "./Player";
 import { useAmbientAudio } from "./useAmbientAudio";
 import {
   EYE,
@@ -117,6 +118,14 @@ export function GalleryApp() {
 
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
+  // Lock state from the BROWSER, not controls callbacks: on room change
+  // the unlock event can land after the old controls unmounted, leaving
+  // callback-based state stale (overlay gone, mouse dead).
+  useEffect(() => {
+    const sync = () => setLocked(Boolean(document.pointerLockElement));
+    document.addEventListener("pointerlockchange", sync);
+    return () => document.removeEventListener("pointerlockchange", sync);
+  }, []);
   // Hum + drips start on first lock (a user gesture), pause on unlock.
   useAmbientAudio(locked);
 
@@ -206,8 +215,10 @@ export function GalleryApp() {
             active={!fading}
             onEnterDoor={enterDoor}
             onFocusChange={setFocusedKey}
-            onLockChange={setLocked}
           />
+          {/* Outside the keyed scene: survives room changes, so the
+              pointer stays captured walking through doors. */}
+          <LockControls />
         </Canvas>
       </div>
 
