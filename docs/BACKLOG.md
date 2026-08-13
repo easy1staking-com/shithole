@@ -15,7 +15,7 @@ already mitigated or defused by later work.
 | F1 | manifest hydration mismatch | **DEFER (latent)** | Doesn't fire while `manifest.json` is populated — `!!slim` is true on both server+client first render. No DOM divergence today. |
 | F2 | `accompanying_lovelace ≥ 0` guard | **FIX — E5-GATED** | Real, but exploit is seller-self-detonation only (no buyer harm). Mainnet-hash-changing → must ride the E5 redeploy, not ship standalone. |
 | F3 | `derivationCache` rejection race | **DEFER (benign)** | Waiters legitimately share an in-flight failure; cache self-heals. Deterministic failures → "retry would succeed" premise usually false. |
-| F4 | `MarketBrowse` empty-state flash | **FIX — NOW** | Reproduces on every cold load (~50ms alarmist panel). One-file fix. → **Slice A, dispatched 2026-08-13.** |
+| F4 | `MarketBrowse` empty-state flash | **DONE (`dc72d6d`)** | Fixed + audited 2026-08-13 via Slice A (branch on hook `loading`). |
 | F5 | `JarManager` derives from `walletPkh` | **WONTFIX** | Working-as-designed: the page is a *generic per-wallet* jar manager (per its own docstring), not the protocol fee-jar console. Giovanni's call 2026-08-13. |
 | F6 | cache/blueprint stale on rebuild | **DEFER (dev-only)** | HMR ergonomics; page reload is the workaround. `loadBlueprint` already fetches `no-cache`. No prod impact. |
 | F7 | `submitMarketBulkCancel` no pkh-uniformity check | **DEFER** | Guards a caller that doesn't exist; sole caller pre-filters by `walletPkh`. Trivial to add if an admin sweep-all UI lands. |
@@ -67,15 +67,13 @@ file:line where it differs from the original.
 - **Fix:** track explicit `{ state: 'pending' | 'resolved' | 'rejected' }`; or
   only insert into the cache on resolve.
 
-### F4 — `MarketBrowse` ManifestEmptyState flash  · **FIX — Slice A (in flight)**
+### F4 — `MarketBrowse` ManifestEmptyState flash  · **DONE (`dc72d6d`, audited)**
 
-- **Verdict:** Reproduces — hook returns `data=null, loading=true` on cold load
-  and the empty-state panel renders during the derive window. Isolated one-file
-  fix. **Slice A dispatched 2026-08-13**; remove this entry once landed+audited.
-- **File:** `web/src/components/market/MarketBrowse.tsx:43` (ignores `loading`),
-  `:201`
-- **Fix:** branch on `loading` to suppress the empty-state during initial
-  derivation (neutral scanning/skeleton state while deriving).
+- **Resolved 2026-08-13** via Slice A: `MarketBrowse` now destructures the
+  hook's `loading` and shows the neutral "scanning the marketplace…" state
+  while `manifest === null && loading === true`, so ManifestEmptyState renders
+  only after derivation completes with no manifest. Auditor re-verified cold-load
+  coverage against the hook. Kept here for provenance; not open.
 
 ### F6 — `derivationCache` + blueprint loader stale on `make contracts-build`  · **DEFER (dev-only)**
 
