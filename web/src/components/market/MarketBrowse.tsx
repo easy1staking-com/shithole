@@ -40,7 +40,8 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
  *      pool-traits, sort); render.
  */
 export function MarketBrowse() {
-  const { data: manifest } = useDerivedMarketplaceManifest();
+  const { data: manifest, loading: manifestLoading } =
+    useDerivedMarketplaceManifest();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -199,7 +200,11 @@ export function MarketBrowse() {
       </header>
 
       {!manifest ? (
-        <ManifestEmptyState />
+        manifestLoading ? (
+          <p className="text-sm text-zinc-500">scanning the marketplace…</p>
+        ) : (
+          <ManifestEmptyState />
+        )
       ) : (
         <>
           {myCount > 0 ? (
