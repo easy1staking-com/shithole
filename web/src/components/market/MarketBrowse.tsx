@@ -11,6 +11,7 @@ import {
   type FilterState,
 } from "@/components/market/FilterBar";
 import { CollectionActivityFeed } from "@/components/market/CollectionActivityFeed";
+import { CollectionPalette } from "@/components/market/CollectionPalette";
 import { CollectionStatsStrip } from "@/components/market/CollectionStatsStrip";
 import { CollectionTabs } from "@/components/market/CollectionTabs";
 import { ListingCard } from "@/components/market/ListingCard";
@@ -229,6 +230,13 @@ export function MarketBrowse() {
           <CollectionTabs
             selected={selectedCollection}
             onSelect={onSelectCollection}
+          />
+
+          <CollectionPalette
+            selected={selectedCollection}
+            onSelect={onSelectCollection}
+            listings={listings}
+            loading={loading}
           />
 
           {selectedCollection ? (
