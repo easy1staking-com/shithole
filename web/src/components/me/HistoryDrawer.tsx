@@ -53,6 +53,8 @@ export function HistoryDrawer() {
   // Auto-close on wallet disconnect so we don't get stuck open with no
   // data + no handle to dismiss us.
   useEffect(() => {
+    // Auto-close on wallet disconnect — reacting to external wallet state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!paymentKeyHashHex) setOpen(false);
   }, [paymentKeyHashHex]);
 

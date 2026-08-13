@@ -43,6 +43,8 @@ export function PitPeek({
   // from an unfiltered view — closing + re-opening shouldn't carry
   // stale picks across.
   useEffect(() => {
+    // Reset filter each time the drawer reopens — sync to the open prop.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setFilter(null);
   }, [open]);
 

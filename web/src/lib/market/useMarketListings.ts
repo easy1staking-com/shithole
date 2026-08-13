@@ -50,6 +50,9 @@ export function useMarketListings(): {
   }, [marketplaceAddress]);
 
   useEffect(() => {
+    // Fetch-on-mount: refresh() sets loading synchronously then awaits the
+    // network. Intentional external-data sync, not an avoidable cascade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 
