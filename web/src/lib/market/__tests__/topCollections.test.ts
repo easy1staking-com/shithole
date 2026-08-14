@@ -4,13 +4,16 @@ import { LANDING_STRIP_LIMIT, topCollections } from "@/lib/market/topCollections
 import type { DecodedListing } from "@/lib/market/queryListings";
 import type { SupportedCollection } from "@/lib/market/supportedCollections";
 
-const P1 = "1".repeat(56);
-const P2 = "2".repeat(56);
-const P3 = "3".repeat(56);
-const P4 = "4".repeat(56);
-const P5 = "5".repeat(56);
-const P6 = "6".repeat(56);
-const P_ABSENT = "9".repeat(56);
+// Real hex containing letters (not digit-only) so `.toUpperCase()` on these
+// actually changes the string — required for the case-insensitivity
+// assertions below to exercise anything.
+const P1 = "1a".repeat(28);
+const P2 = "2b".repeat(28);
+const P3 = "3c".repeat(28);
+const P4 = "4d".repeat(28);
+const P5 = "5e".repeat(28);
+const P6 = "6f".repeat(28);
+const P_ABSENT = "9d".repeat(28);
 
 function listing(unit: string): DecodedListing {
   return { listedUnits: [unit] } as unknown as DecodedListing;
@@ -44,6 +47,20 @@ describe("topCollections", () => {
       ...listingsFor(P4, 50),
       ...listingsFor(P1, 1),
     ];
+    expect(topCollections(collections, listings)).toEqual(collections);
+  });
+
+  it("N=5 boundary (N === limit): passes through in whitelist order, not count order", () => {
+    const collections = [
+      collection(P1, "A"),
+      collection(P2, "B"),
+      collection(P3, "C"),
+      collection(P4, "D"),
+      collection(P5, "E"),
+    ];
+    // All listings sit on the last collection — if the passthrough branch
+    // didn't fire at N === limit, this would sort E to the front.
+    const listings = listingsFor(P5, 50);
     expect(topCollections(collections, listings)).toEqual(collections);
   });
 
@@ -105,7 +122,7 @@ describe("topCollections", () => {
     expect(result.map((c) => c.label)).toEqual(["A", "B", "C", "D", "E"]);
   });
 
-  it("a pinned low-count collection floats to index 0, exactly once", () => {
+  it("a pinned collection with a repeated, case-varied id floats to index 0 exactly once", () => {
     const collections = [
       collection(P1, "A"),
       collection(P2, "B"),
@@ -123,11 +140,42 @@ describe("topCollections", () => {
       ...listingsFor(P4, 2),
       ...listingsFor(P5, 1),
     ];
+    // The SAME collection pinned three times (twice verbatim, once
+    // upper-cased) — de-dup must collapse this to a single entry.
     const result = topCollections(collections, listings, LANDING_STRIP_LIMIT, [
       P6,
+      P6,
+      P6.toUpperCase(),
     ]);
     expect(result.map((c) => c.label)).toEqual(["F", "A", "B", "C", "D"]);
     expect(result.filter((c) => c.label === "F")).toHaveLength(1);
+  });
+
+  it("pinning the TOP-count collection still excludes it from rest — no duplicate inside the limit", () => {
+    const collections = [
+      collection(P1, "A"),
+      collection(P2, "B"),
+      collection(P3, "C"),
+      collection(P4, "D"),
+      collection(P5, "E"),
+      collection(P6, "F"),
+    ];
+    // counts: A=99 B=4 C=3 D=2 E=1 F=0 — A is both pinned AND the highest
+    // count, so a duplicate would land INSIDE the limit if the exclusion
+    // filter didn't remove the pinned collection from `rest`.
+    const listings = [
+      ...listingsFor(P1, 99),
+      ...listingsFor(P2, 4),
+      ...listingsFor(P3, 3),
+      ...listingsFor(P4, 2),
+      ...listingsFor(P5, 1),
+    ];
+    const result = topCollections(collections, listings, LANDING_STRIP_LIMIT, [
+      P1,
+    ]);
+    const labels = result.map((c) => c.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toEqual(["A", "B", "C", "D", "E"]);
   });
 
   it("a pinned id absent from collections is ignored (no undefined in output)", () => {
@@ -173,6 +221,36 @@ describe("topCollections", () => {
       P6.toUpperCase(),
     ]);
     expect(result.map((c) => c.label)).toEqual(["F", "A", "B", "C", "D"]);
+  });
+
+  it("count lookup is case-insensitive: an upper-cased policy id still outranks a non-zero rival", () => {
+    const upperF = P6.toUpperCase();
+    const collections = [
+      // Rival sits earlier in the whitelist AND has a non-zero count, so a
+      // stable sort with everything collapsed to 0 would (wrongly) keep
+      // Rival ahead of the upper-cased collection — only a correct,
+      // lower-cased count lookup floats the latter above it.
+      collection(P1, "Rival"),
+      collection(P2, "X2"),
+      collection(P3, "X3"),
+      collection(P4, "X4"),
+      collection(P5, "X5"),
+      collection(upperF, "Upper"),
+    ];
+    // counts: Rival=1, X2=X3=X4=X5=0, Upper=10 (listings generated against
+    // the upper-cased policy id, exactly like `Upper.policyId` itself).
+    const listings = [
+      ...listingsFor(P1, 1),
+      ...listingsFor(upperF, 10),
+    ];
+    const result = topCollections(collections, listings);
+    expect(result.map((c) => c.label)).toEqual([
+      "Upper",
+      "Rival",
+      "X2",
+      "X3",
+      "X4",
+    ]);
   });
 
   it("does not mutate the input collections array", () => {
