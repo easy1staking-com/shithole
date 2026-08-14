@@ -49,3 +49,8 @@ api/bin/
 # Local working notes / preprod fixture stashes — durable across
 # /tmp reboots but never checked in.
 .local/
+
+# Root-level node_modules (web/node_modules was already covered).
+# Guards against `git add -A` sweeping it — and, by the same accident,
+# the preprod-flipped web/src/lib/market/manifest.json into a mainnet build.
+node_modules/
