@@ -170,19 +170,21 @@ export function MarketBrowse() {
   const someMetaLoading = metaQueries.some((q) => q.isLoading);
   const collectionCount = supportedCollections().length;
 
-  // How many of the live listings in the selected collection belong to the
-  // connected wallet — surfaces a "manage yours" shortcut to /market/me.
-  // Matches onCollection's own predicate so the count agrees with the grid.
+  // How many of the *currently rendered* listings belong to the connected
+  // wallet — surfaces a "manage yours" shortcut to /market/me. Counts over
+  // `visible` (the post-FilterBar set the grid maps over), not the
+  // pre-filter collection set, so the banner's number always equals the
+  // YOURS badges actually on screen. `visible` derives from onCollection
+  // (via decorated), so every element is already collection-scoped — no
+  // separate collection check is needed here.
   const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
   const myCount = useMemo(() => {
-    if (!walletPkh || !listings || !selectedCollection) return 0;
+    if (!walletPkh) return 0;
     const me = walletPkh.toLowerCase();
-    return listings.filter(
-      (l) =>
-        l.listedUnits[0]?.slice(0, 56).toLowerCase() === selectedCollection &&
-        l.datum.sellerPkhHex.toLowerCase() === me,
+    return visible.filter(
+      (e) => e.listing.datum.sellerPkhHex.toLowerCase() === me,
     ).length;
-  }, [walletPkh, listings, selectedCollection]);
+  }, [walletPkh, visible]);
 
   // Unreachable safety net: the server-side redirect at /market guarantees
   // this component only ever mounts with a whitelisted `?c`, so this is not
