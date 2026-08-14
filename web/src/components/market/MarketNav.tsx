@@ -15,7 +15,6 @@ import { useEffect, useRef, useState } from "react";
  */
 
 const DESTINATIONS: Array<{ href: string; label: string }> = [
-  { href: "/market", label: "marketplace" },
   { href: "/market/gallery", label: "walk the dump ⛝" },
   { href: "/market/new", label: "list something →" },
   { href: "/market/me", label: "your listings" },

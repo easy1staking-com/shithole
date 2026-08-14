@@ -86,7 +86,7 @@ export function AppHeader() {
               <NavMenu
                 label="market"
                 items={[
-                  { label: "browse", href: "/market" },
+                  { label: "browse", href: "/" },
                   { label: "list something", href: "/market/new" },
                   { label: "your listings", href: "/market/me" },
                 ]}
