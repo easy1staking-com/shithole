@@ -24,17 +24,26 @@ import {
  *
  * <p>Self-hides on single-collection networks (mainnet today) via the
  * `collections.length <= 1` guard.
+ *
+ * <p>`triggerLabel` and `triggerClassName` are optional presentational
+ * overrides for the trigger button, letting a mount elsewhere (e.g. the
+ * landing hero) swap in its own copy and styling without forking the
+ * component.
  */
 export function CollectionPalette({
   selected,
   onSelect,
   listings,
   loading,
+  triggerLabel,
+  triggerClassName,
 }: {
   selected: string | null;
   onSelect: (policyId: string) => void;
   listings: DecodedListing[] | null;
   loading: boolean;
+  triggerLabel?: string;
+  triggerClassName?: string;
 }) {
   const collections = supportedCollections();
   const [open, setOpen] = useState(false);
@@ -134,10 +143,13 @@ export function CollectionPalette({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950 px-3.5 py-1.5 font-mono text-xs uppercase tracking-wide text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+        className={
+          triggerClassName ??
+          "flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950 px-3.5 py-1.5 font-mono text-xs uppercase tracking-wide text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
+        }
       >
         <span aria-hidden>⌕</span>
-        switch collection
+        {triggerLabel ?? "switch collection"}
         <span
           aria-hidden
           className="hidden rounded border border-zinc-700 px-1 py-0.5 text-[10px] normal-case tracking-normal text-zinc-500 md:inline"
