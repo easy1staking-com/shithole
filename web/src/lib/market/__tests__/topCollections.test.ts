@@ -276,4 +276,16 @@ describe("topCollections", () => {
     const collections = [collection(P1, "A"), collection(P2, "B")];
     expect(topCollections(collections, null, 0)).toEqual([]);
   });
+
+  it("N<=limit passthrough returns a fresh array, not the input reference", () => {
+    const collections = [
+      collection(P1, "A"),
+      collection(P2, "B"),
+      collection(P3, "C"),
+      collection(P4, "D"),
+    ];
+    const result = topCollections(collections, null, 5);
+    expect(result).toEqual(collections);
+    expect(result).not.toBe(collections);
+  });
 });

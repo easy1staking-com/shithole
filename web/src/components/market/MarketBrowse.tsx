@@ -34,8 +34,10 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
  *   1. Pull every UTxO at the marketplace address via the PUBLIC read
  *      client ({@link useMarketListings}) — browsing needs no wallet.
  *   2. Drop anything outside the {@link isSupportedCollection} whitelist.
- *   3. Optional collection tab (?c=policy) narrows to one collection and
- *      unlocks its stats strip + activity feed.
+ *   3. `?c=policy` selects the collection to browse — required; the
+ *      server-side redirect at /market guarantees this component only
+ *      ever mounts with a validated `?c`, so the grid, stats strip, and
+ *      activity feed are always scoped to that one collection.
  *   4. Batch-fetch CIP-25 metadata; apply the filter bar (currency,
  *      pool-traits, sort); render.
  */
@@ -56,7 +58,7 @@ export function MarketBrowse() {
     sort: "asc",
   });
 
-  // Selected collection tab — URL-synced (?c=policy) so the landing strips
+  // Selected collection — URL-synced (?c=policy) so the landing strips
   // can deep-link into a filtered browse. Validated against the whitelist.
   const selectedCollection = useMemo(() => {
     const c = searchParams.get("c")?.toLowerCase() ?? null;
@@ -75,9 +77,8 @@ export function MarketBrowse() {
     [router],
   );
 
-  // listings | activity — activity only meaningful for a single collection.
+  // listings | activity — the two views rendered for the selected collection.
   const [view, setView] = useState<"listings" | "activity">("listings");
-  const activeView = view;
 
   // Whitelist filter — keep only listings whose listed asset is in the
   // supported collection selected via the URL.
@@ -169,18 +170,19 @@ export function MarketBrowse() {
   const someMetaLoading = metaQueries.some((q) => q.isLoading);
   const collectionCount = supportedCollections().length;
 
-  // How many of the live (whitelisted, any collection) listings belong to
-  // the connected wallet — surfaces a "manage yours" shortcut to /market/me.
+  // How many of the live listings in the selected collection belong to the
+  // connected wallet — surfaces a "manage yours" shortcut to /market/me.
+  // Matches onCollection's own predicate so the count agrees with the grid.
   const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
   const myCount = useMemo(() => {
-    if (!walletPkh || !listings) return 0;
+    if (!walletPkh || !listings || !selectedCollection) return 0;
     const me = walletPkh.toLowerCase();
     return listings.filter(
       (l) =>
-        (l.listedUnits[0] ? isSupportedCollection(l.listedUnits[0]) : false) &&
+        l.listedUnits[0]?.slice(0, 56).toLowerCase() === selectedCollection &&
         l.datum.sellerPkhHex.toLowerCase() === me,
     ).length;
-  }, [walletPkh, listings]);
+  }, [walletPkh, listings, selectedCollection]);
 
   // Unreachable safety net: the server-side redirect at /market guarantees
   // this component only ever mounts with a whitelisted `?c`, so this is not
@@ -240,17 +242,17 @@ export function MarketBrowse() {
           <div className="flex gap-1 border-b border-zinc-900">
             <ViewTab
               label="listings"
-              active={activeView === "listings"}
+              active={view === "listings"}
               onClick={() => setView("listings")}
             />
             <ViewTab
               label="activity"
-              active={activeView === "activity"}
+              active={view === "activity"}
               onClick={() => setView("activity")}
             />
           </div>
 
-          {activeView === "activity" ? (
+          {view === "activity" ? (
             <CollectionActivityFeed policyId={selectedCollection} />
           ) : (
             <>

@@ -11,11 +11,11 @@ import {
 
 /**
  * Searchable command-palette collection switcher for /market — the sole
- * in-page switcher. Opens via
- * ⌘K / Ctrl+K, `/` (outside text inputs), or the trigger button; typeahead
- * filters by label, arrows move a highlight, Enter selects. Desktop
- * renders a centered palette, mobile a full-screen sheet (`md:` split,
- * same idiom as {@link ../pit/PitPeek} / {@link ../me/HistoryDrawer}).
+ * in-page switcher. Opens via ⌘K / Ctrl+K, `/` (outside text inputs), or
+ * the trigger button; typeahead filters by label, arrows move a
+ * highlight, Enter selects. Desktop renders a centered palette, mobile a
+ * full-screen sheet (`md:` split, same idiom as {@link ../pit/PitPeek} /
+ * {@link ../me/HistoryDrawer}).
  *
  * <p>Counts are derived client-side from the `listings` prop (no second
  * fetch) via {@link countByPolicy} — the same grouping

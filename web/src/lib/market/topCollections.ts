@@ -15,13 +15,15 @@ export const LANDING_STRIP_LIMIT = 5;
  * Picks the top `limit` collections to show as landing strips.
  *
  * <p>When the whitelist already fits within `limit`, every collection is
- * returned in whitelist order (a shallow copy) — counts and pins never
- * come into play, so N<=limit stays byte-identical to rendering the raw
- * whitelist. Otherwise collections are ranked by live listing count
- * (from {@link countByPolicy}, descending), with `pinnedPolicyIds`
- * floated to the front first (matched case-insensitively, unmatched ids
- * skipped, duplicates collapsed). Ties keep whitelist order (stable
- * sort on a copy — the input array is never mutated).
+ * returned in whitelist order — counts and pins never come into play, so
+ * N<=limit stays byte-identical to rendering the raw whitelist (the
+ * `[...collections]` spread below keeps that return a fresh array, not
+ * an alias of the input). Otherwise collections are ranked by live
+ * listing count (from {@link countByPolicy}, descending), with
+ * `pinnedPolicyIds` floated to the front first (matched
+ * case-insensitively, unmatched ids skipped, duplicates collapsed).
+ * Ties keep whitelist order (stable sort on the array `.filter()`
+ * already returns a fresh copy of, so neither branch mutates the input).
  *
  * <p>`pinnedPolicyIds` has no caller in this slice — it exists so a pin
  * list can be layered on later without changing this function's shape.
@@ -54,7 +56,6 @@ export function topCollections(
 
   const rest = collections
     .filter((c) => !pinnedIds.has(c.policyId.toLowerCase()))
-    .slice()
     .sort((a, b) => countOf(b) - countOf(a));
 
   return [...pinned, ...rest].slice(0, limit);
