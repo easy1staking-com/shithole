@@ -214,7 +214,7 @@ export function MarketBrowse() {
         )
       ) : (
         <>
-          {myCount > 0 ? (
+          {myCount > 0 && view === "listings" ? (
             <Link
               href="/market/me"
               className="flex items-center justify-between rounded-lg border border-amber-900/60 bg-amber-950/20 px-3.5 py-2 text-sm text-amber-200 transition hover:border-amber-700"
