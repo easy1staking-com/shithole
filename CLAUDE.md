@@ -4,20 +4,32 @@ A Cardano dApp giving dead / rugpulled NFT collections a second life via random 
 
 ## Status
 
-**SPEC.md v0.5** (2026-05-12). Build plan at `/Users/giovanni/.claude/plans/snug-herding-penguin.md`.
+**SPEC.md v0.5** (2026-05-12). Live epic-level view: **`PLAN.md`** (repo root,
+untracked — public repo). Refreshed 2026-08-13.
 
-- **Phase 2 (Aiken contracts) LOCKED** at 60c1688 (2026-05-11) — 53 tests green.
-- **Phase 3 (BE + FE bootstrap) in flight**:
-  - `671776b` web: FE plumbing (types, MSW, React Query, two pages).
-  - `6fd425a` api: BE plumbing (entities, repos, DTOs, fixture-serving controllers).
-  - `7697ece` api: Yaci Store 2.1.0-pre3, CCL 0.8.0-pre4, swap-history lineage table (V1_0_1).
-  - `09395b6` api: trustless `POST /api/configs` with CIP-8 admin signature (V1_0_2 drops the candidate_configs FK).
-  - `403d782` docs: SPEC §10.2/§10.3 + docs/BACKEND.md realigned for the FE-driven curation pivot.
-- **Pivot**: CIP-171 auto-discovery deferred for v1. Curation goes through `POST /api/configs` with a CIP-8 admin signature from the on-chain `admin_pkh`.
-- **`9b84ef5` api: listing_script_address derivation via aiken-java-binding (JNI UPLC apply-params).**
-- **`e3f3ec5` api: Yaci Store indexer wiring — WatchAddressRegistry + ListingEventsIndexer (genesis/swap/cancel-or-recover) + UtxoRollbackEvent handler. 47 tests green.**
-- **`759f2c9` web: admin register-config flow end-to-end — CIP-30 wallet, Evolution SDK config-deploy, byte-identical CIP-8 canonical payload, POST /api/configs.**
-- **Next**: Codex pass on `e3f3ec5` + `759f2c9` (both unreviewed). Then end-to-end smoke against a Yaci DevKit / preprod node (the FE tx byte representation hasn't been exercised against a real chain yet). Cancel-vs-recover classification by redeemer (currently both → `spent_unknown`).
+- **LIVE ON MAINNET.** The full lister → swap → cancel path plus the singleton
+  marketplace are deployed and working on mainnet. Any `.ak` edit changes the
+  deployed script hashes → see the **Contract change checklist** below; treat
+  the mainnet hashes as sacred (this is why the aiken pin stays v1.1.22).
+- **Phase 2 (Aiken contracts) LOCKED** — the compiled `plutus.json` is the
+  mainnet provenance; 174 aiken scenarios green on the pinned v1.1.22.
+- **Phase 3 (BE + FE) shipped.** FE plumbing, Yaci Store indexer
+  (WatchAddressRegistry + ListingEventsIndexer), trustless CIP-8 admin
+  `POST /api/configs`, listing-address derivation via aiken-java-binding, and
+  the admin register-config end-to-end flow are all in. Two commits shipped
+  **unreviewed** — `e3f3ec5` (indexer wiring) + `759f2c9` (register-config);
+  the Codex pass on both is parked under PLAN **E1**, to run when E1 activates.
+- **"The dump" 3D gallery — SHIPPED to `main` and iterating.** Walkable
+  marketplace with arcade cabinets (BREAKOUT, FLAPPY HOSKY live) and a Stage-0
+  rat kill-counter. Polish threads are demand-gated (PLAN **E3**, currently
+  cold — no rat kills reported yet).
+- **Pivot (historical):** CIP-171 auto-discovery deferred for v1; curation goes
+  through `POST /api/configs` with a CIP-8 admin signature from the on-chain
+  `admin_pkh`.
+- **Open epics live in `PLAN.md`** — E1 (integration/smoke harness, deferred to
+  next big thing), E2 (marketplace hardening backlog, triaged 2026-08-13),
+  E4 (IPFS resilience), E5 (mainnet 3-collection cutover, held), E6 (toolchain
+  baseline), E7 (bounty terminology scrub).
 
 ## Concept
 
@@ -32,10 +44,50 @@ See `SPEC.md` for the full protocol; memory under `~/.claude/projects/-Users-gio
 
 ## Tech stack
 
-- **Smart contracts:** Aiken (stdlib 3.1.0+, plutus v3, compiler v1.1.21)
+- **Smart contracts:** Aiken (stdlib 3.1.0+, plutus v3, compiler v1.1.22 — pinned; this is the mainnet-deployed compiler, DO NOT bump)
 - **Frontend:** Next.js + Evolution SDK (mobile-first; Eternl → Vespr → Lace wallet priority)
 - **Backend:** Java 21 + Spring Boot 3.3.x + Yaci Store + Postgres + Flyway. CCL annotation processor generates Java types from `contracts/plutus.json`. **Gradle (not Maven).**
 - **Repo:** polyglot monorepo — `contracts/` (Aiken), `web/` (Next.js), `api/` (Spring Boot). `Makefile` + `compose.yaml` glue. No Turborepo/Nx.
+
+## Commands
+
+Proven on this box (Linux; init 2026-08-12, greened 2026-08-13). Run from
+repo root unless noted. Slice-contract Verification sections cite these.
+`make build` and `make test` both pass end-to-end once the two setup steps
+below are done.
+
+| Command | What | Status |
+|---|---|---|
+| `make web-test` — `cd web && vitest run` | FE unit tests | ✅ 80 pass |
+| `cd web && npm run lint` | FE eslint | ✅ 0 errors (5 harmless `exhaustive-deps` warnings) |
+| `make web-build` — `next build` | FE build | ✅ pass |
+| `make api-test` / `api-build` — `./gradlew` | BE | ✅ pass — **needs `JAVA_HOME`** (below) |
+| `make contracts-build` — `aiken build` | blueprint + FE copy | ✅ pass on the pinned **v1.1.22** |
+| `make contracts-test` — `aiken check` | Aiken tests | ✅ 174 scenarios pass on the pinned **v1.1.22** |
+
+### Setup a fresh box needs BEFORE the build runs cold
+
+1. **Java on `PATH`.** jenv is installed but selects no global version, so a
+   bare `./gradlew` dies with `jenv: java: command not found`. Java 21
+   (matching `api/.java-version`) lives at `~/.jenv/versions/21.0.11`.
+   Export it: `export JAVA_HOME=~/.jenv/versions/21.0.11`.
+2. **Install the pinned Aiken: `aikup install v1.1.22`.** This box shipped
+   with an ancient `aiken v1.0.26-alpha` that can't parse the repo's
+   validator syntax — that's the only reason contracts commands failed at
+   init. With the pinned v1.1.22, both `aiken build` AND `aiken check` are
+   green against the committed deps (`stdlib v3.1.0`, `fuzz v2.1.1`).
+   **Do NOT bump the `aiken.toml` compiler pin** — v1.1.22 is the
+   mainnet-deployed compiler (provenance); `aiken build` reproduces
+   `plutus.json` byte-identical to the committed one.
+   - Gotcha learned the hard way: don't `rm -rf build` to "diagnose" — a
+     clean re-resolve can transiently pull a mismatched transitive dep
+     (seen once: `fuzz v2.2.0` despite the `v2.1.1` pin) and break
+     `aiken check`. If that happens, just re-run `aikup install v1.1.22`
+     and rebuild; the pinned versions are fine.
+
+If `make contracts-build` ever rewrites more than `plutus.json`'s preamble
+`compiler` string, STOP — bytecode drifted and the full **Contract change
+checklist** (below) applies.
 
 ## Code review process
 

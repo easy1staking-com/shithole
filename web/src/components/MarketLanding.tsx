@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback } from "react";
 
 import { ErrorView } from "@/components/ErrorView";
 import { PitP2pBand } from "@/components/PitP2pBand";
+import { CollectionPalette } from "@/components/market/CollectionPalette";
 import { CollectionStrip } from "@/components/market/CollectionStrip";
 import { supportedCollections } from "@/lib/market/supportedCollections";
+import { topCollections } from "@/lib/market/topCollections";
 import { useMarketListings } from "@/lib/market/useMarketListings";
 
 /**
@@ -16,6 +20,12 @@ import { useMarketListings } from "@/lib/market/useMarketListings";
 export function MarketLanding() {
   const collections = supportedCollections();
   const { listings, loading, error } = useMarketListings();
+  const router = useRouter();
+
+  const goToCollection = useCallback(
+    (policyId: string) => router.push(`/market?c=${policyId.toLowerCase()}`),
+    [router],
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-12 px-6 py-14">
@@ -36,12 +46,23 @@ export function MarketLanding() {
           it in a Pit and take whatever surfaces.
         </p>
         <div className="flex flex-wrap gap-3">
-          <Link
-            href="/market"
-            className="rounded bg-sky-700 px-5 py-2.5 font-mono text-sm font-semibold uppercase tracking-wide text-zinc-100 hover:bg-sky-600"
-          >
-            browse the market →
-          </Link>
+          {collections.length >= 2 ? (
+            <CollectionPalette
+              selected={null}
+              onSelect={goToCollection}
+              listings={listings}
+              loading={loading}
+              triggerLabel="browse the market →"
+              triggerClassName="inline-flex items-center gap-2 rounded bg-sky-700 px-5 py-2.5 font-mono text-sm font-semibold uppercase tracking-wide text-zinc-100 hover:bg-sky-600"
+            />
+          ) : collections.length === 1 ? (
+            <Link
+              href={`/market?c=${collections[0].policyId.toLowerCase()}`}
+              className="rounded bg-sky-700 px-5 py-2.5 font-mono text-sm font-semibold uppercase tracking-wide text-zinc-100 hover:bg-sky-600"
+            >
+              browse the market →
+            </Link>
+          ) : null}
           <Link
             href="/market/new"
             className="rounded border border-zinc-700 px-5 py-2.5 font-mono text-sm uppercase tracking-wide text-zinc-300 hover:border-sky-600"
@@ -56,7 +77,7 @@ export function MarketLanding() {
         <ErrorView error={error} context={{ subject: "marketplace" }} />
       ) : collections.length > 0 ? (
         <div className="flex flex-col gap-10">
-          {collections.map((c) => (
+          {topCollections(collections, listings).map((c) => (
             <CollectionStrip
               key={c.policyId}
               collection={c}

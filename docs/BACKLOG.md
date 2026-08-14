@@ -1,154 +1,144 @@
 # Backlog
 
 Findings carried over from sessions where the work shipped under a deadline.
-Each entry has enough context to act on standalone — file paths, the specific
-risk, and a suggested fix. Items at the top are higher priority.
 
-## From /code-review on the marketplace-relocation + B2 + manifest-refactor session (2026-05-28)
+## Triage — 2026-08-13 (fabbrica ticket-owner pass)
 
-Two HIGH-severity bugs were fixed in-session (jar payout min-UTxO in
-`submitJarMerge` + `submitJarBulkCollect`); the rest are below.
+The 2026-05-28 `/code-review` findings below were re-verified against current
+`dev` (every finding read at its live location, not the stale line number).
+Net: **1 ships now, 1 is E5-gated, 1 resolved WONTFIX, the rest defer, none
+were stale-deletable.** The backlog was mostly noise — several findings were
+already mitigated or defused by later work.
 
-### Medium — `useDerivedMarketplaceManifest` hydration mismatch
+| # | Finding | Verdict | Why |
+|---|---------|---------|-----|
+| F1 | manifest hydration mismatch | **DEFER (latent)** | Doesn't fire while `manifest.json` is populated — `!!slim` is true on both server+client first render. No DOM divergence today. |
+| F2 | `accompanying_lovelace ≥ 0` guard | **FIX — E5-GATED** | Real, but exploit is seller-self-detonation only (no buyer harm). Mainnet-hash-changing → must ride the E5 redeploy, not ship standalone. |
+| F3 | `derivationCache` rejection race | **DEFER (benign)** | Waiters legitimately share an in-flight failure; cache self-heals. Deterministic failures → "retry would succeed" premise usually false. |
+| F4 | `MarketBrowse` empty-state flash | **DONE (`dc72d6d`)** | Fixed + audited 2026-08-13 via Slice A (branch on hook `loading`). |
+| F5 | `JarManager` derives from `walletPkh` | **WONTFIX** | Working-as-designed: the page is a *generic per-wallet* jar manager (per its own docstring), not the protocol fee-jar console. Giovanni's call 2026-08-13. |
+| F6 | cache/blueprint stale on rebuild | **DEFER (dev-only)** | HMR ergonomics; page reload is the workaround. `loadBlueprint` already fetches `no-cache`. No prod impact. |
+| F7 | `submitMarketBulkCancel` no pkh-uniformity check | **DEFER** | Guards a caller that doesn't exist; sole caller pre-filters by `walletPkh`. Trivial to add if an admin sweep-all UI lands. |
+| F8 | `MyListings` N metadata queries | **DEFER (low)** | React Query dedupes by queryKey → N subscriptions, one fetch per unit. Hoisting is churn for a small self-list. |
+| F9 | `MyListings.selected` unbounded Set | **DEFER (cosmetic)** | Material risk already fixed in-session by `liveKeys`/`effectiveSelected`. Only in-session memory residue remains. |
+| F10 | `submitJarBulkCollect` output-index ordering | **DEFER (hypothetical)** | Correct against today's Evolution SDK; guards a future SDK ordering change. Post-build assertion is cheap insurance, not a present defect. |
+| F11 | `marketplaceManifest()` re-reads localStorage | **DEFER (low)** | Same root as F1; a `useSyncExternalStore` refactor would close F1+F11 together if ever prioritised. |
+| — | Bounty terminology scrub | **PARKED (PLAN E7)** | Comment/naming only, no behavioural change. Tracked as its own epic. |
 
-- **File:** `web/src/lib/market/useDerivedMarketplaceManifest.ts:37`
-- **Risk:** `useState({ ..., loading: !!slim, ... })` evaluates
-  `marketplaceManifest()` during the first render. Server has no
-  `localStorage` so slim is null → `loading=false`. Client first render
-  reads `localStorage` so slim may be non-null → `loading=true`. React
-  fires a hydration mismatch warning on every marketplace page for any
-  user with a persisted manifest.
-- **Fix:** initialise `loading: false` unconditionally; flip to true in
-  `useEffect` after mount. Or use a `useSyncExternalStore`-style pattern
-  for `localStorage`.
+---
 
-### Medium — Marketplace `accompanying_lovelace` not guarded ≥ 0
+## Findings (detail — verdicts above)
 
-- **File:** `contracts/validators/marketplace.ak:106` (datum), `:182` (B2)
+Items retain their original context (file paths, risk, suggested fix); the
+**Verdict** line reflects the 2026-08-13 re-verification and the current
+file:line where it differs from the original.
+
+### F2 — Marketplace `accompanying_lovelace` not guarded ≥ 0  · **FIX (E5-gated)**
+
+- **Verdict:** Real; guard genuinely absent. **Mainnet-hash-changing** — bundle
+  into the next contract redeploy (PLAN E5), never a standalone `plutus.json`
+  bump. Slice contract drafted (see PLAN E5). Exploit = seller self-detonates
+  own listing; no buyer harm → no urgency.
+- **File:** `contracts/validators/marketplace.ak:106` (datum), `:181-182` (B2)
 - **Risk:** Datum field is `Int`, not bounded ≥ 0. B2's `>=` check passes
   trivially when `accompanying_lovelace < 0`; the seller_out's required
   lovelace then computes negative and any positive payout from the buyer
-  satisfies it. Lister self-detonates the listing; no buyer harm.
-- **Fix:** add `expect input_datum.accompanying_lovelace >= 0` as B0 or
-  inline B2's check. Add a matching `fail` test.
+  satisfies it.
+- **Fix:** add `expect input_datum.accompanying_lovelace >= 0` as B0 or inline
+  B2's check. Add a matching `fail` test.
 
-### Medium — `derivationCache` rejection race
+### F1 — `useDerivedMarketplaceManifest` hydration mismatch  · **DEFER (latent)**
 
-- **File:** `web/src/lib/market/config.ts:187`
-- **Risk:** `promise.catch(() => { if (derivationCache?.key === key)
-  derivationCache = null })` is a microtask. Caller B that arrives
-  between the cache-set and the catch firing receives caller A's
-  in-flight rejected promise and surfaces an error in its own UI even
-  though a retry would succeed.
-- **Fix:** track explicit `{ state: 'pending' | 'resolved' | 'rejected' }`
-  and skip rejected entries; or only insert into the cache on resolve.
+- **Verdict:** Anti-pattern real but does not reproduce today — the committed
+  `manifest.json` is populated, so `!!slim` is `true` on both server and client
+  first render. Latent; revisit only if the committed manifest is ever emptied,
+  or fold into a `useSyncExternalStore` refactor with F11.
+- **File:** `web/src/lib/market/useDerivedMarketplaceManifest.ts:38`
+  (`loading: !!slim`)
+- **Fix:** initialise `loading: false` unconditionally, flip to true in
+  `useEffect`; or a `useSyncExternalStore`-style pattern for `localStorage`.
 
-### Medium — `MarketBrowse` ManifestEmptyState flash
+### F3 — `derivationCache` rejection race  · **DEFER (benign)**
 
-- **File:** `web/src/components/market/MarketBrowse.tsx:164`
-- **Risk:** Treats the hook's transient `loading=true, data=null` state
-  identically to a permanently-unconfigured manifest. Users with a valid
-  persisted manifest still see the alarmist "marketplace not deployed
-  yet — head to /market/dev-tools" panel for ~50ms on every cold load.
-- **Fix:** branch on `loading` to suppress the empty-state during initial
-  derivation: `{!manifest ? (loading ? <Skeleton /> : <ManifestEmptyState />) : ...}`.
+- **Verdict:** Concurrent waiters legitimately share an in-flight failure; the
+  `catch` nulls the cache so the next caller retries. UPLC/fetch failures are
+  deterministic, so the "a retry would succeed" premise is usually false.
+- **File:** `web/src/lib/market/config.ts:189-192`
+- **Fix:** track explicit `{ state: 'pending' | 'resolved' | 'rejected' }`; or
+  only insert into the cache on resolve.
 
-### Medium — `JarManager` derives from `walletPkh` not `manifest.adminPkhHex`
+### F4 — `MarketBrowse` ManifestEmptyState flash  · **DONE (`dc72d6d`, audited)**
 
-- **File:** `web/src/components/admin/JarManager.tsx:57` (and call sites
-  at `:100, :126, :155`)
-- **Risk:** Asymmetric with the marketplace UI's new derivation path.
-  Already hit live this session — a non-admin wallet visiting
-  `/admin/jars` silently sees its own (empty) jar address, no error.
-- **Fix:** read `manifest.adminPkhHex` via `useDerivedMarketplaceManifest`;
-  use `walletPkh` only to (a) gate the create/merge/collect buttons (must
-  match admin) and (b) sign txs. Lets any wallet *view* the admin's jar
-  state read-only.
+- **Resolved 2026-08-13** via Slice A: `MarketBrowse` now destructures the
+  hook's `loading` and shows the neutral "scanning the marketplace…" state
+  while `manifest === null && loading === true`, so ManifestEmptyState renders
+  only after derivation completes with no manifest. Auditor re-verified cold-load
+  coverage against the hook. Kept here for provenance; not open.
 
-### Medium — `derivationCache` + blueprint loader stale on `make contracts-build`
+### F6 — `derivationCache` + blueprint loader stale on `make contracts-build`  · **DEFER (dev-only)**
 
-- **File:** `web/src/lib/market/config.ts:160-194`, plus
-  `web/src/lib/tx/plutusBlueprint.ts`
-- **Risk:** Both caches are module-level singletons. Next.js Fast Refresh
-  preserves module state across HMR, so a contract rebuild during a
-  long-lived dev session leaves the FE attaching the OLD compiled script
-  against the NEW expected hash. Blockfrost script-eval fails with no
-  hint. Survives in practice because Next sometimes forces a full reload,
-  but not guaranteed.
-- **Fix:** include a `blake2b(plutus.json.preamble)` (or the validator's
-  hash itself) in the cache key; or expose a `resetDerivationCache()` +
-  `resetBlueprintCache()` and call them from a Next.js HMR `accept`
-  callback in dev.
+- **Verdict:** Dev-only HMR ergonomics; page reload is the workaround.
+  `loadBlueprint` already uses `cache:"no-cache"` at the fetch layer. No prod
+  impact.
+- **File:** `web/src/lib/market/config.ts:163-193`, `web/src/lib/tx/plutusBlueprint.ts:34-56`
+- **Fix:** include a `blake2b(plutus.json.preamble)` / validator hash in the
+  cache key; or expose `resetDerivationCache()` + `resetBlueprintCache()` wired
+  to a Next.js HMR `accept` callback in dev.
 
-### Medium — `submitMarketBulkCancel` doesn't defensively check seller pkh uniformity
+### F7 — `submitMarketBulkCancel` doesn't check seller pkh uniformity  · **DEFER**
 
-- **File:** `web/src/lib/tx/marketCancel.ts:73`
-- **Risk:** Trusts the docstring claim. Today the only caller (MyListings)
-  pre-filters by `walletPkh` so it's fine. A future caller (admin
-  sweep-all UI) could pass mixed sellers; tx builds + wallet signs + then
-  Blockfrost script-eval fails with the opaque "script evaluation failed"
-  error.
+- **Verdict:** Guards a caller that does not exist; sole caller (`MyListings`)
+  pre-filters by `walletPkh`. Add when/if an admin sweep-all UI lands.
+- **File:** `web/src/lib/tx/marketCancel.ts:81-83` (length check only)
 - **Fix:** `if (!targets.every(t => t.datum.sellerPkhHex.toLowerCase() ===
-  sellerPkhHex.toLowerCase())) throw new Error("bulk cancel requires all
-  UTxOs to share the same seller pkh")`.
+  sellerPkhHex.toLowerCase())) throw new Error("bulk cancel requires all UTxOs
+  to share the same seller pkh")`.
 
-### Low — `MyListings` fires N `useNftMetadata` queries (one per row)
+### F8 — `MyListings` fires N `useNftMetadata` queries  · **DEFER (low)**
 
-- **File:** `web/src/components/market/MyListings.tsx:308` (ListingRow)
-- **Risk:** Each row independently subscribes to React Query. For a
-  seller with 20 listings that's 20 separate subscriptions + 20
-  concurrent metadata fetches on cache miss. MarketBrowse already
-  batches via `useQueries`.
-- **Fix:** hoist a single `useQueries` at MyListings; pass meta + traits
-  down as props to ListingRow.
+- **Verdict:** React Query dedupes by queryKey, so N subscriptions collapse to
+  one fetch per unit. Hoisting to `useQueries` is churn for a seller's own
+  (small) list.
+- **File:** `web/src/components/market/MyListings.tsx:338` (ListingRow)
+- **Fix:** hoist a single `useQueries` at MyListings; pass meta+traits down.
 
-### Low — `MyListings.selected` Set grows unbounded across single-cancels
+### F9 — `MyListings.selected` Set grows unbounded  · **DEFER (cosmetic)**
 
-- **File:** `web/src/components/market/MyListings.tsx:51`
-- **Risk:** `selected` is filtered at read time via `effectiveSelected`
-  but never pruned. Across a long admin session with many single-cancels,
-  the underlying Set accumulates stale keys. Cosmetic for now; a future
-  "spent listings" tab reusing the same key shape would surface phantom
-  selections.
-- **Fix:** prune `selected` in `refresh()`'s success branch
-  (`setSelected(s => new Set([...s].filter(k => liveKeys.has(k))))`);
-  drop `liveKeys`/`effectiveSelected` as separate derivations.
+- **Verdict:** The material risk (phantom selections) is **already fixed** by
+  the in-session `liveKeys`/`effectiveSelected` read-time filtering
+  (`MyListings.tsx:104-108`). Only cosmetic in-session memory growth remains.
+- **File:** `web/src/components/market/MyListings.tsx:60`
+- **Fix (optional):** prune `selected` in `refresh()`'s success branch; drop the
+  separate `liveKeys`/`effectiveSelected` derivations.
 
-### Low — `submitJarBulkCollect` output-index ordering fragile to SDK upgrade
+### F10 — `submitJarBulkCollect` output-index ordering fragile to SDK upgrade  · **DEFER (hypothetical)**
 
-- **File:** `web/src/lib/tx/jarCollect.ts:170` (after the fix lands at
-  `:185-195`)
-- **Risk:** Redeemers hard-code `output_index = i` and rely on Evolution
-  SDK preserving `payToAddress` insertion order AND appending change
-  outputs at the end. Verified correct against today's SDK (Pay.js
-  appends, build.js puts change last). A future Evolution change
-  (e.g., CIP-95-style canonical output ordering for coin selection) would
-  silently break the per-input binding.
-- **Fix:** add a post-build assertion that walks the assembled outputs
-  and verifies `outputs[i].address === jar.address` for i in 0..N-1.
-  Or build it as a Pay-pre-finalise hook if Evolution exposes one.
+- **Verdict:** Verified correct against today's Evolution SDK. Guards a future
+  SDK output-ordering change. Post-build assertion is cheap insurance, not a
+  present defect.
+- **File:** `web/src/lib/tx/jarCollect.ts:194-227`
+- **Fix:** add a post-build assertion walking the assembled outputs verifying
+  `outputs[i].address === jar.address` for i in 0..N-1.
 
-### Low (cleanup) — `marketplaceManifest()` re-reads localStorage on every render
+### F11 — `marketplaceManifest()` re-reads localStorage on every render  · **DEFER (low)**
 
-- **File:** `web/src/lib/market/useDerivedMarketplaceManifest.ts:31`
-- **Risk:** Each consumer's render synchronously reads + parses
-  localStorage. Not a perf hotspot today, but interacts oddly with
-  cross-tab manifest mutation (other tab's `persistManifestLocally` is
-  visible mid-session, which can re-derive against new addresses
-  mid-tx-build).
-- **Fix:** module-scope cache busted by the same `resetDerivationCache`
-  path; or `useSyncExternalStore` so React subscribes to the
-  `storage` event.
+- **Verdict:** Low cleanup, same root as F1. Not a hotspot; the cross-tab race
+  is theoretical. A `useSyncExternalStore` refactor closes F1+F11 together.
+- **File:** `web/src/lib/market/useDerivedMarketplaceManifest.ts:32` →
+  `web/src/lib/market/config.ts:81-95`
+- **Fix:** module-scope cache busted by `resetDerivationCache`; or
+  `useSyncExternalStore` subscribed to the `storage` event.
 
 ## From earlier sessions (still open)
 
-### Bounty terminology scrub — contracts + BE + docs
+### Bounty terminology scrub — contracts + BE + docs  · **PARKED (PLAN E7)**
 
 - **Scope:** `contracts/validators/wanted_listing.ak`,
   `contracts/lib/shithole/types.ak`, `api/docs/P2P_MATCHER.md`, BE
   matcher/auto-fulfiller Java comments + local-var names.
-- **Why deferred:** FE-side scrub shipped 2026-05-28; contracts + BE
-  parts didn't fit the production push window.
-- **Notes:** keep on-chain `min_seller_compensation` constant name —
-  it's anchored across layers. Bounty mentions in code comments only;
-  no behavioural change.
+- **Why deferred:** FE-side scrub shipped 2026-05-28; contracts + BE parts
+  didn't fit the production push window.
+- **Notes:** keep on-chain `min_seller_compensation` constant name — it's
+  anchored across layers. Comment/naming only; no behavioural change. Contract
+  *comment* edits do not change bytecode, but bundling with any `.ak` logic edit
+  is wasteful — keep parked as its own epic.

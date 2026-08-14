@@ -41,6 +41,8 @@ export function useDerivedMarketplaceManifest(): {
   useEffect(() => {
     if (!slim || !slimKey) {
       lastKeyRef.current = null;
+      // Clear derived state when the slim manifest disappears (external sync).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setState({ data: null, loading: false, error: null });
       return;
     }

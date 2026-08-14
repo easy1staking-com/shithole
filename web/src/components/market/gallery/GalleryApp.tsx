@@ -376,7 +376,7 @@ export function GalleryApp() {
       {/* exit to 2D */}
       <div className="absolute right-4 top-4">
         <Link
-          href="/market"
+          href="/"
           className="rounded border border-zinc-700 bg-zinc-950/80 px-3 py-1.5 font-mono text-xs uppercase tracking-widest text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
         >
           ← 2D market

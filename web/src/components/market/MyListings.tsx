@@ -80,6 +80,8 @@ export function MyListings() {
   }, [marketplaceAddress, walletApi]);
 
   useEffect(() => {
+    // Fetch-on-mount: refresh() sets loading synchronously then awaits.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 

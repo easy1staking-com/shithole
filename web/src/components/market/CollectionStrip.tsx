@@ -71,11 +71,9 @@ export function CollectionStrip({
           <h2 className="font-mono text-sm font-semibold uppercase tracking-widest text-zinc-200">
             {collection.label}
           </h2>
-          {!loading ? (
-            <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-600">
-              {forCollection.length} listed
-            </span>
-          ) : null}
+          <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-600">
+            {loading ? "—" : forCollection.length} listed
+          </span>
         </div>
         <Link
           href={`/market?c=${policy}`}

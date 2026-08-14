@@ -99,3 +99,21 @@ export function isSupportedCollection(
     (c) => c.policyId.toLowerCase() === policy,
   );
 }
+
+/**
+ * Returns true iff {@code c} is a whitelisted collection's policy id
+ * (case-insensitive). Backs the /market route guard: a missing or
+ * non-whitelisted {@code ?c} redirects to the landing instead of
+ * rendering an empty/broken browse view. Mirrors the {@code
+ * selectedCollection} memo in {@link MarketBrowse}.
+ */
+export function isValidCollectionParam(
+  c: string | null | undefined,
+  network: CardanoNetworkName = getNetworkName(),
+): boolean {
+  if (!c) return false;
+  const policy = c.toLowerCase();
+  return supportedCollections(network).some(
+    (x) => x.policyId.toLowerCase() === policy,
+  );
+}

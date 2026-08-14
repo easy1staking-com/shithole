@@ -319,7 +319,9 @@ export function ListingDetail({ unit }: { unit: string }) {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-12">
-      <MarketNav back={{ href: "/market", label: "← back to market" }} />
+      <MarketNav
+        back={{ href: `/market?c=${unit.slice(0, 56)}`, label: "← back to market" }}
+      />
 
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">{displayName}</h1>

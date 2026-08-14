@@ -54,6 +54,8 @@ export function JarManager() {
   // Resolve jar address from the connected pkh.
   useEffect(() => {
     if (!walletPkh) {
+      // Reset derived address when the wallet clears — external-state sync.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setJarAddress(null);
       return;
     }
@@ -87,6 +89,8 @@ export function JarManager() {
   }, [walletApi, jarAddress]);
 
   useEffect(() => {
+    // Fetch-on-mount: refresh() sets loading synchronously then awaits.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 

@@ -51,7 +51,7 @@ export function DevTools() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-12">
-      <MarketNav back={{ href: "/market", label: "← back to market" }} />
+      <MarketNav back={{ href: "/", label: "← back to market" }} />
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold text-zinc-100">dev tools</h1>
         <p className="text-sm text-zinc-400">

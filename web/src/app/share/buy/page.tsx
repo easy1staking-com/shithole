@@ -122,7 +122,7 @@ export default async function ShareBuyPage({
           </Link>
         )}
         <Link
-          href="/market"
+          href="/"
           className="rounded-md border border-zinc-700 px-5 py-2 text-sm uppercase tracking-wide text-zinc-300 hover:border-zinc-500"
         >
           browse the market

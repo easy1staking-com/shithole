@@ -11,8 +11,8 @@ import {
   type FilterState,
 } from "@/components/market/FilterBar";
 import { CollectionActivityFeed } from "@/components/market/CollectionActivityFeed";
+import { CollectionPalette } from "@/components/market/CollectionPalette";
 import { CollectionStatsStrip } from "@/components/market/CollectionStatsStrip";
-import { CollectionTabs } from "@/components/market/CollectionTabs";
 import { ListingCard } from "@/components/market/ListingCard";
 import { MarketNav } from "@/components/market/MarketNav";
 import { ErrorView } from "@/components/ErrorView";
@@ -34,13 +34,16 @@ import { useWalletStore } from "@/lib/wallet/walletStore";
  *   1. Pull every UTxO at the marketplace address via the PUBLIC read
  *      client ({@link useMarketListings}) — browsing needs no wallet.
  *   2. Drop anything outside the {@link isSupportedCollection} whitelist.
- *   3. Optional collection tab (?c=policy) narrows to one collection and
- *      unlocks its stats strip + activity feed.
+ *   3. `?c=policy` selects the collection to browse — required; the
+ *      server-side redirect at /market guarantees this component only
+ *      ever mounts with a validated `?c`, so the grid, stats strip, and
+ *      activity feed are always scoped to that one collection.
  *   4. Batch-fetch CIP-25 metadata; apply the filter bar (currency,
  *      pool-traits, sort); render.
  */
 export function MarketBrowse() {
-  const { data: manifest } = useDerivedMarketplaceManifest();
+  const { data: manifest, loading: manifestLoading } =
+    useDerivedMarketplaceManifest();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -55,7 +58,7 @@ export function MarketBrowse() {
     sort: "asc",
   });
 
-  // Selected collection tab — URL-synced (?c=policy) so the landing strips
+  // Selected collection — URL-synced (?c=policy) so the landing strips
   // can deep-link into a filtered browse. Validated against the whitelist.
   const selectedCollection = useMemo(() => {
     const c = searchParams.get("c")?.toLowerCase() ?? null;
@@ -66,28 +69,25 @@ export function MarketBrowse() {
   }, [searchParams]);
 
   const onSelectCollection = useCallback(
-    (policyId: string | null) => {
-      router.replace(policyId ? `/market?c=${policyId.toLowerCase()}` : "/market", {
+    (policyId: string) => {
+      router.replace(`/market?c=${policyId.toLowerCase()}`, {
         scroll: false,
       });
     },
     [router],
   );
 
-  // listings | activity — activity only meaningful for a single collection.
+  // listings | activity — the two views rendered for the selected collection.
   const [view, setView] = useState<"listings" | "activity">("listings");
-  const activeView = selectedCollection ? view : "listings";
 
-  // Whitelist filter — keep only listings whose listed asset is in a
-  // supported collection; then narrow to the selected tab if any.
+  // Whitelist filter — keep only listings whose listed asset is in the
+  // supported collection selected via the URL.
   const onCollection = useMemo<DecodedListing[]>(() => {
     if (!listings) return [];
     return listings.filter((l) => {
       const u = l.listedUnits[0];
       if (!u || !isSupportedCollection(u)) return false;
-      return selectedCollection
-        ? u.slice(0, 56).toLowerCase() === selectedCollection
-        : true;
+      return u.slice(0, 56).toLowerCase() === selectedCollection;
     });
   }, [listings, selectedCollection]);
 
@@ -170,18 +170,26 @@ export function MarketBrowse() {
   const someMetaLoading = metaQueries.some((q) => q.isLoading);
   const collectionCount = supportedCollections().length;
 
-  // How many of the live (whitelisted, any collection) listings belong to
-  // the connected wallet — surfaces a "manage yours" shortcut to /market/me.
+  // How many of the *currently rendered* listings belong to the connected
+  // wallet — surfaces a "manage yours" shortcut to /market/me. Counts over
+  // `visible` (the post-FilterBar set the grid maps over), not the
+  // pre-filter collection set, so the banner's number always equals the
+  // YOURS badges actually on screen. `visible` derives from onCollection
+  // (via decorated), so every element is already collection-scoped — no
+  // separate collection check is needed here.
   const walletPkh = useWalletStore((s) => s.paymentKeyHashHex);
   const myCount = useMemo(() => {
-    if (!walletPkh || !listings) return 0;
+    if (!walletPkh) return 0;
     const me = walletPkh.toLowerCase();
-    return listings.filter(
-      (l) =>
-        (l.listedUnits[0] ? isSupportedCollection(l.listedUnits[0]) : false) &&
-        l.datum.sellerPkhHex.toLowerCase() === me,
+    return visible.filter(
+      (e) => e.listing.datum.sellerPkhHex.toLowerCase() === me,
     ).length;
-  }, [walletPkh, listings]);
+  }, [walletPkh, visible]);
+
+  // Unreachable safety net: the server-side redirect at /market guarantees
+  // this component only ever mounts with a whitelisted `?c`, so this is not
+  // the generic all-collections view — it renders nothing, not the grid.
+  if (!selectedCollection) return null;
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
@@ -199,10 +207,14 @@ export function MarketBrowse() {
       </header>
 
       {!manifest ? (
-        <ManifestEmptyState />
+        manifestLoading ? (
+          <p className="text-sm text-zinc-500">scanning the marketplace…</p>
+        ) : (
+          <ManifestEmptyState />
+        )
       ) : (
         <>
-          {myCount > 0 ? (
+          {myCount > 0 && view === "listings" ? (
             <Link
               href="/market/me"
               className="flex items-center justify-between rounded-lg border border-amber-900/60 bg-amber-950/20 px-3.5 py-2 text-sm text-amber-200 transition hover:border-amber-700"
@@ -221,30 +233,28 @@ export function MarketBrowse() {
             </Link>
           ) : null}
 
-          <CollectionTabs
+          <CollectionPalette
             selected={selectedCollection}
             onSelect={onSelectCollection}
+            listings={listings}
+            loading={loading}
           />
 
-          {selectedCollection ? (
-            <>
-              <CollectionStatsStrip policyId={selectedCollection} />
-              <div className="flex gap-1 border-b border-zinc-900">
-                <ViewTab
-                  label="listings"
-                  active={activeView === "listings"}
-                  onClick={() => setView("listings")}
-                />
-                <ViewTab
-                  label="activity"
-                  active={activeView === "activity"}
-                  onClick={() => setView("activity")}
-                />
-              </div>
-            </>
-          ) : null}
+          <CollectionStatsStrip policyId={selectedCollection} />
+          <div className="flex gap-1 border-b border-zinc-900">
+            <ViewTab
+              label="listings"
+              active={view === "listings"}
+              onClick={() => setView("listings")}
+            />
+            <ViewTab
+              label="activity"
+              active={view === "activity"}
+              onClick={() => setView("activity")}
+            />
+          </div>
 
-          {activeView === "activity" && selectedCollection ? (
+          {view === "activity" ? (
             <CollectionActivityFeed policyId={selectedCollection} />
           ) : (
             <>
