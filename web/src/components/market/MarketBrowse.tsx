@@ -13,7 +13,6 @@ import {
 import { CollectionActivityFeed } from "@/components/market/CollectionActivityFeed";
 import { CollectionPalette } from "@/components/market/CollectionPalette";
 import { CollectionStatsStrip } from "@/components/market/CollectionStatsStrip";
-import { CollectionTabs } from "@/components/market/CollectionTabs";
 import { ListingCard } from "@/components/market/ListingCard";
 import { MarketNav } from "@/components/market/MarketNav";
 import { ErrorView } from "@/components/ErrorView";
@@ -68,8 +67,8 @@ export function MarketBrowse() {
   }, [searchParams]);
 
   const onSelectCollection = useCallback(
-    (policyId: string | null) => {
-      router.replace(policyId ? `/market?c=${policyId.toLowerCase()}` : "/market", {
+    (policyId: string) => {
+      router.replace(`/market?c=${policyId.toLowerCase()}`, {
         scroll: false,
       });
     },
@@ -78,18 +77,16 @@ export function MarketBrowse() {
 
   // listings | activity — activity only meaningful for a single collection.
   const [view, setView] = useState<"listings" | "activity">("listings");
-  const activeView = selectedCollection ? view : "listings";
+  const activeView = view;
 
-  // Whitelist filter — keep only listings whose listed asset is in a
-  // supported collection; then narrow to the selected tab if any.
+  // Whitelist filter — keep only listings whose listed asset is in the
+  // supported collection selected via the URL.
   const onCollection = useMemo<DecodedListing[]>(() => {
     if (!listings) return [];
     return listings.filter((l) => {
       const u = l.listedUnits[0];
       if (!u || !isSupportedCollection(u)) return false;
-      return selectedCollection
-        ? u.slice(0, 56).toLowerCase() === selectedCollection
-        : true;
+      return u.slice(0, 56).toLowerCase() === selectedCollection;
     });
   }, [listings, selectedCollection]);
 
@@ -185,6 +182,11 @@ export function MarketBrowse() {
     ).length;
   }, [walletPkh, listings]);
 
+  // Unreachable safety net: the server-side redirect at /market guarantees
+  // this component only ever mounts with a whitelisted `?c`, so this is not
+  // the generic all-collections view — it renders nothing, not the grid.
+  if (!selectedCollection) return null;
+
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-12">
       <MarketNav back={{ href: "/", label: "← home" }} />
@@ -227,11 +229,6 @@ export function MarketBrowse() {
             </Link>
           ) : null}
 
-          <CollectionTabs
-            selected={selectedCollection}
-            onSelect={onSelectCollection}
-          />
-
           <CollectionPalette
             selected={selectedCollection}
             onSelect={onSelectCollection}
@@ -239,25 +236,21 @@ export function MarketBrowse() {
             loading={loading}
           />
 
-          {selectedCollection ? (
-            <>
-              <CollectionStatsStrip policyId={selectedCollection} />
-              <div className="flex gap-1 border-b border-zinc-900">
-                <ViewTab
-                  label="listings"
-                  active={activeView === "listings"}
-                  onClick={() => setView("listings")}
-                />
-                <ViewTab
-                  label="activity"
-                  active={activeView === "activity"}
-                  onClick={() => setView("activity")}
-                />
-              </div>
-            </>
-          ) : null}
+          <CollectionStatsStrip policyId={selectedCollection} />
+          <div className="flex gap-1 border-b border-zinc-900">
+            <ViewTab
+              label="listings"
+              active={activeView === "listings"}
+              onClick={() => setView("listings")}
+            />
+            <ViewTab
+              label="activity"
+              active={activeView === "activity"}
+              onClick={() => setView("activity")}
+            />
+          </div>
 
-          {activeView === "activity" && selectedCollection ? (
+          {activeView === "activity" ? (
             <CollectionActivityFeed policyId={selectedCollection} />
           ) : (
             <>

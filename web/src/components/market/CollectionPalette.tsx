@@ -10,8 +10,8 @@ import {
 } from "@/lib/market/supportedCollections";
 
 /**
- * Searchable command-palette collection switcher for /market — additive
- * alongside {@link ../market/CollectionTabs}, not a replacement. Opens via
+ * Searchable command-palette collection switcher for /market — the sole
+ * in-page switcher. Opens via
  * ⌘K / Ctrl+K, `/` (outside text inputs), or the trigger button; typeahead
  * filters by label, arrows move a highlight, Enter selects. Desktop
  * renders a centered palette, mobile a full-screen sheet (`md:` split,
@@ -22,10 +22,8 @@ import {
  * {@code CollectionStrip.tsx} uses. Renders "—" per row until `listings`
  * resolves so "zero live listings" isn't confused with "still loading".
  *
- * <p>Self-hides on single-collection networks (mainnet today), mirroring
- * {@code CollectionTabs}' `collections.length <= 1` guard — same trigger,
- * same rows, so keeping both in sync matters more than which one wins if
- * they ever diverge.
+ * <p>Self-hides on single-collection networks (mainnet today) via the
+ * `collections.length <= 1` guard.
  */
 export function CollectionPalette({
   selected,
@@ -34,7 +32,7 @@ export function CollectionPalette({
   loading,
 }: {
   selected: string | null;
-  onSelect: (policyId: string | null) => void;
+  onSelect: (policyId: string) => void;
   listings: DecodedListing[] | null;
   loading: boolean;
 }) {
