@@ -40,7 +40,9 @@ untracked — public repo). Refreshed 2026-08-13.
 - Listers claim accrued ADA via cancel + relist (no separate refresh path).
 - Protocol parameters (M, fees, treasury, admin) live in a per-collection config UTxO guarded by a one-shot state NFT, mutated only by the admin via the same multi-handler validator that mints the NFT.
 
-See `SPEC.md` for the full protocol; memory under `~/.claude/projects/-Users-giovanni-Development-workspace-shithole/memory/` for design rationale (39 logged decisions).
+See `SPEC.md` for the full protocol; design rationale (39 logged decisions) lives in this
+repo's Claude project memory — `~/.claude/projects/<slug>/memory/`, where `<slug>` is this
+repo's absolute path with `/` replaced by `-` (so it differs per machine; do not hardcode it).
 
 ## Tech stack
 
@@ -99,7 +101,7 @@ checklist** (below) applies.
 
 After the review, action the findings (or explicitly reject with rationale), then commit. Codex output goes through Claude for triage; do not action findings blindly.
 
-For Aiken contracts specifically, **also reference the performance tips in `cardano-dev-skills` (skills `optimize-validator`, `write-validator`) before writing**. Validators must be CPU- and memory-efficient — Plutus budgets are tight. Use the local docs at `/Users/giovanni/Development/workspace/cardano-dev-skills/docs/sources/aiken/` and `aiken-stdlib/` and `aiken-design-patterns/`.
+For Aiken contracts specifically, **also reference the performance tips in `cardano-dev-skills` (skills `optimize-validator`, `write-validator`) before writing**. Validators must be CPU- and memory-efficient — Plutus budgets are tight. Use the bundled docs under `${CLAUDE_PLUGIN_ROOT}/docs/sources/` (see the Cardano Development Context block below for the canonical path) — specifically `aiken/`, `aiken-stdlib/` and `aiken-design-patterns/`.
 
 ## Cardano-specific constraints (recap from SPEC)
 
@@ -110,15 +112,21 @@ For Aiken contracts specifically, **also reference the performance tips in `card
 
 ## Working with this repo
 
-- **Local cardano-dev-skills docs are the primary Cardano reference**, not the Cardano MCP. Path: `/Users/giovanni/Development/workspace/cardano-dev-skills/docs/sources/`. 42 sources, updated daily. MCP has round-robin loops and truncation issues — fallback only.
+- **The bundled cardano-dev-skills docs are the primary Cardano reference**, not the Cardano MCP. Path: `${CLAUDE_PLUGIN_ROOT}/docs/sources/` (canonical form lives in the Cardano Development Context block below — do not hardcode an absolute path here; it breaks on any other machine and leaks a local layout into a public repo). ~58 sources, refreshed from upstream. MCP has round-robin loops and truncation issues — fallback only.
 - The relevant Cardano dev skills (`cardano-dev-skills:*`) are loaded — `write-validator`, `optimize-validator`, `build-transaction`, `review-contract`, `query-chain`, `design-token` are the most relevant here.
 - The `easy1staking-dev-skills:*` plugin is also loaded — `design-process` (this project's workflow) and `cardano-design-patterns` (the architectural patterns we mirror, including jpgstore-sniper's `compute_output_tag` recipe).
 - Run formal Codex code review (see "Code review process" above) on every non-trivial code chunk before committing.
 
 ## Reference projects (mirror these patterns)
 
-- **Aiken**: `/Users/giovanni/Development/workspace/jpgstore-sniper/src/jpgstore-sniper-onchain/` — `validators/settings.ak` is the multi-handler template for our `config.ak`; `validators/snipe.ak` for our `listing.ak`; `lib/utils.ak` exports `compute_output_tag` and `signed_by` (copy verbatim).
-- **BE**: `/Users/giovanni/Development/workspace/ada-watch/` — Spring Boot 3.3.4 + Java 21 + Yaci Store + Postgres + Flyway. Strip telegram/discord/scalus/notification deps for our use; keep Lombok, CCL, CCL annotation processor, Spring Boot starters.
+Both are **workspace sibling repos, read for pattern only — never built against.** Paths are
+intentionally relative: they sit alongside this repo in the same workspace directory, and
+**neither is checked out on every machine** (as of 2026-08-17, neither is present on this
+Linux workstation). Locate them with `fd -t d <name> ~` or ask Giovanni; do not hardcode an
+absolute path here.
+
+- **Aiken**: `jpgstore-sniper` → `src/jpgstore-sniper-onchain/` — `validators/settings.ak` is the multi-handler template for our `config.ak`; `validators/snipe.ak` for our `listing.ak`; `lib/utils.ak` exports `compute_output_tag` and `signed_by` (copy verbatim).
+- **BE**: `ada-watch` — Spring Boot 3.3.4 + Java 21 + Yaci Store + Postgres + Flyway. Strip telegram/discord/scalus/notification deps for our use; keep Lombok, CCL, CCL annotation processor, Spring Boot starters.
 
 ## Contract change checklist (READ BEFORE TOUCHING `contracts/`)
 
@@ -176,7 +184,7 @@ list whenever you change a validator:
 When in doubt during dev: rebuild contracts, restart BE, redeploy
 jar+marketplace, re-register configs, treat old UTxOs as lost.
 
-<!-- BEGIN cardano-dev-skills v1 -->
+<!-- BEGIN cardano-dev-skills v2 -->
 ## Cardano Development Context
 
 This project involves Cardano blockchain development.
@@ -189,12 +197,12 @@ recommending any library, tool, code pattern, or CIP behavior:
 1. **Check the `cardano-dev-skills:*` skill set.** These skills encode current
    best practices, decision criteria, and trade-offs. Bias toward invoking
    one even when you feel confident — confidence is not evidence of currency.
-2. **Search `/Users/giovanni/Development/workspace/cardano-dev-skills//docs/sources/`** before relying on memory
+2. **Search `${CLAUDE_PLUGIN_ROOT}/docs/sources/`** before relying on memory
    or web search. The corpus is regularly refreshed from upstream and covers
-   Aiken, Plutus, current SDKs, all CIPs, on-chain tooling, and ~40 other
+   Aiken, Plutus, current SDKs, all CIPs, on-chain tooling, and ~50 other
    Cardano projects.
 3. **Cite what you used** (skill name or doc path). If bundled docs and your
    training conflict, prefer bundled docs.
 
-Plugin: https://github.com/easy1staking-com/cardano-dev-skills
-<!-- END cardano-dev-skills v1 -->
+Plugin: https://github.com/cardano-foundation/cardano-dev-skills
+<!-- END cardano-dev-skills v2 -->
