@@ -1,28 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ipfsGatewayUrl, rewriteDeadGateway } from "@/lib/ipfsGateway";
 
 /**
- * NFT image with IPFS-gateway rotation. The BE rewrites ipfs:// URIs to a
- * hardcoded public gateway (ipfs.io) in {@code image_url} — but ipfs.io is
- * on ad-block/privacy filter lists (Brave Shields, uBlock, strict ETP, DNS
- * blockers) and rate-limits bursts, so on some browsers every card in a
- * grid 404s/blocks and renders a raw broken image.
- *
- * <p>This component builds the URL client-side from the RAW on-chain URI
- * ({@code image_ipfs_uri}) and rotates through a gateway list on
- * {@code onError}: w3s.link → dweb.link → ipfs.io. When there is no
- * ipfs:// URI it falls back to {@code image_url} verbatim (http/ar/data
- * images). When every candidate fails — or there's no image at all — it
- * renders {@code fallback} (default: the muted gradient placeholder).
+ * NFT image with candidate rotation. The BE's persisted {@code image_url}
+ * points at ipfs.io, which was sunset on 2026-09-21 (every request now
+ * 429s), so this component builds the URL client-side from the RAW
+ * on-chain URI ({@code image_ipfs_uri}) through {@link ipfsGatewayUrl}, and
+ * only then falls back to {@code image_url} (dead-gateway hosts rewritten)
+ * — the sole candidate for http/ar/data images. On {@code onError} it
+ * advances to the next candidate. When every candidate fails — or there's
+ * no image at all — it renders {@code fallback} (default: the muted
+ * gradient placeholder).
  *
  * <p>Drop-in recipe at call sites:
  * {@code <NftImage ipfsUri={meta.data?.image_ipfs_uri} url={meta.data?.image_url} …/>}
  * replacing the whole {@code image ? <img/> : <placeholder/>} branch.
  */
-
-/** Rotation order. cloudflare-ipfs.com is dead — do not add it. */
-const GATEWAYS = ["w3s.link", "dweb.link", "ipfs.io"] as const;
 
 export type NftImageProps = {
   /** Raw on-chain URI (ipfs://CID[/path]) — preferred source. */
@@ -152,11 +147,11 @@ export function buildCandidates(
 ): string[] {
   const out: string[] = [];
   const path = ipfsUri ? ipfsPath(ipfsUri) : null;
-  if (path) {
-    for (const g of GATEWAYS) out.push(`https://${g}/ipfs/${path}`);
-  }
-  // BE-rewritten URL as the last resort (deduped — it's usually the
-  // ipfs.io form already in the list). Sole candidate for non-IPFS images.
-  if (url && !out.includes(url)) out.push(url);
+  if (path) out.push(ipfsGatewayUrl(path));
+  // BE-rewritten URL as the last resort (deduped — once its dead-gateway
+  // host is rewritten it's usually the same URL). Sole candidate for
+  // non-IPFS images.
+  const fallbackUrl = rewriteDeadGateway(url);
+  if (fallbackUrl && !out.includes(fallbackUrl)) out.push(fallbackUrl);
   return out;
 }
