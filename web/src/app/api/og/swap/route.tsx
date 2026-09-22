@@ -15,7 +15,7 @@
  *   <li>{@code display_name} — collection display name for the caption.</li>
  *   <li>{@code na_name}, {@code nb_name} — optional pretty names for the cards.</li>
  *   <li>{@code na_img}, {@code nb_img} — already-resolved HTTPS image URLs
- *       (e.g. {@code https://ipfs.io/ipfs/Qm…}). The FE caller has these
+ *       (e.g. {@code https://c-ipfs-gw.nmkr.io/ipfs/Qm…}). The FE caller has these
  *       in memory from the NFT metadata cache, so passing them avoids a
  *       server-side fetch from the OG route to the BE. If omitted, the
  *       OG route fetches {@code GET /api/nft/{unit}} to resolve.</li>
@@ -24,6 +24,7 @@
  */
 
 import { ImageResponse } from "next/og";
+import { rewriteDeadGateway } from "@/lib/ipfsGateway";
 
 export const contentType = "image/png";
 // Force dynamic — the response depends on query params + a runtime
@@ -53,7 +54,7 @@ async function resolveImageUrl(apiBase: string, unit: string): Promise<string | 
     });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { image_url?: string };
-    return data.image_url ?? null;
+    return rewriteDeadGateway(data.image_url) ?? null;
   } catch {
     return null;
   }
@@ -96,8 +97,9 @@ export async function GET(req: Request): Promise<Response> {
     process.env.OG_BE_INTERNAL_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     "http://localhost:8080";
-  let naImg = sp.get("na_img") || null;
-  let nbImg = sp.get("nb_img") || null;
+  // Share links already posted carry ipfs.io (sunset) URLs — rewrite them.
+  let naImg = rewriteDeadGateway(sp.get("na_img")) || null;
+  let nbImg = rewriteDeadGateway(sp.get("nb_img")) || null;
   if (!naImg && na) naImg = await resolveImageUrl(apiBase, na);
   if (!nbImg && nb) nbImg = await resolveImageUrl(apiBase, nb);
 

@@ -56,6 +56,9 @@ import java.util.Set;
 @Slf4j
 public class NftMetadataService {
 
+    /** NMKR public IPFS gateway — must match web/src/lib/ipfsGateway.ts. */
+    static final String IPFS_GATEWAY_PREFIX = "https://c-ipfs-gw.nmkr.io/ipfs/";
+
     private static final List<String> NESTED_TRAIT_KEYS = List.of(
             "-----Traits-----",
             "traits",
@@ -155,8 +158,10 @@ public class NftMetadataService {
             if (imageStr != null) {
                 if (imageStr.startsWith("ipfs://")) {
                     b.imageIpfsUri(imageStr);
-                    // Convert ipfs://CID/path → https gateway URL the FE can <img src=...>
-                    b.imageUrl("https://ipfs.io/ipfs/" + imageStr.substring("ipfs://".length()));
+                    // Convert ipfs://CID/path → https gateway URL the FE can <img src=...>.
+                    // ipfs.io was sunset 2026-09-21 (429 on everything); rows persisted
+                    // before then still say ipfs.io and are rewritten FE-side.
+                    b.imageUrl(IPFS_GATEWAY_PREFIX + imageStr.substring("ipfs://".length()));
                 } else if (imageStr.startsWith("https://") || imageStr.startsWith("http://")) {
                     b.imageUrl(imageStr);
                 }
