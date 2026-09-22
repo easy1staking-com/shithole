@@ -23,6 +23,7 @@ import type {
   Pool,
   Proof,
 } from "@/types/api";
+import { rewriteDeadGateway } from "@/lib/ipfsGateway";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
@@ -122,8 +123,12 @@ export function fetchListings(
   );
 }
 
-export function fetchNftMetadata(unit: string): Promise<NftMetadata> {
-  return getJson<NftMetadata>(`/api/nft/${encodeURIComponent(unit)}`);
+export async function fetchNftMetadata(unit: string): Promise<NftMetadata> {
+  const meta = await getJson<NftMetadata>(`/api/nft/${encodeURIComponent(unit)}`);
+  // Persisted BE rows point at sunset public gateways (ipfs.io) — rewrite
+  // once here so every consumer of image_url (swap reveal, share links,
+  // cards) gets a live URL.
+  return meta.image_url ? { ...meta, image_url: rewriteDeadGateway(meta.image_url) } : meta;
 }
 
 /** Build the BE image URL for an NFT. Use directly in <img src>. */

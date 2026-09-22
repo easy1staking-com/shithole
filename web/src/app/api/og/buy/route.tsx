@@ -23,6 +23,7 @@
  */
 
 import { ImageResponse } from "next/og";
+import { rewriteDeadGateway } from "@/lib/ipfsGateway";
 
 export const contentType = "image/png";
 // Force dynamic — the response depends on query params + a possible
@@ -53,7 +54,7 @@ async function resolveImageUrl(
     });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { image_url?: string };
-    return data.image_url ?? null;
+    return rewriteDeadGateway(data.image_url) ?? null;
   } catch {
     return null;
   }
@@ -110,7 +111,8 @@ export async function GET(req: Request): Promise<Response> {
     process.env.OG_BE_INTERNAL_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     "http://localhost:8080";
-  let img = sp.get("img") || null;
+  // Share links already posted carry ipfs.io (sunset) URLs — rewrite them.
+  let img = rewriteDeadGateway(sp.get("img")) || null;
   if (!img && unit) img = await resolveImageUrl(apiBase, unit);
 
   return new ImageResponse(
