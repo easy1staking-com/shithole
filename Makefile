@@ -1,4 +1,4 @@
-.PHONY: help dev build test clean fmt contracts-build contracts-test contracts-fmt api-build api-test api-run web-build web-test web-dev compose-up compose-down devkit-start devkit-stop
+.PHONY: aiken-pin help dev build test clean fmt contracts-build contracts-test contracts-fmt api-build api-test api-run web-build web-test web-dev compose-up compose-down devkit-start devkit-stop
 
 help:
 	@echo "Top-level targets:"
@@ -26,7 +26,18 @@ clean:
 	cd web && rm -rf .next node_modules/.cache
 
 # Aiken contracts
-contracts-build:
+# The compiler pin in contracts/aiken.toml is mainnet provenance: a different
+# aiken emits different bytecode, so plutus.json (and every script hash) drifts
+# silently. Refuse to build or test on anything but the pinned version.
+AIKEN_PIN := $(shell sed -n 's/^compiler = "\(.*\)"/\1/p' contracts/aiken.toml)
+
+aiken-pin:
+	@v=$$(aiken --version | awk '{print $$2}' | cut -d+ -f1); \
+	if [ "$$v" != "$(AIKEN_PIN)" ]; then \
+	  echo "aiken $$v != pinned $(AIKEN_PIN) — run: aikup install $(AIKEN_PIN)" >&2; exit 1; \
+	fi
+
+contracts-build: aiken-pin
 	cd contracts && aiken build
 	# Keep the FE-side copy in sync. web/public/contracts/plutus.json is
 	# served as a static asset to the admin register-config flow; if the
@@ -35,7 +46,7 @@ contracts-build:
 	mkdir -p web/public/contracts
 	cp contracts/plutus.json web/public/contracts/plutus.json
 
-contracts-test:
+contracts-test: aiken-pin
 	cd contracts && aiken check -D
 
 contracts-fmt:

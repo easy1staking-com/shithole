@@ -53,43 +53,49 @@ repo's absolute path with `/` replaced by `-` (so it differs per machine; do not
 
 ## Commands
 
-Proven on this box (Linux; init 2026-08-12, greened 2026-08-13). Run from
-repo root unless noted. Slice-contract Verification sections cite these.
-`make build` and `make test` both pass end-to-end once the two setup steps
-below are done.
+Proven on this box (Linux). Last re-proved cold **2026-09-22** (fabbrica-init
+schema 2). Run from repo root. Slice-contract Verification sections cite these.
 
-| Command | What | Status |
+| Command | What | Status (2026-09-22) |
 |---|---|---|
-| `make web-test` — `cd web && vitest run` | FE unit tests | ✅ 80 pass |
+| `make web-test` — `cd web && vitest run` | FE unit tests | ✅ 109 pass |
 | `cd web && npm run lint` | FE eslint | ✅ 0 errors (5 harmless `exhaustive-deps` warnings) |
 | `make web-build` — `next build` | FE build | ✅ pass |
-| `make api-test` / `api-build` — `./gradlew` | BE | ✅ pass — **needs `JAVA_HOME`** (below) |
-| `make contracts-build` — `aiken build` | blueprint + FE copy | ✅ pass on the pinned **v1.1.22** |
-| `make contracts-test` — `aiken check` | Aiken tests | ✅ 174 scenarios pass on the pinned **v1.1.22** |
+| `make api-test` — `./gradlew test` | BE tests | ✅ 120 pass (`--rerun-tasks`; see gotcha) |
+| `make api-build` — `./gradlew build -x test` | BE build | ✅ pass |
+| `make contracts-build` — pin check + `aiken build` | blueprint + FE copy | ✅ `plutus.json` byte-identical on **v1.1.22** |
+| `make contracts-test` — pin check + `aiken check -D` | Aiken tests | ✅ 174 pass on **v1.1.22** |
 
-### Setup a fresh box needs BEFORE the build runs cold
+### Setup and gotchas
 
-1. **Java on `PATH`.** jenv is installed but selects no global version, so a
-   bare `./gradlew` dies with `jenv: java: command not found`. Java 21
-   (matching `api/.java-version`) lives at `~/.jenv/versions/21.0.11`.
-   Export it: `export JAVA_HOME=~/.jenv/versions/21.0.11`.
-2. **Install the pinned Aiken: `aikup install v1.1.22`.** This box shipped
-   with an ancient `aiken v1.0.26-alpha` that can't parse the repo's
-   validator syntax — that's the only reason contracts commands failed at
-   init. With the pinned v1.1.22, both `aiken build` AND `aiken check` are
-   green against the committed deps (`stdlib v3.1.0`, `fuzz v2.1.1`).
-   **Do NOT bump the `aiken.toml` compiler pin** — v1.1.22 is the
-   mainnet-deployed compiler (provenance); `aiken build` reproduces
-   `plutus.json` byte-identical to the committed one.
-   - Gotcha learned the hard way: don't `rm -rf build` to "diagnose" — a
-     clean re-resolve can transiently pull a mismatched transitive dep
-     (seen once: `fuzz v2.2.0` despite the `v2.1.1` pin) and break
-     `aiken check`. If that happens, just re-run `aikup install v1.1.22`
-     and rebuild; the pinned versions are fine.
-
-If `make contracts-build` ever rewrites more than `plutus.json`'s preamble
-`compiler` string, STOP — bytecode drifted and the full **Contract change
-checklist** (below) applies.
+1. **Aiken pin — `aikup install v1.1.22`.** v1.1.22 is the mainnet-deployed
+   compiler (provenance); do NOT bump the `aiken.toml` pin. This box has drifted
+   twice (v1.0.26-alpha at 2026-08-12 init; **v1.1.21** found active on
+   2026-09-22, which rewrote every script hash in `plutus.json`). **`make
+   contracts-build` / `contracts-test` now refuse to run unless `aiken --version`
+   equals the `aiken.toml` pin** (`make aiken-pin`). A bare `aiken build` inside
+   `contracts/` bypasses that guard — always go through `make`.
+   - Every build rewrites the etag *timestamp* in `contracts/aiken.lock` (the
+     content hash is unchanged). That is noise: `git checkout -- contracts/aiken.lock`,
+     never commit it alone.
+   - If `make contracts-build` rewrites more than that timestamp and the
+     `plutus.json` preamble `compiler` string, STOP — bytecode drifted and the
+     full **Contract change checklist** (below) applies.
+   - Don't `rm -rf build` (or `make clean`) to "diagnose" — a clean re-resolve can
+     pull a mismatched transitive dep (seen once: `fuzz v2.2.0` despite the `v2.1.1`
+     pin). Re-run `aikup install v1.1.22` and rebuild instead.
+2. **Java.** jenv resolves Java 21 from `api/.java-version`, so `make api-*`
+   works with no `JAVA_HOME` (re-verified 2026-09-22). A bare `java` from the
+   repo root still fails (`jenv: java: command not found`) — there is no global
+   version; `export JAVA_HOME=~/.jenv/versions/21.0.11` if you need one there.
+   ⚠ jenv's failure exits **0**: a gradle run that printed "java: command not
+   found" did not build. Gradle also caches — `UP-TO-DATE` means no test ran;
+   pass `--rerun-tasks` when a test run is the evidence.
+3. **Staging.** `web/next.config.ts` and `web/src/lib/market/manifest.json` live
+   permanently modified in the working tree and must never be committed. Stage
+   by explicit path (no `./` prefix): `git add -A` / `.` / `commit -a` and
+   tree-wide `checkout`/`restore .`/`git clean` are denied by the permission
+   policy.
 
 ## Code review process
 
@@ -206,3 +212,70 @@ recommending any library, tool, code pattern, or CIP behavior:
 
 Plugin: https://github.com/cardano-foundation/cardano-dev-skills
 <!-- END cardano-dev-skills v2 -->
+
+## Constitution
+
+**Purpose.** Give dead / rugpulled Cardano NFT collections a second life via random
+in-collection swaps, plus the singleton NFT marketplace and the walkable 3D gallery
+("the dump") around it. **Live on mainnet** — every boundary below exists because
+real user assets sit at deployed script addresses. Needing more than this section
+grants is an escalation to Giovanni, never a judgment call.
+
+**Modules.** `contracts/` (Aiken, plutus v3, compiler pinned v1.1.22) · `api/` (Java 21,
+Spring Boot 3.3.x, Yaci Store, Postgres, Flyway, Gradle — never Maven) · `web/`
+(Next.js, Evolution SDK). Glue is `Makefile` + `compose.yaml`; no Turborepo/Nx.
+
+**Hard invariants.**
+1. `contracts/plutus.json` is the single source of truth for both other modules (FE
+   reads the copied blueprint at runtime; the BE generates types and `COMPILED_CODE`
+   from it at build time).
+2. No slice is ever scoped to `contracts/` alone: any `.ak` edit moves script hashes,
+   orphans live UTxOs, and drags the full **Contract change checklist** above.
+   Contract changes ride a planned redeploy, never ship standalone.
+3. The aiken pin is mainnet provenance — never bumped (guarded in the `Makefile`).
+4. `web/next.config.ts` (local dev origin) and `web/src/lib/market/manifest.json`
+   (local deploy manifest) stay permanently modified and are never committed. The
+   manifest is a static build-time import: a preprod copy on `main` would go live.
+5. `main` auto-deploys to Vercel — a push/merge to `main` IS a production release.
+
+**Allowed technologies.** As per the module list. Adding to a module's stack is an
+escalation. New runtime dependencies need justification (UI that plain React can
+do gets no new npm dep).
+
+**Allowed service dependencies.** Blockfrost (primary chain provider, FE + BE) ·
+Yaci Store + Postgres + Flyway · public IPFS gateways (known fragile behind DNS
+filters) · Koios (incidental). Anything else — e.g. a paid pinning service — is an
+escalation.
+
+**Reference repos (read for pattern, never built against):** `jpgstore-sniper`,
+`ada-watch`, `cardano-dev-skills`.
+
+**Boundaries.** Belongs here: the swap protocol, the marketplace, their FE/BE
+support, curation tooling. Split seams, flagged not proposed: the **3D gallery /
+arcade** (self-contained surface, own asset pipeline) and the **p2p / wanted-listing**
+subsystem (own validators, matcher and merkle pools).
+
+## Hand-offs across machines
+
+This repo is public, so the factory's working state (`PLAN.md`, `WORKLOG.md`,
+`.fabbrica/`, the generated `.claude/settings.json` / `.codex/`) is **untracked and
+local to one machine**. It does not travel with a clone. Anything a different
+machine or a fresh clone must read — a hand-off, a lead, the current head, how to
+reproduce — goes in a **tracked** doc (`docs/`, or this file), never only in the
+worklog.
+
+<!-- fabbrica:begin -->
+## La Fabbrica
+This repo is factory-operated (fabbrica plugin). Non-trivial requests go through
+`intake` (never straight to code); tickets run as slice contracts with the
+worker/auditor pair; before ending any significant work, run `distill` — "close
+the circle" — even if Giovanni forgets to ask. Ticket substrate: plan.
+Fabbrica init schema: 2.
+Authority class: 2 partner-profile (ours, but public + mainnet + `main` auto-deploys)
+— branches and `dev` push freely; `main` only through a PR Giovanni merges.
+Factory floor: standard — the lowest `Lane:` any slice here may carry (`model-routing`);
+`critical` where Giovanni rules it at onboarding. A slice may raise, never lower.
+State lives in WORKLOG.md plus the substrate (PLAN.md, or GitHub Issues where the
+substrate is github — factory trail stays out of public issues), plus the local
+`.fabbrica/` state-owning checkout. An open slice forbids switching or deleting it.
+<!-- fabbrica:end -->

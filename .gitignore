@@ -20,6 +20,13 @@ Thumbs.db
 .env.mainnet
 .env.preview
 .env.devnet
+.env.dev
+.env.development
+.env.production
+.env.mainnet-dev
+# Editor/Finder duplicates of a populated env file ("`.env copy`", space and all).
+.env copy*
+.env*.bak
 
 # Aiken
 contracts/build/
